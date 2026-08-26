@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Què arriba de debò — ListenBrainz</title>
+<style>
+  :root{--tinta:#141414;--paper:#fbfbf9;--regla:#d8d6cf;--apagat:#6b6862;--si:#1f6f43;--no:#a32020}
+  *{box-sizing:border-box}
+  body{margin:0;padding:22px 18px 60px;background:var(--paper);color:var(--tinta);
+       font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  h1{font-size:19px;font-weight:600;margin:0 0 2px;letter-spacing:-.01em}
+  .sub{color:var(--apagat);font-size:13px;margin:0 0 18px}
+  h2{font-size:14px;font-weight:600;margin:26px 0 6px;padding-bottom:5px;border-bottom:1px solid var(--regla)}
+  h2 span{float:right;font-weight:400;color:var(--apagat)}
+  h3{font-size:12.5px;font-weight:600;margin:16px 0 4px;color:var(--apagat);
+     text-transform:uppercase;letter-spacing:.06em}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;
+        font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  td{padding:5px 6px 5px 0;border-bottom:1px solid #eeece6;vertical-align:top;
+     word-break:break-word}
+  td:nth-child(1){width:38%}
+  td:nth-child(2){width:18%;white-space:nowrap}
+  .si{color:var(--si)}.no{color:var(--no)}
+  pre{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;background:#fff;
+      border:1px solid var(--regla);padding:10px;overflow-x:auto;white-space:pre-wrap;
+      word-break:break-word;margin:0}
+  .avis{border:1px solid var(--regla);border-left:4px solid var(--apagat);padding:12px 14px;
+        margin:0 0 20px;background:#fff;font-size:14px}
+</style>
+</head>
+<body>
+
+<h1>Què arriba de debò en un scrobble</h1>
+<p class="sub">Màquina Màgica Tria-Discos · §3.3, §8.3 i la qüestió oberta del §11</p>
+
+<div id="estat" class="avis">Llegint…</div>
+<div id="resultats"></div>
+
+<script>
+const COMPTES=["crimsonnnn","crimsonnnnfeina"];
+const API="https://api.listenbrainz.org/1/user/";
+const N=100;
+
+const esc=s=>String(s??"").replace(/[<>&]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+
+function aplana(obj,prefix,out){
+  for(const [k,v] of Object.entries(obj||{})){
+    const clau=prefix?prefix+"."+k:k;
+    if(v && typeof v==="object" && !Array.isArray(v)) aplana(v,clau,out);
+    else out[clau]=Array.isArray(v)?v.join(" | "):v;
+  }
+}
+
+function taula(listens){
+  const comptador={}, mostra={};
+  for(const l of listens){
+    const pla={}; aplana(l,"",pla);
+    for(const [k,v] of Object.entries(pla)){
+      if(v===undefined||v===null||v==="") continue;
+      comptador[k]=(comptador[k]||0)+1;
+      if(mostra[k]===undefined) mostra[k]=v;
+    }
+  }
+  return Object.keys(comptador).sort().map(k=>{
+    const n=comptador[k], pct=Math.round(100*n/listens.length);
+    let ex=String(mostra[k]); if(ex.length>60) ex=ex.slice(0,60)+"…";
+    return `<tr><td>${esc(k)}</td><td class="${pct?'si':'no'}">${n}/${listens.length} · ${pct}%</td><td>${esc(ex)}</td></tr>`;
+  }).join("");
+}
+
+(async()=>{
+  const est=document.getElementById("estat"), out=document.getElementById("resultats");
+  if(location.protocol==="file:"||location.origin==="null"){
+    est.innerHTML="<b>Això encara no és la prova.</b> Puja-la al repositori i obre-la des de la seva adreça https.";
+    return;
+  }
+  try{
+    let html="";
+    for(const c of COMPTES){
+      const r=await fetch(API+encodeURIComponent(c)+"/listens?count="+N);
+      if(!r.ok) throw new Error("HTTP "+r.status+" a "+c);
+      const listens=(await r.json()).payload?.listens??[];
+      html+=`<h2>${esc(c)} <span>${listens.length} escoltes</span></h2>
+        <h3>Totes les claus que arriben</h3>
+        <table>${taula(listens)}</table>
+        <h3>Una escolta sencera, tal qual</h3>
+        <pre>${esc(JSON.stringify(listens[0],null,1))}</pre>`;
+    }
+    out.innerHTML=html;
+    est.innerHTML="<b>Fet.</b> Cada clau que apareix, en quin percentatge, i un valor real d'exemple. "
+      +"El que no surt en aquesta llista no arriba.";
+  }catch(e){
+    est.innerHTML="<b>Error.</b> <code>"+esc(e.message||e)+"</code>";
+  }
+})();
+</script>
+</body>
+</html>
