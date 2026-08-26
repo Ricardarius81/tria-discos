@@ -1,2 +1,2 @@
 # tria-discos
-Maquina magica tria-discos, un motor de propostes i registre d'escolta de musica
+Màquina Màgica Tria-Discos, un motor de propostes i registre d'escolta de música
