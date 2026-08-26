@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prova de lectura — ListenBrainz</title>
+<style>
+  :root{
+    --tinta:#141414;
+    --paper:#fbfbf9;
+    --regla:#d8d6cf;
+    --apagat:#6b6862;
+    --si:#1f6f43;
+    --no:#a32020;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:22px 18px 60px;
+    background:var(--paper); color:var(--tinta);
+    font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  }
+  h1{font-size:19px; font-weight:600; margin:0 0 2px; letter-spacing:-.01em}
+  .sub{color:var(--apagat); font-size:13px; margin:0 0 18px}
+  .veredicte{
+    border:1px solid var(--regla); border-left-width:4px;
+    padding:14px 16px; margin:0 0 22px; background:#fff;
+  }
+  .veredicte b{display:block; font-size:17px; margin-bottom:4px}
+  .ok{border-left-color:var(--si)} .ok b{color:var(--si)}
+  .ko{border-left-color:var(--no)} .ko b{color:var(--no)}
+  .esperant{border-left-color:var(--apagat)}
+  h2{font-size:14px; font-weight:600; margin:26px 0 6px; padding-bottom:5px;
+     border-bottom:1px solid var(--regla)}
+  h2 span{float:right; font-weight:400; color:var(--apagat)}
+  table{width:100%; border-collapse:collapse; font-size:12.5px;
+        font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  td{padding:5px 6px 5px 0; border-bottom:1px solid #eeece6; vertical-align:top}
+  td.q{color:var(--apagat); white-space:nowrap}
+  .camps td:first-child{width:44%}
+  .si{color:var(--si)} .no{color:var(--no)}
+  .err{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px;
+       background:#fff; border:1px solid var(--regla); padding:10px; overflow-x:auto;
+       white-space:pre-wrap; word-break:break-word}
+  footer{margin-top:34px; padding-top:12px; border-top:1px solid var(--regla);
+         color:var(--apagat); font-size:12px}
+</style>
+</head>
+<body>
+
+<h1>Prova de lectura — ListenBrainz</h1>
+<p class="sub">Màquina Màgica Tria-Discos · comprovació prèvia a la Fase 4</p>
+
+<div id="veredicte" class="veredicte esperant"><b>Llegint…</b>
+  <span id="origen"></span></div>
+
+<div id="resultats"></div>
+
+<footer>
+  Aquesta pàgina no desa res, no envia res i no fa servir cap token.
+  Només llegeix l'historial públic i mira quins camps arriben de debò.
+</footer>
+
+<script>
+const COMPTES = ["crimsonnnn", "crimsonnnnfeina"];
+const API = "https://api.listenbrainz.org/1/user/";
+const N = 100;
+
+const CAMPS = [
+  ["release_name (l'àlbum)",  l => l.track_metadata?.release_name],
+  ["artist_name",             l => l.track_metadata?.artist_name],
+  ["track_name",              l => l.track_metadata?.track_name],
+  ["listened_at",             l => l.listened_at],
+  ["duration_ms",             l => l.track_metadata?.additional_info?.duration_ms],
+  ["music_service",           l => l.track_metadata?.additional_info?.music_service
+                                 ?? l.track_metadata?.additional_info?.music_service_name],
+  ["release_mbid (conjectura)",l => l.track_metadata?.mbid_mapping?.release_mbid
+                                 ?? l.track_metadata?.additional_info?.release_mbid],
+  ["submission_client",       l => l.track_metadata?.additional_info?.submission_client]
+];
+
+const esc = s => String(s ?? "").replace(/[<>&]/g, c => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[c]));
+const quan = ts => new Date(ts*1000).toLocaleString("ca-ES",
+  {day:"2-digit",month:"2-digit",year:"2-digit",hour:"2-digit",minute:"2-digit"});
+
+async function llegir(compte){
+  const r = await fetch(API + encodeURIComponent(compte) + "/listens?count=" + N);
+  if(!r.ok) throw new Error("HTTP " + r.status + " " + r.statusText);
+  const j = await r.json();
+  return j.payload?.listens ?? [];
+}
+
+function pinta(compte, listens){
+  const ult = listens.slice(0,8).map(l => `<tr>
+      <td class="q">${esc(quan(l.listened_at))}</td>
+      <td>${esc(l.track_metadata?.artist_name)} — ${esc(l.track_metadata?.track_name)}<br>
+          <span style="color:var(--apagat)">${esc(l.track_metadata?.release_name) || "(sense àlbum)"}</span></td>
+    </tr>`).join("");
+
+  const camps = CAMPS.map(([nom, f]) => {
+    const n = listens.filter(l => f(l) !== undefined && f(l) !== null && f(l) !== "").length;
+    const pct = Math.round(100*n/listens.length);
+    const cls = pct === 0 ? "no" : "si";
+    return `<tr><td>${esc(nom)}</td><td class="${cls}">${n} de ${listens.length} (${pct}%)</td></tr>`;
+  }).join("");
+
+  return `<h2>${esc(compte)} <span>${listens.length} escoltes llegides</span></h2>
+    <table>${ult}</table>
+    <h2 style="border:0;margin-bottom:0">Quins camps arriben</h2>
+    <table class="camps">${camps}</table>`;
+}
+
+(async () => {
+  const v = document.getElementById("veredicte");
+  const out = document.getElementById("resultats");
+  document.getElementById("origen").textContent = "Origen provat: " + location.origin;
+
+  if(location.protocol === "file:" || location.origin === "null"){
+    v.className = "veredicte esperant";
+    v.innerHTML = `<b>Això encara no és la prova.</b>
+      Has obert el fitxer des del disc, i un fitxer local no té adreça web:
+      el navegador li dóna l'origen <code>null</code> i cap servidor accepta peticions així.
+      <div style="margin-top:8px">Puja <code>prova.html</code> al repositori i obre-la des de
+      <code>https://&lt;usuari&gt;.github.io/&lt;repositori&gt;/prova.html</code>.
+      Allà es prova l'origen que tindrà la màquina de debò.</div>`;
+    return;
+  }
+
+  try{
+    let html = "", total = 0;
+    for(const c of COMPTES){
+      const listens = await llegir(c);
+      total += listens.length;
+      html += listens.length
+        ? pinta(c, listens)
+        : `<h2>${esc(c)} <span>cap escolta</span></h2>
+           <p class="sub">El compte respon però no té escoltes en aquest tram.</p>`;
+    }
+    out.innerHTML = html;
+    v.className = "veredicte ok";
+    v.innerHTML = `<b>Funciona.</b>El navegador ha pogut llegir ListenBrainz des d'aquesta pàgina:
+      ${total} escoltes en total, sense cap token.
+      <div style="color:var(--apagat);font-size:13px;margin-top:6px">
+      Origen provat: ${esc(location.origin)}</div>`;
+  }catch(e){
+    v.className = "veredicte ko";
+    v.innerHTML = `<b>Bloquejat.</b>El navegador no ha pogut llegir ListenBrainz des d'aquesta pàgina.
+      Passa-li l'error sencer a Claude.
+      <div style="color:var(--apagat);font-size:13px;margin:6px 0">
+      Origen provat: ${esc(location.origin)}</div>
+      <div class="err">${esc(e && e.message ? e.message : e)}</div>`;
+  }
+})();
+</script>
+</body>
+</html>
