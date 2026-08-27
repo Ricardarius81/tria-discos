@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sonda Drive · Maquina Magica Tria-Discos</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 0; padding: 24px; max-width: 780px; }
+  h1 { font-size: 17px; margin: 0 0 4px; }
+  p.sub { color: #666; margin: 0 0 20px; font-size: 13px; }
+  button { font: inherit; padding: 10px 18px; cursor: pointer; }
+  button[disabled] { opacity: .5; cursor: default; }
+  #log { margin-top: 20px; font: 13px/1.6 ui-monospace, monospace; white-space: pre-wrap;
+         border-top: 1px solid #ddd; padding-top: 14px; }
+  .ok   { color: #0a7c2f; }
+  .bad  { color: #b3261e; }
+  .head { font-weight: 600; display: block; margin-top: 14px; }
+  .note { color: #666; }
+</style>
+</head>
+<body>
+
+<h1>Sonda de Google Drive</h1>
+<p class="sub">Mide si el permiso configurado escribe de verdad. No toca nada mas de tu Drive.</p>
+
+<button id="go">Pedir permiso y medir</button>
+
+<div id="log"></div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+const CLIENT_ID = '918975060033-hs8so80pee5mjlrlpeu9gnleuoqjib3a.apps.googleusercontent.com';
+const SCOPE = 'https://www.googleapis.com/auth/drive.file';
+
+const logEl = document.getElementById('log');
+function say(txt, cls) {
+  const s = document.createElement('span');
+  if (cls) s.className = cls;
+  s.textContent = txt + '\n';
+  logEl.appendChild(s);
+}
+function head(txt) { say(txt, 'head'); }
+
+const BOUNDARY = 'sonda-tria-discos-boundary';
+const DELIM = '\r\n--' + BOUNDARY + '\r\n';
+const CLOSE = '\r\n--' + BOUNDARY + '--';
+
+let token = null;
+
+async function crearFichero(nombre, mime, cuerpo) {
+  const meta = { name: nombre, mimeType: mime };
+  const pre = DELIM + 'Content-Type: application/json; charset=UTF-8\r\n\r\n'
+            + JSON.stringify(meta)
+            + DELIM + 'Content-Type: ' + mime + '\r\n\r\n';
+  const body = new Blob([pre, cuerpo, CLOSE]);
+  const r = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink',
+    { method: 'POST',
+      headers: { Authorization: 'Bearer ' + token,
+                 'Content-Type': 'multipart/related; boundary=' + BOUNDARY },
+      body });
+  if (!r.ok) throw new Error('crear ' + nombre + ': ' + r.status + ' ' + await r.text());
+  return r.json();
+}
+
+async function sobreescribir(id, mime, cuerpo) {
+  const r = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files/' + id + '?uploadType=media',
+    { method: 'PATCH',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': mime },
+      body: cuerpo });
+  if (!r.ok) throw new Error('sobreescribir: ' + r.status + ' ' + await r.text());
+  return r.json();
+}
+
+async function leer(id, binario) {
+  const r = await fetch('https://www.googleapis.com/drive/v3/files/' + id + '?alt=media',
+    { headers: { Authorization: 'Bearer ' + token } });
+  if (!r.ok) throw new Error('leer: ' + r.status + ' ' + await r.text());
+  return binario ? new Uint8Array(await r.arrayBuffer()) : r.text();
+}
+
+async function listar() {
+  const r = await fetch(
+    'https://www.googleapis.com/drive/v3/files?pageSize=100&fields=files(id,name,mimeType)',
+    { headers: { Authorization: 'Bearer ' + token } });
+  if (!r.ok) throw new Error('listar: ' + r.status + ' ' + await r.text());
+  return (await r.json()).files || [];
+}
+
+async function medir() {
+  // ---- 2. Escritura de texto ----
+  head('2 · Escribir un fichero de texto');
+  const sello = 'sonda ' + new Date().toISOString();
+  const f = await crearFichero('sonda-tria-discos.txt', 'text/plain', sello);
+  say('  Creado. id=' + f.id, 'ok');
+  say('  Enlace: ' + (f.webViewLink || '(sin enlace)'), 'note');
+
+  // ---- 3. Leer lo escrito ----
+  head('3 · Leer lo que acabamos de escribir');
+  const vuelta = await leer(f.id, false);
+  if (vuelta === sello) say('  Coincide byte a byte.', 'ok');
+  else { say('  NO coincide. Escrito: ' + sello + ' / Leido: ' + vuelta, 'bad'); }
+
+  // ---- 4. Binario: ida y vuelta de los 256 bytes ----
+  head('4 · Ida y vuelta binaria (es lo que hara el .sqlite)');
+  const bytes = new Uint8Array(256);
+  for (let i = 0; i < 256; i++) bytes[i] = i;
+  const fb = await crearFichero('sonda-tria-discos.bin', 'application/octet-stream', bytes);
+  const leidos = await leer(fb.id, true);
+  let iguales = leidos.length === 256;
+  if (iguales) for (let i = 0; i < 256; i++) if (leidos[i] !== i) { iguales = false; break; }
+  if (iguales) say('  Los 256 bytes vuelven intactos.', 'ok');
+  else say('  Corrupcion binaria: han vuelto ' + leidos.length + ' bytes y no coinciden.', 'bad');
+
+  // ---- 5. Sobreescribir el mismo fichero ----
+  head('5 · Sobreescribir el mismo fichero (la operacion real de la maquina)');
+  const sello2 = 'segunda escritura ' + new Date().toISOString();
+  await sobreescribir(f.id, 'text/plain', sello2);
+  const vuelta2 = await leer(f.id, false);
+  if (vuelta2 === sello2) say('  Sobreescrito y releido. Mismo id, contenido nuevo.', 'ok');
+  else say('  La sobreescritura no cuadra. Leido: ' + vuelta2, 'bad');
+
+  // ---- 6. Alcance real del permiso ----
+  head('6 · Que ve la aplicacion de tu Drive');
+  const fichs = await listar();
+  say('  Ficheros visibles para esta aplicacion: ' + fichs.length);
+  fichs.forEach(x => say('    - ' + x.name, 'note'));
+  if (fichs.length === 2) say('  Solo los dos que ha creado. El resto de tu Drive es invisible.', 'ok');
+  else say('  Revisa la lista: deberian ser solo los ficheros creados por esta sonda.', 'bad');
+
+  head('Fin. Puedes borrar los dos ficheros de tu Drive cuando quieras.');
+}
+
+document.getElementById('go').onclick = () => {
+  logEl.textContent = '';
+  const btn = document.getElementById('go');
+  btn.disabled = true;
+
+  const client = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SCOPE,
+    callback: async (resp) => {
+      if (resp.error) { say('Permiso denegado: ' + resp.error, 'bad'); btn.disabled = false; return; }
+      token = resp.access_token;
+
+      head('1 · El permiso');
+      say('  Concedido.', 'ok');
+      say('  Duracion declarada: ' + resp.expires_in + ' segundos ('
+          + Math.round(resp.expires_in / 60) + ' minutos)');
+      say('  Permisos concedidos: ' + resp.scope);
+
+      try { await medir(); }
+      catch (e) { say('\nERROR: ' + e.message, 'bad'); }
+      btn.disabled = false;
+    }
+  });
+  client.requestAccessToken();
+};
+</script>
+</body>
+</html>
