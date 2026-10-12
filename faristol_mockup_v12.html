@@ -1,0 +1,1308 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>La Meva Discoteca — El Faristol (maqueta v12)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&display=swap" rel="stylesheet">
+<style>
+/* ===========================================================
+   UNA SOLA DIRECCIÓ. El fons el mana el LLOC (§12): tenyeix la
+   pantalla i decideix quins canals existeixen. Un sol accent.
+   El color el posen els discos; la interfície calla.
+   =========================================================== */
+:root{
+  --r:3px;
+  --serif:'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif;
+  --sans:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  color-scheme:dark;
+}
+/* LLEIDA — terra i blat. Hi ha físic. */
+body[data-lloc="Lleida"]{
+  --fons:#3A2A07; --fons-2:#4A3710; --fons-3:#5A451A; --marc:#1D1403;
+  --os:#FDF3DC; --os-2:#CBB284; --os-3:#95805A;
+  --accent:#FFE49B; --accent-2:#B8913B;
+  --vora:rgba(253,243,220,.15); --vora-2:rgba(253,243,220,.3);
+}
+/* MANACOR — mar de nit. Només streaming. */
+body[data-lloc="Fora"]{
+  --fons:#062639; --fons-2:#0B3450; --fons-3:#134463; --marc:#01111C;
+  --os:#E9F4FB; --os-2:#96B7CC; --os-3:#5F8299;
+  --accent:#FFC24D; --accent-2:#C08A25;
+  --vora:rgba(233,244,251,.15); --vora-2:rgba(233,244,251,.3);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--marc); color:var(--os); font-family:var(--sans); font-size:15px; line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+#telefon{
+  max-width:430px; margin:0 auto; min-height:100vh; position:relative; overflow:hidden;
+  background:var(--fons); box-shadow:0 0 60px rgba(0,0,0,.6);
+  display:flex; flex-direction:column;
+  transition:background .45s ease;
+  padding-top:env(safe-area-inset-top,0px);
+}
+/* ---------- capçalera ---------- */
+header.barra{
+  position:sticky; top:0; z-index:30; display:flex; align-items:center; gap:8px;
+  padding:14px 16px 10px; background:var(--fons); border-bottom:1px solid var(--vora);
+}
+.marca{font-family:var(--serif); font-size:15px; flex:1; color:var(--os)}
+.lloc{
+  font-size:11px; color:var(--os-2); border:1px solid var(--vora-2); border-radius:20px;
+  padding:3px 9px; background:none; cursor:pointer; font-family:var(--sans);
+}
+.lloc:hover{color:var(--accent); border-color:var(--accent)}
+.icona-btn{
+  appearance:none; border:1px solid var(--vora-2); background:transparent; color:var(--os-2);
+  width:32px; height:29px; border-radius:var(--r); font-size:13px; cursor:pointer; line-height:1;
+}
+.icona-btn:hover{color:var(--os); border-color:var(--accent)}
+.icona-btn[aria-pressed="true"]{color:var(--fons); background:var(--accent); border-color:var(--accent)}
+/* ---------- safata ---------- */
+.safata-tira{
+  display:flex; align-items:center; gap:10px; padding:11px 16px; width:100%; text-align:left;
+  border:0; border-bottom:1px solid var(--vora); background:var(--fons-2); cursor:pointer;
+  font-size:14px; color:var(--os); font-family:var(--sans); position:relative; z-index:2;
+}
+.pastilla{min-width:22px; height:22px; border-radius:11px; background:var(--accent); color:var(--fons);
+  font-size:12.5px; font-weight:700; display:grid; place-items:center; padding:0 7px}
+.safata-tira .tanca{margin-left:auto; color:var(--os-3); font-size:18px; line-height:1}
+/* ---------- superfícies ---------- */
+main{flex:1; padding:0 0 78px}
+.superficie{display:none; padding:20px 16px 0}
+.superficie.activa{display:block}
+h1{font-family:var(--serif); font-weight:400; font-size:29px; line-height:1.1; margin:0 0 16px; letter-spacing:-.01em}
+h2{font-family:var(--serif); font-weight:400; font-size:19px; margin:0 0 10px}
+.subtitol{color:var(--os-2); font-size:13.5px; margin:-10px 0 18px}
+/* ---------- subpestanyes: tres, en dues línies ---------- */
+.subpestanyes{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; align-items:end;
+  border-bottom:1px solid var(--vora); margin-bottom:16px}
+.subpestanyes button{
+  font-family:var(--serif); font-size:15.5px; line-height:1.15; padding:0 0 9px; background:none; border:0; cursor:pointer;
+  color:var(--os-3); border-bottom:2px solid transparent; margin-bottom:-1px; text-align:left;
+}
+.subpestanyes button[aria-selected="true"]{color:var(--os); border-bottom-color:var(--accent)}
+.panell{display:none}
+.panell.activa{display:block}
+.eina{display:flex; justify-content:flex-end; margin:-6px 0 8px}
+.eina button{background:none; border:0; color:var(--os-2); font-size:12px; cursor:pointer; font-family:var(--sans); padding:4px}
+.eina button[aria-pressed="true"]{color:var(--accent)}
+/* ---------- coberta de text ---------- */
+.coberta{
+  position:relative; width:100%; aspect-ratio:1/1; background:var(--fons-2); border:1px solid var(--vora);
+  padding:9px; display:flex; flex-direction:column; gap:4px; overflow:hidden; cursor:pointer;
+  text-align:left; font-family:var(--sans); color:inherit; border-radius:1px;
+}
+.coberta:hover{border-color:var(--accent-2)}
+.coberta .a{font-size:9.5px; color:var(--os-2); line-height:1.25;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+.coberta .t{font-family:var(--serif); font-size:13.5px; line-height:1.18; color:var(--os);
+  display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden}
+.coberta img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
+.coberta .filet{position:absolute; left:9px; right:9px; bottom:8px; height:1px; background:var(--vora-2)}
+/* ---------- reixa de rotació ---------- */
+.reixa{display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:16px 10px}
+.disc{position:relative}
+.escoltar{
+  position:absolute; top:6px; right:6px; width:30px; height:30px; border-radius:50%;
+  background:rgba(0,0,0,.5); border:1px solid var(--vora-2); color:var(--os);
+  font-size:11px; line-height:1; cursor:pointer; padding:0; display:grid; place-items:center;
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+}
+.escoltar:hover{background:var(--accent); color:var(--fons); border-color:var(--accent)}
+.disc .peu{display:flex; align-items:center; gap:5px; margin-top:5px; font-size:10.5px; color:var(--os-3); flex-wrap:wrap}
+.tag{border:1px solid var(--vora-2); border-radius:2px; padding:0 4px; color:var(--os-2); font-size:9.5px}
+.part{color:var(--accent)}
+.repren{background:var(--accent); color:var(--fons); border:0; border-radius:10px; font-size:10.5px; font-weight:600;
+  padding:2px 9px; cursor:pointer; font-family:var(--sans)}
+/* ---------- files de preferents ---------- */
+.files{border-top:1px solid var(--vora)}
+.fila{border-bottom:1px solid var(--vora); display:flex; align-items:center}
+.fila-cap{
+  display:flex; align-items:center; gap:12px; flex:1; min-width:0; padding:10px 2px;
+  background:none; border:0; color:inherit; text-align:left; cursor:pointer; font-family:var(--sans);
+}
+.fila-cap:hover .nom{color:var(--accent)}
+.fila-txt{flex:1; min-width:0}
+.nom{font-family:var(--serif); font-size:16px; line-height:1.15; display:block}
+.estat{font-size:12px; color:var(--os-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; margin-top:2px}
+.estat em{font-style:italic; color:var(--os)}
+.nansa{width:32px; height:40px; border:1px solid var(--vora); border-radius:2px; background:none;
+  color:var(--os-2); font-size:14px; line-height:1; cursor:grab; touch-action:none; margin-right:2px;
+  display:grid; place-items:center}
+.nansa:hover{border-color:var(--accent); color:var(--accent)}
+.fila.agafat{background:var(--fons-3); box-shadow:0 10px 24px rgba(0,0,0,.45); position:relative; z-index:5}
+body.arrossegant{user-select:none; -webkit-user-select:none}
+.mou{display:flex; flex-direction:column; gap:2px; padding-right:2px}
+.mou button{background:none; border:1px solid var(--vora); color:var(--os-2); border-radius:2px;
+  width:30px; height:21px; font-size:10px; cursor:pointer; line-height:1}
+.mou button:hover{border-color:var(--accent); color:var(--accent)}
+/* la portada del disc que estudies, a la dreta de la fila (v7) */
+.cob-fila{position:relative; width:42px; height:42px; flex:0 0 42px; border-radius:4px; overflow:hidden;
+  background:var(--fons-2); box-shadow:0 3px 10px rgba(0,0,0,.35); display:block}
+.cob-fila img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
+#files.ordenant .cob-fila{display:none}
+/* ---------- pantalla d'artista ---------- */
+.enrere{background:none; border:0; color:var(--os-2); font-size:13px; cursor:pointer; padding:0 0 12px; font-family:var(--sans)}
+.enrere:hover{color:var(--accent)}
+.cap-artista{display:flex; gap:14px; align-items:flex-start; margin-bottom:16px}
+.cap-artista h1{margin:2px 0 6px; font-size:26px}
+.barra-accions{
+  position:sticky; bottom:56px; background:linear-gradient(transparent, var(--fons) 24%);
+  padding:18px 0 14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+}
+/* ---------- botons ---------- */
+.bt{font-family:var(--sans); font-size:13px; padding:9px 13px; border-radius:var(--r); cursor:pointer;
+  background:transparent; color:var(--os); border:1px solid var(--vora-2)}
+.bt:hover{border-color:var(--accent); color:var(--accent)}
+.bt.principal{background:var(--accent); border-color:var(--accent); color:var(--fons); font-weight:600}
+.bt.principal:hover{background:var(--accent-2); border-color:var(--accent-2); color:var(--os)}
+.bt.discret{border-color:transparent; color:var(--os-2)}
+/* ---------- marcadors ---------- */
+.marcador{border:1px dashed var(--vora-2); border-radius:var(--r); padding:20px 16px; margin-top:20px}
+.marcador p{margin:0 0 10px; color:var(--os-2); font-size:13.5px}
+.marcador p:last-child{margin-bottom:0}
+.marcador .cita{font-family:var(--serif); font-size:17px; color:var(--os); line-height:1.35}
+.marcador.amb-cob{display:flex; gap:14px; align-items:center}
+.marcador.amb-cob .cob-fila{width:68px; height:68px; flex-basis:68px}
+/* ---------- navegació ---------- */
+nav.peu{position:fixed; left:50%; transform:translateX(-50%); bottom:0; width:100%; max-width:430px;
+  z-index:35; display:grid; grid-template-columns:repeat(3,1fr); background:var(--fons-2);
+  border-top:1px solid var(--vora-2); padding-bottom:env(safe-area-inset-bottom,0px);
+  box-shadow:0 -10px 24px rgba(0,0,0,.35)}
+nav.peu button{font-family:var(--serif); font-size:14px; padding:13px 4px 14px; background:none; border:0;
+  color:var(--os-3); cursor:pointer; border-top:2px solid transparent; margin-top:-1px}
+nav.peu button[aria-current="page"]{color:var(--os); border-top-color:var(--accent)}
+/* ---------- fulls ---------- */
+.fons-fosc{position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:40; display:none}
+.fons-fosc.obert{display:block}
+.full{position:fixed; left:50%; transform:translateX(-50%); bottom:0; width:100%; max-width:430px; z-index:41;
+  background:var(--fons-2); border-top:1px solid var(--accent-2); border-radius:14px 14px 0 0;
+  padding:20px 18px calc(24px + env(safe-area-inset-bottom,0px)); display:none; max-height:84vh; overflow:auto}
+.full.obert{display:block; animation:puja .2s ease-out}
+@keyframes puja{from{transform:translate(-50%,14px); opacity:0} to{transform:translate(-50%,0); opacity:1}}
+.full h3{font-family:var(--serif); font-weight:400; font-size:20px; margin:0 0 4px}
+.full p{color:var(--os-2); font-size:13px; margin:0 0 14px; line-height:1.5}
+.escala{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px}
+.escala button{font-family:var(--serif); font-size:15px; padding:13px 6px; background:var(--fons-3);
+  border:1px solid var(--vora); border-radius:var(--r); color:var(--os); cursor:pointer}
+.escala button:hover{border-color:var(--accent); color:var(--accent)}
+.canals{display:flex; flex-direction:column; gap:8px; margin-bottom:6px}
+.canals a,.canals button{display:flex; align-items:center; gap:10px; padding:13px 14px; border-radius:var(--r);
+  border:1px solid var(--vora-2); background:var(--fons-3); color:var(--os); text-decoration:none;
+  font-size:14px; cursor:pointer; font-family:var(--sans); text-align:left}
+.canals a:hover,.canals button:hover{border-color:var(--accent); color:var(--accent)}
+.canals small{margin-left:auto; color:var(--os-3); font-size:11px}
+.fitxa-dades{list-style:none; margin:0 0 14px; padding:0; font-size:13px}
+.fitxa-dades li{display:flex; gap:10px; padding:7px 0; border-bottom:1px solid var(--vora); color:var(--os-2)}
+.fitxa-dades b{font-weight:400; color:var(--os-3); min-width:96px}
+.fitxa-dades span{color:var(--os)}
+.llista-ajust{list-style:none; margin:0; padding:0}
+.llista-ajust li{border-bottom:1px solid var(--vora)}
+.llista-ajust button{width:100%; text-align:left; background:none; border:0; color:var(--os); padding:13px 2px;
+  font-size:14px; cursor:pointer; font-family:var(--sans); display:flex; gap:10px; align-items:baseline}
+.llista-ajust small{color:var(--os-3); font-size:11.5px; margin-left:auto}
+/* ---------- avís (a dalt, i d'un altre material) ---------- */
+.avis{
+  position:fixed; left:50%; transform:translateX(-50%); top:14px; z-index:60; max-width:400px;
+  width:calc(100% - 32px); background:#EFE7D9; color:#2A241A; border-left:3px solid var(--accent-2);
+  border-radius:2px; padding:10px 13px; display:none; align-items:center; gap:12px; font-size:13px;
+  box-shadow:0 10px 30px rgba(0,0,0,.45);
+}
+.avis.obert{display:flex}
+.avis button{margin-left:auto; background:none; border:0; color:#7A5E12; font-size:13px; cursor:pointer;
+  font-family:var(--sans); text-decoration:underline; white-space:nowrap}
+/* ---------- bastida ---------- */
+[data-src],[data-inv]{position:relative}
+body.procs [data-src]::after,body.procs [data-inv]::after{
+  content:attr(data-src); position:absolute; top:-7px; left:-3px; z-index:9;
+  font-family:var(--sans); font-size:8.5px; line-height:1.5; background:var(--accent); color:#1A1509;
+  padding:0 4px; border-radius:2px; pointer-events:none; white-space:nowrap}
+body.procs [data-inv]::after{content:attr(data-inv); background:var(--accent-2); color:#F0E8DA}
+.nota-maqueta{border:1px dashed var(--accent-2); border-radius:var(--r); padding:10px 12px; margin:16px 0 0;
+  font-size:11.5px; line-height:1.5; color:var(--os-2); display:none}
+body.procs .nota-maqueta{display:block}
+.nota-maqueta b{color:var(--accent)}
+@media (prefers-reduced-motion:reduce){*{animation:none !important; transition:none !important}}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+/* ---------- durada, fotos, camps ---------- */
+.coberta .durada{
+  position:absolute; left:6px; bottom:6px; z-index:2; background:rgba(0,0,0,.72); color:var(--accent);
+  font-family:var(--serif); font-size:17px; line-height:1; padding:5px 8px 4px; border-radius:4px;
+  font-variant-numeric:tabular-nums; letter-spacing:.01em;
+}
+.coberta .durada.falta{font-family:var(--sans); font-size:10.5px; color:var(--os)}
+.coberta.amb-img .a,.coberta.amb-img .t,.coberta.amb-img .filet{display:none}
+.reixa .coberta{padding-bottom:36px}
+.reixa .coberta .t{-webkit-line-clamp:3}
+.reixa .coberta .a,.reixa .coberta .t{padding-right:28px}
+.reixa .coberta .filet{display:none}
+.disc .nom-sota{background:none; border:0; padding:0; width:100%; text-align:left; cursor:pointer; font-family:var(--sans);
+  font-size:11px; line-height:1.25; color:var(--os-2); margin-top:6px; display:block}
+.disc .nom-sota span{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+.disc .nom-sota b{font-weight:400; color:var(--os)}
+.disc .nom-sota i{font-style:normal}
+body[data-estil="original"] .disc .nom-sota i::before{content:' · '}
+body[data-estil="original"] .coberta:not(.amb-img) ~ .nom-sota,
+body[data-estil="galeria"] .coberta:not(.amb-img) ~ .nom-sota{display:none}
+.dur-gran{display:none}
+.foto{position:relative; width:46px; height:46px; flex:0 0 46px; border-radius:50%; overflow:hidden; background:var(--fons-2);
+  border:1px solid var(--vora); display:grid; place-items:center; font-family:var(--serif); font-size:15px; color:var(--os-2)}
+.foto img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
+.foto.quadrat{border-radius:4px}
+.afegeix{display:flex; align-items:center; gap:8px; width:100%; margin:0 0 16px; padding:12px 12px; background:none;
+  border:1px dashed var(--vora-2); border-radius:var(--r); color:var(--os-2); font-family:var(--sans); font-size:13.5px; cursor:pointer}
+.afegeix.sota{margin:14px 0 0}
+.afegeix:hover{border-color:var(--accent); color:var(--accent)}
+.camp{display:block; margin:0 0 10px}
+.camp span{display:block; font-size:11.5px; color:var(--os-3); margin-bottom:3px}
+.camp input{width:100%; background:var(--fons-3); border:1px solid var(--vora-2); border-radius:var(--r); color:var(--os);
+  font:inherit; padding:10px 10px}
+.camp input:focus{outline:2px solid var(--accent); outline-offset:1px}
+.proposta{border:1px solid var(--accent-2); border-radius:var(--r); padding:10px 12px; margin:0 0 12px; font-size:13px; color:var(--os-2)}
+.proposta b{font-family:var(--serif); font-size:20px; font-weight:400; color:var(--accent)}
+.retrat-gran{position:relative; width:104px; height:104px; flex:0 0 104px; border-radius:50%; overflow:hidden; background:var(--fons-2);
+  border:1px solid var(--vora-2); display:grid; place-items:center; font-family:var(--serif); font-size:30px; color:var(--os-2)}
+.retrat-gran img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
+
+/* ===========================================================
+   AFEGITS DE LA V7
+   =========================================================== */
+/* --- l'historial --- */
+.cerca{width:100%; background:var(--fons-2); border:1px solid var(--vora); border-radius:20px; color:var(--os);
+  font:inherit; font-size:14px; padding:9px 14px; margin:0 0 4px}
+.cerca::placeholder{color:var(--os-3)}
+.cerca:focus{outline:2px solid var(--accent); outline-offset:1px}
+.hgrup{font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--os-3); margin:18px 0 2px}
+.hfila{display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--vora)}
+.hcap{display:flex; gap:12px; align-items:center; flex:1; min-width:0; background:none; border:0; color:inherit;
+  text-align:left; cursor:pointer; font-family:var(--sans); padding:0}
+.hcob{position:relative; width:60px; height:60px; flex:0 0 60px; border-radius:5px; overflow:hidden; background:var(--fons-2);
+  display:grid; place-items:center; font-family:var(--serif); font-size:14px; color:var(--os-3);
+  box-shadow:0 4px 12px rgba(0,0,0,.35)}
+.hcob img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
+.hcob::after{content:'▶'; position:absolute; right:3px; bottom:3px; width:18px; height:18px; border-radius:50%;
+  background:rgba(0,0,0,.6); color:var(--os); font-size:7.5px; display:grid; place-items:center; font-family:var(--sans)}
+.htxt{flex:1; min-width:0; display:block}
+.htit{font-family:var(--serif); font-size:15px; line-height:1.2; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.hart{font-size:12px; color:var(--os-2); display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.hmeta{font-size:13px; color:var(--os-2); display:block; margin-top:3px; font-variant-numeric:tabular-nums}
+.hmeta b{font-weight:400; color:var(--accent); font-family:var(--serif); font-size:15.5px}
+.hmeta u{text-decoration:none; color:var(--os)}
+.hmeta b.prop{color:var(--os-2)}
+.hcap:hover .htit{color:var(--accent)}
+.hrot{flex:0 0 auto; background:none; border:1px solid var(--accent-2); color:var(--accent); border-radius:16px;
+  font-family:var(--sans); font-size:11.5px; padding:6px 10px; cursor:pointer; white-space:nowrap}
+.hrot:hover{background:var(--accent); color:var(--fons); border-color:var(--accent)}
+.hja{flex:0 0 auto; font-size:11px; color:var(--os-3); white-space:nowrap; padding-right:2px}
+.hja::before{content:''; display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--accent); margin-right:5px; vertical-align:1px}
+
+/* --- més vistós: el color el posen els discos --- */
+#s-faristol{position:relative}
+.ambient{position:absolute; left:-40px; right:-40px; top:-40px; height:250px; background-size:cover; background-position:center;
+  filter:blur(40px) saturate(1.6); opacity:.5; pointer-events:none; z-index:0; transition:background-image .6s ease;
+  -webkit-mask-image:linear-gradient(#000 30%,transparent); mask-image:linear-gradient(#000 30%,transparent)}
+#s-faristol > h1, #s-faristol > .subpestanyes, #s-faristol > .panell{position:relative; z-index:1}
+.reixa .coberta{border-radius:7px; transition:transform .12s ease, box-shadow .2s ease}
+.reixa .coberta.amb-img{border-color:transparent; box-shadow:0 8px 18px rgba(0,0,0,.4)}
+.reixa .coberta:active, .hcap:active .hcob, .fila-cap:active .foto{transform:scale(.96)}
+.coberta img,.hcob img,.foto img,.cob-fila img{animation:apareix .45s ease both}
+@keyframes apareix{from{opacity:0} to{opacity:1}}
+.foto.viu{box-shadow:0 0 0 2px var(--fons), 0 0 0 3.5px var(--accent); border-color:transparent}
+/* aspecte sobri: com la v6, per comparar */
+body.sobri .ambient{display:none}
+body.sobri .reixa .coberta{border-radius:1px; box-shadow:none; border-color:var(--vora)}
+body.sobri .hcob, body.sobri .cob-fila{border-radius:1px; box-shadow:none}
+body.sobri .foto.viu{box-shadow:none; border-color:var(--vora)}
+
+/* ===========================================================
+   V9 — UN SOL ESTIL, la barreja: portades senceres i grans (Galeria),
+   el color del LLOC en un bloc pla amb tinta (Cartell, suavitzat),
+   i l'Historial com una pila de lloms (Lloms).
+   =========================================================== */
+.dur-gran{display:none}
+.hdreta{display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:0 0 auto}
+.hdur{font-family:var(--titol); font-weight:800; font-stretch:72%; font-size:25px; line-height:1; color:#fff; font-variant-numeric:tabular-nums}
+.hdur.prop{opacity:.72}
+body[data-estil="ricard"]{--titol:'Archivo','sans-serif-condensed','Arial Narrow',sans-serif; --serif:var(--sans); --r:12px}
+body[data-estil="ricard"][data-lloc="Lleida"]{--c1:#D6A548; --tinta:#1A1306;
+  --fons:#16110A; --fons-2:#231B10; --fons-3:#30261A; --marc:#0B0805;
+  --os:#FFF8EA; --os-2:rgba(255,248,234,.76); --os-3:rgba(255,248,234,.56);
+  --accent:#F0C469; --accent-2:#B98A30; --vora:rgba(255,248,234,.12); --vora-2:rgba(255,248,234,.28)}
+body[data-estil="ricard"][data-lloc="Fora"]{--c1:#7FC0CF; --tinta:#04202B;
+  --fons:#07151B; --fons-2:#0F232C; --fons-3:#18323D; --marc:#020A0E;
+  --os:#EEF9FC; --os-2:rgba(238,249,252,.76); --os-3:rgba(238,249,252,.56);
+  --accent:#93D6E5; --accent-2:#3F97AF; --vora:rgba(238,249,252,.12); --vora-2:rgba(238,249,252,.28)}
+body[data-estil="ricard"] .ambient{display:none}
+/* el bloc de color del Lloc: capçalera, safata i cap del Faristol */
+body[data-estil="ricard"] header.barra{background:var(--c1); border-bottom:0; transition:background .45s ease}
+body[data-estil="ricard"] .marca{color:var(--tinta); font-family:var(--titol); font-weight:800; font-stretch:88%; font-size:16.5px}
+body[data-estil="ricard"] .lloc{background:var(--tinta); color:var(--c1); border-color:var(--tinta); font-weight:700; font-size:12px; padding:4px 11px}
+body[data-estil="ricard"] .icona-btn{border-color:rgba(0,0,0,.45); color:var(--tinta)}
+body[data-estil="ricard"] .icona-btn[aria-pressed="true"]{background:var(--tinta); color:var(--c1); border-color:var(--tinta)}
+body[data-estil="ricard"] .safata-tira{background:var(--c1); color:var(--tinta); border-top:1px solid rgba(0,0,0,.16); border-bottom:1px solid rgba(0,0,0,.16); font-weight:600; transition:background .45s ease}
+body[data-estil="ricard"] .safata-tira .tanca{color:var(--tinta)}
+body[data-estil="ricard"] .pastilla{background:var(--tinta); color:var(--c1)}
+body[data-estil="ricard"] .cap{background:var(--c1); color:var(--tinta); margin:-20px -16px 18px; padding:22px 16px 0; position:relative; z-index:1; transition:background .45s ease}
+body[data-estil="ricard"] h1{font-family:var(--titol); font-weight:900; font-stretch:70%; font-size:44px; line-height:.92; letter-spacing:-.02em}
+body[data-estil="ricard"] .cap h1{font-size:56px; font-stretch:68%; margin:0 0 16px; color:var(--tinta)}
+body[data-estil="ricard"] .subpestanyes{border-bottom:0; margin:0; gap:12px}
+body[data-estil="ricard"] .subpestanyes button{font-family:var(--titol); font-weight:800; font-stretch:84%; font-size:15.5px; line-height:1.08;
+  color:var(--tinta); opacity:.56; border-bottom:5px solid transparent; margin:0; padding-bottom:9px}
+body[data-estil="ricard"] .subpestanyes button[aria-selected="true"]{opacity:1; color:var(--tinta); border-bottom-color:var(--tinta)}
+/* discos en rotació: portades senceres i grans */
+body[data-estil="ricard"] .afegeix{margin:0 0 18px; border:0; background:var(--fons-2); border-radius:26px; color:var(--os); font-weight:600; justify-content:center; padding:13px}
+body[data-estil="ricard"] .afegeix.sota{margin:16px 0 0}
+body[data-estil="ricard"] .reixa{grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px 10px}
+body[data-estil="ricard"] .disc{min-width:0}
+body[data-estil="ricard"] .reixa .coberta{border-radius:12px; border:0; box-shadow:0 12px 26px rgba(0,0,0,.5); padding:14px 14px 44px; background:var(--fons-3)}
+body[data-estil="ricard"] .reixa .coberta .a{display:none}
+body[data-estil="ricard"] .reixa .coberta .t{font-family:var(--titol); font-weight:800; font-stretch:80%; font-size:20px; line-height:1.05; padding:0 34px 0 0; -webkit-line-clamp:4; color:var(--os-2)}
+body[data-estil="ricard"] .coberta .durada{left:8px; bottom:8px; border-radius:9px; background:rgba(0,0,0,.64); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  color:#fff; font-family:var(--titol); font-weight:800; font-stretch:72%; font-size:23px; padding:5px 9px 4px}
+body[data-estil="ricard"] .coberta .durada.falta{font-size:11px; font-stretch:100%; font-weight:600}
+body[data-estil="ricard"] .escoltar{width:38px; height:38px; top:8px; right:8px; background:var(--accent); color:var(--tinta); border:0; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,.45)}
+body[data-estil="ricard"] .disc .nom-sota{margin-top:9px}
+body[data-estil="ricard"] .disc .nom-sota span{display:block}
+body[data-estil="ricard"] .disc .nom-sota b{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  font-family:var(--titol); font-weight:700; font-stretch:88%; font-size:15.5px; line-height:1.12; color:var(--os)}
+body[data-estil="ricard"] .disc .nom-sota i{display:block; font-size:12.5px; color:var(--os-2); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+body[data-estil="ricard"] .disc .peu{margin-top:5px; font-size:11.5px}
+body[data-estil="ricard"] .repren{color:var(--tinta)}
+/* historial: la pila de lloms, amb la portada sencera a l'esquerra */
+body[data-estil="ricard"] .cerca{border:0; border-radius:26px; background:var(--fons-2); padding:12px 16px}
+body[data-estil="ricard"] .hgrup{font-family:var(--titol); font-weight:800; font-stretch:80%; font-size:19px; letter-spacing:0; text-transform:none; color:var(--os); margin:20px 0 8px}
+body[data-estil="ricard"] .hfila{position:relative; overflow:hidden; border:0; border-radius:8px; margin-bottom:5px; padding:6px 10px 6px 6px; background:var(--fons-2);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.45)}
+body[data-estil="ricard"] .hfila::before{content:''; position:absolute; inset:-16px; background:var(--img,none) center/cover; filter:blur(9px) saturate(1.5)}
+body[data-estil="ricard"] .hfila::after{content:''; position:absolute; inset:0; background:linear-gradient(90deg,rgba(0,0,0,.5),rgba(0,0,0,.36) 50%,rgba(0,0,0,.64))}
+body[data-estil="ricard"] .hfila > *{position:relative; z-index:1}
+body[data-estil="ricard"] .hcob{width:58px; height:58px; flex-basis:58px; border-radius:5px; box-shadow:0 4px 12px rgba(0,0,0,.5)}
+body[data-estil="ricard"] .htit{font-family:var(--titol); font-weight:700; font-stretch:86%; font-size:16.5px; color:#fff}
+body[data-estil="ricard"] .hart{color:rgba(255,255,255,.84); font-size:12.5px}
+body[data-estil="ricard"] .hmeta{color:rgba(255,255,255,.82); font-size:12.5px}
+body[data-estil="ricard"] .hmeta u{color:#fff; font-weight:600}
+body[data-estil="ricard"] .hrot{border:0; background:rgba(255,255,255,.93); color:#111; font-weight:700; font-size:11.5px; padding:5px 10px; border-radius:14px}
+body[data-estil="ricard"] .hja{color:#fff; font-size:11.5px; padding:0}
+/* preferents */
+body[data-estil="ricard"] .files{border-top:0}
+body[data-estil="ricard"] .foto{width:54px; height:54px; flex-basis:54px}
+body[data-estil="ricard"] .foto.quadrat{border-radius:8px}
+body[data-estil="ricard"] .nom{font-family:var(--titol); font-weight:700; font-stretch:88%; font-size:17.5px}
+body[data-estil="ricard"] .estat{font-size:12.5px}
+body[data-estil="ricard"] .cob-fila{width:48px; height:48px; flex-basis:48px; border-radius:6px}
+body[data-estil="ricard"] .marcador.amb-cob .cob-fila{width:76px; height:76px; flex-basis:76px}
+body[data-estil="ricard"] .eina button{font-size:13px}
+body[data-estil="ricard"] .marcador{border-style:solid; border-color:var(--vora); border-radius:14px; background:var(--fons-2)}
+/* peu, fulls, botons */
+body[data-estil="ricard"] nav.peu{border-top:3px solid var(--c1)}
+body[data-estil="ricard"] nav.peu button{font-family:var(--titol); font-weight:700; font-stretch:88%; font-size:15px; border-top:0; margin:0}
+body[data-estil="ricard"] nav.peu button[aria-current="page"]{color:var(--accent)}
+body[data-estil="ricard"] .full{border-radius:22px 22px 0 0; border-top:0}
+body[data-estil="ricard"] .full h3{font-family:var(--titol); font-weight:800; font-stretch:82%; font-size:24px; line-height:1.05; margin-bottom:6px}
+body[data-estil="ricard"] .bt{border-radius:24px; padding:11px 16px; font-weight:600}
+body[data-estil="ricard"] .bt.principal{color:var(--tinta)}
+body[data-estil="ricard"] .canals a,
+body[data-estil="ricard"] .canals button{border-radius:12px; border-color:var(--vora)}
+body[data-estil="ricard"] .escala button{font-family:var(--titol); font-weight:700; border-radius:12px}
+/* ---------- v10 ---------- */
+.marcador .barra-accions,.full .barra-accions,.superficie#s-artista .barra-accions{background:none}
+body[data-estil="ricard"] .reixa .coberta{border-radius:9px; padding:9px 9px 34px; box-shadow:0 8px 18px rgba(0,0,0,.5)}
+body[data-estil="ricard"] .reixa .coberta .t{font-size:14.5px; padding:0 26px 0 0}
+body[data-estil="ricard"] .coberta .durada{left:6px; bottom:6px; font-size:18px; padding:4px 7px 3px; border-radius:7px}
+body[data-estil="ricard"] .escoltar{width:31px; height:31px; top:6px; right:6px; font-size:11px}
+body[data-estil="ricard"] .disc .nom-sota{margin-top:7px}
+body[data-estil="ricard"] .disc .nom-sota b{font-size:13.5px}
+body[data-estil="ricard"] .disc .nom-sota i{font-size:11.5px}
+.torna-full{display:inline-flex; align-items:center; gap:6px; margin:0 0 14px; padding:9px 15px 9px 12px; border:0; border-radius:22px;
+  background:var(--fons-3); color:var(--os); font:600 14px var(--sans); cursor:pointer}
+body[data-estil="ricard"] .enrere{display:inline-flex; align-items:center; gap:6px; margin:0 0 16px; padding:10px 16px 10px 13px; border-radius:22px;
+  background:var(--fons-2); color:var(--os); font-weight:600; font-size:14.5px}
+.canals a.canal-principal{background:var(--accent); border-color:var(--accent); color:var(--tinta,#111); font-weight:700}
+.canals a.canal-principal small{color:inherit; opacity:.75}
+.panell.entra-dreta{animation:entraD .22s ease-out}
+.panell.entra-esquerra{animation:entraE .22s ease-out}
+@keyframes entraD{from{transform:translateX(26px); opacity:.2} to{transform:none; opacity:1}}
+@keyframes entraE{from{transform:translateX(-26px); opacity:.2} to{transform:none; opacity:1}}
+/* ---------- v11: capçalera amb icones, safata ---------- */
+header.barra{gap:6px}
+.marca{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
+body[data-estil="ricard"] .marca{font-size:15.5px}
+.ic-safata{position:relative; display:grid; place-items:center; width:38px; height:32px}
+.ic-safata .pastilla{position:absolute; top:-7px; right:-8px; min-width:19px; height:19px; font-size:11px; padding:0 5px; border-radius:10px}
+.ic-safata .pastilla.zero{opacity:.45}
+.lloc{display:inline-flex; align-items:center; gap:5px; min-height:32px}
+body[data-lloc="Fora"] #llocTxt{display:none}
+body[data-estil="ricard"][data-lloc="Fora"] .lloc{background:none; color:var(--tinta); border-color:rgba(0,0,0,.45); padding:4px 8px}
+body.procs-off #btProcs{display:none}
+.sf-card{background:var(--fons-2); border-radius:16px; padding:14px 14px 12px; margin:0 0 12px}
+.sf-cap{display:flex; align-items:baseline; gap:8px; justify-content:space-between; margin-bottom:10px}
+.sf-cap b{font-family:var(--titol); font-weight:800; font-stretch:84%; font-size:17px}
+.sf-cap span{font-size:12px; color:var(--os-3); white-space:nowrap}
+.sf-disc{display:flex; gap:10px; align-items:center; padding:5px 0}
+.sf-disc .hcob{width:44px; height:44px; flex-basis:44px; border-radius:5px; font-size:12px}
+.sf-disc .hcob::after{display:none}
+.sf-disc .t{font-family:var(--titol); font-weight:700; font-stretch:88%; font-size:15px; line-height:1.15; display:block}
+.sf-disc .a{font-size:12.5px; color:var(--os-2); display:block}
+.sf-disc .m{margin-left:auto; font-family:var(--titol); font-weight:800; font-stretch:72%; font-size:19px; color:var(--os-2)}
+.sf-q{font-weight:600; font-size:14px; margin:12px 0 8px; color:var(--os)}
+.sf-pre{font-size:13px; color:var(--os-2); margin:10px 0 0}
+.sf-chips{display:flex; flex-wrap:wrap; gap:7px}
+.sf-chips button{border:1px solid var(--vora-2); background:var(--fons-3); color:var(--os); border-radius:18px; padding:8px 12px;
+  font:500 13.5px var(--sans); cursor:pointer}
+.sf-chips button:hover{border-color:var(--accent); color:var(--accent)}
+.sf-chips button.principal{background:var(--accent); border-color:var(--accent); color:var(--tinta,#111); font-weight:700}
+.sf-chips button.nose{border-style:dashed}
+.sf-chips button.mes{border-color:transparent; background:none; color:var(--os-2); text-decoration:underline; text-underline-offset:3px}
+.sf-link{background:none; border:0; color:var(--os-2); font:13px var(--sans); padding:8px 0 0; cursor:pointer; text-decoration:underline; text-underline-offset:3px}
+.sf-tipus{font-size:12px; color:var(--accent); font-weight:600; margin-bottom:6px; display:block}
+.sf-buit{text-align:center; padding:28px 10px; color:var(--os-2)}
+.sf-buit b{display:block; font-family:var(--titol); font-weight:800; font-stretch:80%; font-size:24px; color:var(--os); margin-bottom:6px}
+.sf-resolta{display:flex; gap:10px; align-items:center; padding:10px 2px; border-bottom:1px solid var(--vora); font-size:13.5px}
+.sf-resolta span{flex:1; min-width:0; color:var(--os-2)}
+.sf-resolta span b{color:var(--os); font-weight:600}
+.sf-resolta button{background:none; border:1px solid var(--vora-2); color:var(--os-2); border-radius:14px; padding:5px 10px; font:12px var(--sans); cursor:pointer}
+.mesura{background:var(--fons-3); border-radius:12px; padding:12px 14px; margin:0 0 12px}
+.mesura .barra{height:8px; border-radius:4px; background:var(--vora); position:relative; margin:10px 0 6px; overflow:hidden}
+.mesura .barra i{position:absolute; left:0; top:0; bottom:0; background:var(--accent); border-radius:4px}
+.mesura .barra u{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--os)}
+.mesura small{color:var(--os-3); font-size:12px}
+/* ---------- v12 ---------- */
+.ar-fila{display:flex; gap:12px; align-items:center; width:100%; padding:8px 2px; border:0; border-bottom:1px solid var(--vora); background:none;
+  color:inherit; text-align:left; cursor:pointer; font-family:var(--sans)}
+.ar-fila .hcob{width:48px; height:48px; flex-basis:48px; border-radius:5px; font-size:12px}
+.ar-fila .hcob::after{display:none}
+.ar-fila .m{margin-left:auto; font-family:var(--titol); font-weight:800; font-stretch:72%; font-size:20px; color:var(--os-2)}
+.menu-net .llista-ajust button{font-size:15px; padding:15px 2px}
+</style>
+</head>
+<body data-lloc="Fora" data-estil="ricard">
+<div id="telefon">
+
+  <header class="barra" data-inv="I2">
+    <span class="marca" data-src="§12">La Meva Discoteca</span>
+    <button class="lloc" id="btLloc" data-src="§12·Lloc" aria-label="On ets"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 21s-6.5-6.1-6.5-11.2A6.5 6.5 0 0 1 18.5 9.8C18.5 14.9 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.3"/></svg><span id="llocTxt"></span></button>
+    <button class="icona-btn ic-safata" id="btSafata" data-src="§8.7" aria-label="La safata"><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><path d="M3 13.5 5.4 5.6A1.5 1.5 0 0 1 6.8 4.5h10.4a1.5 1.5 0 0 1 1.4 1.1L21 13.5V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18z"/><path d="M3 13.5h5l1.3 2.4h5.4l1.3-2.4h5"/></svg><span class="pastilla" id="safataNum">0</span></button>
+    <button class="icona-btn" id="btAjustos" title="La màquina" aria-label="La màquina">≡</button>
+    <button class="icona-btn" id="btProcs" aria-pressed="false" title="Procedències (només a la maqueta)">§</button>
+  </header>
+
+  <main>
+    <section class="superficie" id="s-prestatgeria">
+      <div class="cap" data-inv="I44">
+        <h1 data-src="§12" style="font-size:46px">La Prestatgeria</h1>
+        <div class="subpestanyes" role="tablist">
+          <button id="ptab-tots" role="tab" aria-selected="true" data-psub="tots">Tots<br>els discos</button>
+          <button id="ptab-cat" role="tab" aria-selected="false" data-psub="cat" data-src="§8.7 bis">Per<br>catalogar</button>
+          <button id="ptab-fons" role="tab" aria-selected="false" data-psub="fons" data-src="§8.12">Feina<br>de fons</button>
+        </div>
+      </div>
+      <div class="panell activa" id="q-tots">
+        <input class="cerca" id="cercaArxiu" type="search" placeholder="Cerca a tot l'arxiu" autocomplete="off">
+        <div id="arxiu" style="margin-top:12px"></div>
+        <p class="subtitol" style="margin-top:12px">A la màquina hi seran tots, amb filtres per gènere, tags i format. Aquí només els d'aquesta maqueta.</p>
+      </div>
+      <div class="panell" id="q-cat">
+        <p class="subtitol" style="margin:0 0 14px">Discos que han sonat i només tenen la fitxa mínima. Fins que no els cataloguis, La Gramola no els pot proposar. Sense comptador: es fa quan ve de gust.</p>
+        <div id="perCatalogar"></div>
+      </div>
+      <div class="panell" id="q-fons">
+        <p class="subtitol" style="margin:0 0 14px">Forats de fitxes que ja existeixen, sobretot les que entren pel volcat, i el repàs de notes. Sense comptador.</p>
+        <div id="feinaFons"></div>
+      </div>
+    </section>
+
+    <section class="superficie" id="s-safata">
+      <button class="enrere" data-tornasafata="1">← Tornar</button>
+      <h1 data-src="§8.7">La safata</h1>
+      <p class="subtitol" id="safataSub"></p>
+      <div id="safataLlista"></div>
+    </section>
+
+    <section class="superficie activa" id="s-faristol">
+      <div class="ambient" id="ambient" data-inv="I31"></div>
+      <div class="cap" data-inv="I37">
+      <h1 data-src="§7.7">El Faristol</h1>
+      <div class="subpestanyes" data-inv="v7" role="tablist">
+        <button id="tab-rot" role="tab" aria-selected="true" data-sub="rot">Discos<br>en Rotació</button>
+        <button id="tab-pref" role="tab" aria-selected="false" data-sub="pref">Artistes<br>Preferents</button>
+        <button id="tab-hist" role="tab" aria-selected="false" data-sub="hist">Historial</button>
+      </div>
+      </div>
+
+      <div class="panell activa" id="p-rot">
+        <button class="afegeix" id="btAfegeixDisc" data-src="§7.1·v1.33">＋ Posa un disc en rotació</button>
+        <div class="reixa" id="reixa" data-src="§7.7"></div>
+        <div class="nota-maqueta"><b>v10</b> · Tres portades per fila. Llisca amb el dit per canviar de pestanya. «Posa un disc en rotació» és a dalt de tot. Una caixa que espera porta el botó <b>Reprèn</b>. Aquí només hi ha el que has posat tu, o el que has acceptat quan la màquina t'ho ha preguntat (pregunta 7, tres escoltes): aquesta pregunta no es dibuixa en aquesta maqueta.</div>
+      </div>
+
+      <div class="panell" id="p-pref">
+        <div class="eina"><button id="btOrdena" aria-pressed="false" data-src="§8.3·Ordre">Ordena la llista</button></div>
+        <div class="files" id="files"></div>
+        <button class="afegeix sota" id="btAfegeixArtista" data-src="§7.7·v1.33">＋ Afegeix un artista</button>
+        <div class="nota-maqueta"><b>v7</b> · Si l'artista té un disc en rotació, la seva portada surt a la dreta, a més de la foto. L'anell marca qui té disc en rotació.</div>
+      </div>
+
+      <div class="panell" id="p-hist">
+        <input class="cerca" id="cerca" type="search" placeholder="Cerca a l'historial" autocomplete="off" data-inv="I32">
+        <div id="hist"></div>
+        <div class="nota-maqueta"><b>v7</b> · Una fila per disc, ordenada per l'última vegada que ha sonat. Sense límit de temps. Tocar la fila és <b>Escoltar ara</b>. Les dates i el nombre d'escoltes d'aquesta maqueta són inventats per poder provar la pantalla; els discos són reals. Una durada amb «?» és proposada i encara no confirmada: si poses el disc en rotació abans de confirmar-la, te la demana.</div>
+      </div>
+    </section>
+
+    <section class="superficie" id="s-artista"></section>
+
+    <section class="superficie" id="s-gramola">
+      <h1 data-src="§12·v1.33">La Gramola</h1>
+      <p class="subtitol">Aquí la màquina proposa.</p>
+      <div class="marcador">
+        <p class="cita">Encara no dissenyada.</p>
+        <p>És l'embut del capítol 4. Prioritat 3 del §9.</p>
+        <p>Fins a la v1.32 es deia <i>El Tria-Discos</i>.</p>
+      </div>
+    </section>
+  </main>
+
+  <nav class="peu" data-inv="I1">
+    <button data-anar="prestatgeria">Prestatgeria</button>
+    <button data-anar="faristol" aria-current="page">Faristol</button>
+    <button data-anar="gramola">Gramola</button>
+  </nav>
+</div>
+
+<div class="fons-fosc" id="fons"></div>
+<div class="full" id="full" role="dialog" aria-modal="true"></div>
+<div class="avis" id="avis"><span id="avisTxt"></span><button id="avisBt">Desfés</button></div>
+<input type="file" id="fitxer" accept="image/*" hidden>
+
+<script>
+/* ===== DADES: les 23 línies en rotació del «car pendent» del 10-10-2026.
+   img = la portada que va arribar sola a la sonda de l'11-10 (20 de 23). ===== */
+const ROTACIO = [{"art": "Peter Hammill", "tit": "Patience", "min": 40, "canal": "amazon", "posseit": true, "id": "r01", "img": "https://coverartarchive.org/release/47bbce12-47ba-4f81-838c-e98cc04445be/10639310315-250.jpg"}, {"art": "Bartók", "tit": "The 6 String Quartets (Keller Quartet)", "min": 149, "canal": "amazon", "posseit": true, "id": "r02"}, {"art": "Fish", "tit": "Weltschmerz", "min": 84, "canal": "amazon", "posseit": true, "id": "r03", "img": "https://coverartarchive.org/release/117e6e42-0e12-4d37-850a-de08cc48f1b5/27448550174-250.jpg"}, {"art": "Roger Mas", "tit": "Parnàs", "min": 43, "canal": "amazon", "id": "r04", "img": "https://coverartarchive.org/release/7a9ab3b9-8746-4398-910e-587dd6933386/40497306856-250.jpg"}, {"art": "Ludwig Göransson", "tit": "The Odyssey (Original Motion Picture Soundtrack)", "min": 118, "canal": "youtube", "id": "r05", "img": "https://coverartarchive.org/release/4ae20d98-0750-4de8-9d61-f10988a8b97f/45699417862-250.jpg"}, {"art": "Marillion", "tit": "Anoraknophobia", "min": 63, "canal": "amazon", "posseit": true, "id": "r06", "img": "https://coverartarchive.org/release/52f24542-9578-48f9-8635-26a11478e92b/31507131195-250.jpg"}, {"art": "Glenn Gould", "tit": "Bach: The French Suites", "min": 39, "canal": "amazon", "posseit": true, "part": {"n": 48, "de": 81, "cont": "la integral de Gould"}, "id": "r07", "img": "https://coverartarchive.org/release/e6751766-78e6-41f1-8a1b-2d8fb0eab9b0/11529288584-250.jpg"}, {"art": "Rafael Anton Irisarri", "tit": "The North Bend", "min": 40, "canal": "bandcamp", "nota": "i la reedició del 10è aniversari", "id": "r08", "img": "https://coverartarchive.org/release/3ee9fc01-5545-4d9b-b49c-e78a90439191/13988337801-250.jpg"}, {"art": "Slow Reels", "tit": "Everyday Exotic", "min": 39, "canal": "bandcamp", "nota": "Ian Hawgood + James Murray", "id": "r09", "img": "https://coverartarchive.org/release/9bfdaf31-ada2-461b-a31d-2445d549914f/38495964008-250.jpg"}, {"art": "Schumann", "tit": "Das Paradies und die Peri (Savall)", "min": 99, "canal": "amazon", "posseit": true, "id": "r10", "img": "https://coverartarchive.org/release/3e0c3c23-8a5d-4f5c-9257-49323236f3d7/45866827211-250.jpg"}, {"art": "Frank Zappa & The Mothers of Invention", "tit": "Weasels Ripped My Flesh", "min": 40, "canal": "amazon", "posseit": true, "id": "r11", "img": "https://coverartarchive.org/release/51c56f90-14d5-407a-9cc8-c0973aafba75/21978438527-250.jpg"}, {"art": "Bvdub", "tit": "Wrath and Apathy", "min": 76, "canal": "bandcamp", "id": "r12", "img": "https://coverartarchive.org/release/b9b29263-5cf9-497a-b65d-b962bdf167c5/27350468613-250.jpg"}, {"art": "Sarah Davachi", "tit": "The Will of Tongues", "min": 139, "canal": "bandcamp", "tags": ["bon equip"], "id": "r13", "img": "https://coverartarchive.org/release/feb566a9-be7c-49e4-92b5-ea43c00b8143/46126745575-250.jpg"}, {"art": "Deepspace", "tit": "The Atlas Sector", "min": 96, "canal": "bandcamp", "tags": ["apte acompanyat"], "id": "r14", "img": "https://coverartarchive.org/release/3169b5c6-a362-4d6a-8ae1-29527aa5945c/46136524337-250.jpg"}, {"art": "D York", "tit": "The Italian Chronicles", "min": 112, "canal": "bandcamp", "tags": ["apte dormir"], "part": {"n": 1, "de": 5, "cont": "The Italian Chronicles", "nom": "Vol. 1"}, "parts": [["Vol. 1", 112], ["Vol. 2", 56], ["Vol. 3", 61], ["Vol. 4", 50], ["Vol. 5", 52]], "id": "r15", "img": "https://coverartarchive.org/release/3d954bba-d52b-4ff5-add6-4ade57114ce4/42543364781-250.jpg"}, {"art": "theAdelaidean", "tit": "Airward", "min": 55, "canal": "bandcamp", "tags": ["apte dormir"], "id": "r16", "img": "https://coverartarchive.org/release/1eda8d1f-ace9-4647-9807-fb483eeb9b1c/46208835875-250.jpg"}, {"art": "Chris Zabriskie", "tit": "I Want You To Think About Me", "min": 53, "canal": "bandcamp", "id": "r17"}, {"art": "Brahms, Schumann, Mahler", "tit": "Piano Quartets", "min": 77, "canal": "amazon", "id": "r18"}, {"art": "Deaf Center", "tit": "Reverie", "min": 34, "canal": "bandcamp", "id": "r19", "img": "https://coverartarchive.org/release/d5c498bb-eaf8-4e9a-b8c8-e7947492fd73/42140586422-250.jpg"}, {"art": "Bob Dylan", "tit": "Under the Red Sky", "min": 35, "canal": "amazon", "id": "r20", "img": "https://coverartarchive.org/release/334fdc17-f3ad-30a3-8aa0-c673af334609/31802941122-250.jpg"}, {"art": "The Inward Circles", "tit": "I Have Heard a Music and it is Delirious", "min": 19, "canal": "bandcamp", "alies": "Richard Skelton", "id": "r21", "img": "https://coverartarchive.org/release/f8c9509f-46f7-4b31-ad32-a7ef7740805a/12774845849-250.jpg"}, {"art": "Øystein Skar", "tit": "Hem", "min": 37, "canal": "amazon", "id": "r22", "img": "https://coverartarchive.org/release/25909898-70dc-40a5-9f8f-1ca1a52f7c7f/44147399390-250.jpg"}, {"art": "Tom Leclerc", "tit": "A Brief Story of Slowness", "min": 34, "canal": "bandcamp", "id": "r23", "img": "https://coverartarchive.org/release/15e283e6-2da5-47b8-ba1f-ae1eb736517c/44164901869-250.jpg"}];
+/* Codis de Bandcamp llegits l'11-10-2026 de la pàgina de cada disc (item_id). D York: només el volum 1. */
+const BC={r08:'2047526199', r09:'1646776080', r12:'2082848946', r13:'1798022475', r14:'295441197', r15:'1619048694',
+  r16:'847531634', r17:'2842653166', r19:'2429362044', r21:'252589909', r23:'3867378599'};
+ROTACIO.forEach(d=>{ if(BC[d.id]) d.bc=BC[d.id]; });
+/* Els 40 preferents, en l'ordre del «car pendent». foto = la que va trobar la sonda (31 de 40). */
+const PREFERENTS = [{"nom": "Brian Eno", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b1/Brian_Eno_2015.png/250px-Brian_Eno_2015.png"}, {"nom": "Glenn Gould", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/78/Glenn_Gould_1.jpg/250px-Glenn_Gould_1.jpg", "rot": "r07"}, {"nom": "Joni Mitchell", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/97/Joni_Mitchell_2021_Kennedy_Center_Honors_%28cropped%29.jpg/250px-Joni_Mitchell_2021_Kennedy_Center_Honors_%28cropped%29.jpg"}, {"nom": "Steve Roach", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/3e/Steve_Roach%2C_Tucson_%28bright%29.jpg/250px-Steve_Roach%2C_Tucson_%28bright%29.jpg"}, {"nom": "Peter Hammill", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/33/Peter_Hammill_%28cropped%29.jpg/250px-Peter_Hammill_%28cropped%29.jpg", "rot": "r01"}, {"nom": "Max Richter", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/88/Max-Richter-3_%28cropped%29.jpg/250px-Max-Richter-3_%28cropped%29.jpg"}, {"nom": "Biosphere", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1a/Jenssen_cracow.jpg/250px-Jenssen_cracow.jpg"}, {"nom": "Sigur Rós", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/af/Sigur_R%C3%B3s_at_the_Orpheum_Theatre%2C_San_Francisco.jpg/250px-Sigur_R%C3%B3s_at_the_Orpheum_Theatre%2C_San_Francisco.jpg"}, {"nom": "Grouper", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/4b/Liz_Harris_Grouper.png/250px-Liz_Harris_Grouper.png"}, {"nom": "Mount Eerie", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1b/Phil_Elverum_%28Mount_Eerie%29.jpg/250px-Phil_Elverum_%28Mount_Eerie%29.jpg"}, {"nom": "Will Johnson"}, {"nom": "Bob Dylan", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2a/DylanYoungKilkenny140719v2_%2850_of_52%29_%2852246124397%29_%28cropped%29.jpg/250px-DylanYoungKilkenny140719v2_%2850_of_52%29_%2852246124397%29_%28cropped%29.jpg", "rot": "r20"}, {"nom": "Sun Kil Moon", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/9/9d/Sun_Kil_Moon_Paris_2014.jpg/250px-Sun_Kil_Moon_Paris_2014.jpg"}, {"nom": "Father John Misty", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/2/2c/J._Tillman_2014.jpg/250px-J._Tillman_2014.jpg"}, {"nom": "Devin Townsend", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e1/Devin_Townsend_Project_%E2%80%93_Wacken_Open_Air_2014_03.jpg/250px-Devin_Townsend_Project_%E2%80%93_Wacken_Open_Air_2014_03.jpg"}, {"nom": "Tinariwen", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/6/67/Tinariwen-Bardentreffen_2010.jpg/250px-Tinariwen-Bardentreffen_2010.jpg"}, {"nom": "Burial", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d2/Burial1.svg/250px-Burial1.svg.png"}, {"nom": "Villagers", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7f/Villagers_%28Haldern_Pop_Festival_2013%29_IMGP4642_smial_wp.jpg/250px-Villagers_%28Haldern_Pop_Festival_2013%29_IMGP4642_smial_wp.jpg"}, {"nom": "Al Tall", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/3/38/Al_Tall.jpg/250px-Al_Tall.jpg"}, {"nom": "Peter Gabriel", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/71/Peter_Gabriel%2C_Denver_2023.jpg/250px-Peter_Gabriel%2C_Denver_2023.jpg"}, {"nom": "Bvdub", "rot": "r12"}, {"nom": "Summer Heart"}, {"nom": "Bill Callahan", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1f/Bill_callahan_atp.jpg/250px-Bill_callahan_atp.jpg", "variant": "al «car pendent»: BILL CALAHAN"}, {"nom": "Ian Hawgood"}, {"nom": "James Murray"}, {"nom": "Jon Anderson", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/d/d6/Jon_Anderson_2017_%28cropped%29.jpg/250px-Jon_Anderson_2017_%28cropped%29.jpg"}, {"nom": "Pearl Jam", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/85/PearlJam-Oakland-2013.JPG/250px-PearlJam-Oakland-2013.JPG"}, {"nom": "Foo Fighters", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/4/49/FoosLollBerlin190917-74_%28cropped%29.jpg/250px-FoosLollBerlin190917-74_%28cropped%29.jpg"}, {"nom": "Elliott Smith", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/8c/Elliott_Smith.jpg/250px-Elliott_Smith.jpg"}, {"nom": "Björk", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/a/af/Bj%C3%B6rk_by_Hello%2C_I_am_Bruce_at_Nature_Awareness_Nattura_concert_Reykjavik_2008.jpg/250px-Bj%C3%B6rk_by_Hello%2C_I_am_Bruce_at_Nature_Awareness_Nattura_concert_Reykjavik_2008.jpg"}, {"nom": "zakè"}, {"nom": "Richard Skelton", "rot": "r21"}, {"nom": "Yann Novak"}, {"nom": "Joachim Spieth"}, {"nom": "Benoît Pioulard", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/89/Benoit_Pioulard_performing_at_Oxfam_Cafe_at_Tufts_University_in_2009.png/250px-Benoit_Pioulard_performing_at_Oxfam_Cafe_at_Tufts_University_in_2009.png"}, {"nom": "Lambchop", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7f/Lambchop_Dachau.jpg/250px-Lambchop_Dachau.jpg"}, {"nom": "Wilco", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/8/85/Wilco_MassMoca_AustinNelson.jpg/250px-Wilco_MassMoca_AustinNelson.jpg"}, {"nom": "Michael Jackson", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/b/b9/Michael_Jackson_1983_%283x4_cropped%29_%28contrast%29.jpg/250px-Michael_Jackson_1983_%283x4_cropped%29_%28contrast%29.jpg"}, {"nom": "Dinosaur Jr.", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/7/7b/Dinosaur_Jr._at_WTAI_in_Stockholm.jpg/250px-Dinosaur_Jr._at_WTAI_in_Stockholm.jpg"}, {"nom": "Crippled Black Phoenix", "foto": "https://thumb.wikimedia.org/wikipedia/commons/thumb/c/c6/Crippled_Black_Phoenix_%40_Roadburn_Festival_2017_03.jpg/250px-Crippled_Black_Phoenix_%40_Roadburn_Festival_2017_03.jpg"}];
+
+/* ===== L'HISTORIAL DE LA MAQUETA (v7).
+   Els discos són reals: dotze de la rotació i tres línies del «car pendent» que no hi són.
+   Les DATES (dies enrere) i el NOMBRE D'ESCOLTES són inventats, per poder provar la pantalla. ===== */
+const FORA = {
+  h1:{art:'Federico Durand', tit:'El Libro de los Arboles Magicos', min:42, confirmada:true},
+  h2:{art:'Phoanogramma', tit:'Dream Flow', min:52},
+  h3:{art:'Steve Roach & Vidna Obmana', tit:'Ascension of Shadows Complete', min:211},
+  h4:{art:'Phase 90', tit:'Infinitati', min:70, canal:'aimp'},
+  h5:{art:'Jon Anderson', tit:'Animation', min:40, canal:'aimp'}
+};
+const DEMO_HIST = [['r16',0,4],['h1',0,1],['r01',1,5],['h2',1,2],['r13',2,2],['h4',2,1],['r20',3,3],['h3',4,1],['r03',5,3],
+  ['r09',6,4],['h5',8,2],['r07',9,2],['r15',12,3],['r22',15,6],['r06',21,2],['r11',34,1],['r19',48,3]];
+
+const CANALS = {
+  amazon:{nom:'Amazon Music', url:t=>'https://music.amazon.com/search/'+encodeURIComponent(t)},
+  youtube:{nom:'YouTube Music', url:t=>'https://music.youtube.com/search?q='+encodeURIComponent(t)},
+  bandcamp:{nom:'Bandcamp', url:t=>'https://bandcamp.com/search?q='+encodeURIComponent(t)+'&item_type=a'},
+  aimp:{nom:'AIMP', url:null}
+};
+/* AIMP s'obre donant-li un quart de segon de silenci (prova D de l'11-10). A la màquina, el fitxer viurà al teu GitHub Pages. */
+const SILENCI='raw.githubusercontent.com/anars/blank-audio/master/250-milliseconds-of-silence.mp3';
+const AIMP_APP='intent://'+SILENCI+'#Intent;scheme=https;action=android.intent.action.VIEW;type=audio/mpeg;package=com.aimp.player;S.browser_fallback_url='+encodeURIComponent(location.href)+';end';
+function enllacCanal(k,d){
+  const q=d.art+' '+d.tit;
+  if(k==='bandcamp'){
+    const id=(d.bc && !(d.part && d.part.n>1)) ? d.bc : null;
+    return id ? {href:'x-bandcamp://show_tralbum?tralbum_type=a&tralbum_id='+id, nota:"obre el disc a l'app", ext:false}
+              : {href:CANALS.bandcamp.url(q), nota:'cerca: falta el codi', ext:true};
+  }
+  if(k==='aimp') return {href:AIMP_APP, nota:"obre l'app; el disc el tries tu", ext:false};
+  return {href:CANALS[k].url(q), nota:'obre la cerca', ext:true};
+}
+const ESCALA=['Mític','Discàs','Bo','Normal','Fluix','Ignorar'];
+
+const estat={superficie:'faristol', sub:'rot', lloc:'Fora', gps:'Encara no s\'ha mirat la ubicació.',
+  rotacio:ROTACIO.map(d=>Object.assign({},d)), preferents:PREFERENTS.map(p=>Object.assign({},p)),
+  ordena:false, artista:null, ultima:null, pujades:{}, filtre:'',
+  historial:DEMO_HIST.map(([k,q,n])=>{
+    const o=Object.assign({}, FORA[k]||ROTACIO.find(r=>r.id===k), {quan:q, n:n, hid:k});
+    if(!FORA[k]) o.confirmada=true;
+    delete o.id; return o; })};
+
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const IMG = u => `<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="var c=this.closest('.coberta');if(c)c.classList.remove('amb-img');this.remove()">`;
+const inicials = n => n.replace(/[^\p{L}\s.]/gu,'').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0].toUpperCase()).join('');
+const esPreferent = art => estat.preferents.some(p=>p.nom.toLowerCase()===art.toLowerCase());
+const enRot = h => estat.rotacio.some(r=>r.art===h.art && r.tit===h.tit);
+const copia = h => { const o=Object.assign({},h); ['quan','n','hid','confirmada','id'].forEach(k=>delete o[k]); return o; };
+
+/* ===== LA SAFATA (v11). Sessions i preguntes INVENTADES per provar la pantalla; els discos són reals. ===== */
+const CONTEXTOS=['A casa','Escolta activa','Conduint (sol)','Conduint (acompanyat)','Llegir','Llegir acompanyat','Dinar / sopar familiar',
+  'Treballant','Al gimnàs','Caminant / pel carrer','Netejar / Cuinar','Dutxa','Amor','Platja','Avió / Tren / Bus','Malalt al llit','Dormir'];
+const HABITUALS=['Treballant','A casa','Caminant / pel carrer','Avió / Tren / Bus','Dormir','Escolta activa'];
+const discDe = k => ROTACIO.find(r=>r.id===k) || FORA[k];
+let sfId=0;
+const sessio = (quan, compte, claus, pre) => ({t:'sessio', id:'s'+(++sfId), quan, compte, discos:claus.map(discDe), pre});
+estat.safata=[
+  sessio('Avui · 8:05 – 9:50','compte de feina',['r22','r16'],'Treballant'),
+  sessio('Ahir · 22:40 – 23:35','compte personal',['r13']),
+  sessio('Ahir · 18:10 – 19:20','compte personal',['h4','r01']),
+  {t:'durada', id:'d1', disc:FORA.h2},
+  {t:'rotacio', id:'q1', disc:FORA.h1},
+  sessio('Diumenge · 11:00 – 11:40','compte personal',['r20'])
+];
+estat.resoltes=[]; estat.prova={sessions:18, nose:3};
+function pintaBadge(){ const n=estat.safata.length, b=$('#safataNum'); b.textContent=n; b.classList.toggle('zero', n===0); }
+function minDisc(d){ return `<span class="sf-disc"><span class="hcob">${esc(inicials(d.art))}${d.img?IMG(d.img):''}</span>
+  <span><span class="t">${esc(d.tit)}</span><span class="a">${esc(d.art)}</span></span><span class="m">${d.min?d.min+'′':''}${d.confirmada===false||(!d.confirmada&&FORA_K(d))?'?':''}</span></span>`; }
+const FORA_K = d => Object.values(FORA).includes(d) && !d.confirmada;
+function pintaSafata(){
+  const n=estat.safata.length;
+  $('#safataSub').textContent = n ? (n===1?'Una cosa per resoldre.':n+' coses per resoldre.') : 'Res pendent.';
+  let h='';
+  if(!n) h+=`<div class="sf-buit"><b>Safata buida</b>Quan soni alguna cosa, la màquina et preguntarà aquí el que no sap.</div>`;
+  estat.safata.forEach((x,i)=>{
+    if(x.t==='sessio'){
+      const ctx = x.ctx;
+      let q;
+      if(ctx){
+        q=`<p class="sf-q">${ctx==='No ho sé'?'I com ho escoltaves?':'A casa: com ho escoltaves?'}</p>
+          <div class="sf-chips">${['Despert','Dormint','Estudi cant'].map(a=>`<button data-sfatencio="${i}:${a}">${a}</button>`).join('')}</div>
+          <button class="sf-link" data-sfctx="${i}:">Canvia el lloc</button>`;
+      } else {
+        const llista = x.tots ? CONTEXTOS : HABITUALS;
+        q=`${x.pre?`<p class="sf-pre">Ve del compte de feina: la màquina proposa <b>${x.pre}</b>.</p>`:''}
+          <p class="sf-q">On ho escoltaves?</p>
+          <div class="sf-chips">${llista.map(c=>`<button class="${c===x.pre?'principal':''}" data-sfctx="${i}:${esc(c)}">${esc(c)}</button>`).join('')}
+            <button class="nose" data-sfctx="${i}:No ho sé">No ho sé</button>
+            ${x.tots?'':`<button class="mes" data-sftots="${i}">Tots (${CONTEXTOS.length})</button>`}</div>
+          ${x.discos.length>1?`<button class="sf-link" data-sfsepara="${i}">Separa: cada disc per la seva banda</button>`:''}`;
+      }
+      h+=`<div class="sf-card" data-inv="I41"><div class="sf-cap"><b>${esc(x.quan)}</b><span>${esc(x.compte)} · ${x.discos.length} ${x.discos.length===1?'disc':'discos'}</span></div>
+        ${x.discos.map(minDisc).join('')}${q}</div>`;
+    } else if(x.t==='durada'){
+      h+=`<div class="sf-card"><span class="sf-tipus">Disc nou: cal la durada</span>${minDisc(x.disc)}
+        <p class="sf-pre">Proposta: la suma de les pistes que han sonat. Només és la del disc si l'has sentit sencer.</p>
+        <label class="camp" style="margin-top:10px"><span>Durada en minuts</span><input id="sfDur${i}" type="number" inputmode="numeric" value="${x.disc.min}"></label>
+        <div class="sf-chips"><button class="principal" data-sfdurada="${i}">És correcta</button></div></div>`;
+    } else if(x.t==='rotacio'){
+      h+=`<div class="sf-card"><span class="sf-tipus" data-src="§8.10·7">Tres escoltes en sis mesos</span>${minDisc(x.disc)}
+        <p class="sf-q">Sembla que l'estàs estudiant. El poso en rotació?</p>
+        <div class="sf-chips"><button class="principal" data-sfrot="${i}:si">Sí, posa'l</button><button data-sfrot="${i}:no">No</button></div></div>`;
+    }
+  });
+  if(estat.resoltes.length){
+    h+=`<h2 style="margin-top:22px">Resoltes</h2>`+estat.resoltes.map((r,k)=>`<div class="sf-resolta"><span><b>${esc(r.titol)}</b> · ${esc(r.resposta)}</span>
+      ${r.item?`<button data-sfreobre="${k}">Canvia</button>`:''}</div>`).join('');
+  }
+  $('#safataLlista').innerHTML=h; pintaBadge();
+}
+function resol(i, resposta){
+  const x=estat.safata.splice(i,1)[0];
+  const titol = x.t==='sessio' ? x.quan : x.disc.tit;
+  estat.resoltes.unshift({titol, resposta, item:x.t==='sessio'?Object.assign({}, x, {ctx:undefined}):null});
+  if(x.t==='sessio'){ estat.prova.sessions++; if(resposta.startsWith('No ho sé')) estat.prova.nose++; }
+  pintaSafata();
+  avisa(titol+': '+resposta, ()=>{ estat.resoltes.shift(); estat.safata.splice(i,0,x);
+    if(x.t==='sessio'){ estat.prova.sessions--; if(resposta.startsWith('No ho sé')) estat.prova.nose--; } pintaSafata(); });
+}
+
+/* ===== La Prestatgeria (v12). Els forats i les fitxes mínimes són inventats; els discos, reals. ===== */
+estat.psub='tots';
+estat.perCatalogar=[{d:FORA.h3, n:1}, {d:FORA.h2, n:2}];
+estat.feinaFons=[
+  {t:'Bartók — The 6 String Quartets', f:'falta l\'any de publicació i el segell'},
+  {t:'Glenn Gould — la integral', f:'33 parts sense durada'},
+  {t:'Repàs de notes', f:'discos amb un 2 i discos en «Encara no»'}];
+function totsElsDiscos(){
+  const vist=new Set(), out=[];
+  estat.rotacio.concat(estat.historial, Object.values(FORA)).forEach(d=>{ const k=d.art+'|'+d.tit; if(!vist.has(k)){ vist.add(k); out.push(d); } });
+  return out.sort((a,b)=>a.art.localeCompare(b.art,'ca'));
+}
+function pintaPrestatgeria(){
+  const f=($('#cercaArxiu').value||'').toLowerCase();
+  const ll=totsElsDiscos().filter(d=>!f || (d.art+' '+d.tit).toLowerCase().includes(f));
+  estat.arxiuLlista=ll;
+  $('#arxiu').innerHTML = ll.map((d,i)=>`<button class="ar-fila" data-arxiu="${i}"><span class="hcob">${esc(inicials(d.art))}${d.img?IMG(d.img):''}</span>
+    <span><span class="htit">${esc(d.tit)}</span><span class="hart">${esc(d.art)}</span></span><span class="m">${d.min?d.min+'′':''}</span></button>`).join('')
+    || `<p class="subtitol">Res amb aquest nom.</p>`;
+  $('#perCatalogar').innerHTML = estat.perCatalogar.length ? estat.perCatalogar.map((x,i)=>`<div class="sf-card"><span class="sf-tipus">${x.n} ${x.n===1?'escolta':'escoltes'}</span>${minDisc(x.d)}
+      <p class="sf-q">Què és?</p>
+      <div class="sf-chips"><button data-catal="${i}:nou">Un disc nou</button><button data-catal="${i}:altre">Un que ja tinc amb un altre nom</button><button data-catal="${i}:part">Part d'un disc que ja tinc</button></div></div>`).join('')
+    : `<div class="sf-buit"><b>Res per catalogar</b>Quan soni un disc nou, sortirà aquí amb la fitxa mínima.</div>`;
+  $('#feinaFons').innerHTML = estat.feinaFons.map((x,i)=>`<div class="sf-resolta"><span><b>${esc(x.t)}</b> · ${esc(x.f)}</span><button data-fons="${i}">Omple-ho</button></div>`).join('');
+}
+const PSUBS=['tots','cat','fons'];
+function psub(v){
+  const de=PSUBS.indexOf(estat.psub), a=PSUBS.indexOf(v), p=$('#q-'+v);
+  p.classList.remove('entra-dreta','entra-esquerra');
+  if(a!==de){ void p.offsetWidth; p.classList.add(a>de?'entra-dreta':'entra-esquerra'); window.scrollTo(0,0); }
+  estat.psub=v;
+  PSUBS.forEach(k=>{ $('#ptab-'+k).setAttribute('aria-selected', v===k); $('#q-'+k).classList.toggle('activa', v===k); });
+}
+function fullFitxaArxiu(d){
+  const c=CANALS[d.canal]||CANALS.amazon;
+  obreFull(`<h3>${esc(d.tit)}</h3><p>${esc(d.art)}</p>
+   <ul class="fitxa-dades">
+     <li><b>Durada</b><span>${d.min?d.min+'′':'pendent'}</span></li>
+     <li><b>Canal</b><span>${c.nom}</span></li>
+     <li><b>En rotació</b><span>${enRot(d)?'sí':'no'}</span></li>
+   </ul>
+   <p style="font-size:12px">A la màquina, aquí hi ha la fitxa sencera i es pot editar.</p>
+   <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-escarxiu="1">Escoltar ara</button></div>`);
+  estat.fitxaArxiu=d;
+}
+
+/* ===== rotació ===== */
+function pintaReixa(){
+  $('#reixa').innerHTML = estat.rotacio.map(d=>{
+    const part = d.esperant
+      ? `<span class="part">esperant la part ${d.part.n+1}</span><button class="repren" data-repren="${d.id}" data-inv="I34">Reprèn</button>`
+      : (d.part ? `<span class="part">${d.part.nom?esc(d.part.nom)+' · ':''}part ${d.part.n}/${d.part.de}</span>` : '');
+    const tags=(d.tags||[]).map(t=>`<span class="tag" data-src="§12">${esc(t)}</span>`).join('');
+    const dur = d.esperant ? '' : (d.min ? `<span class="durada">${d.min}′</span>` : `<span class="durada falta">falta la durada</span>`);
+    const alt = Math.round(Math.max(44, Math.min(74, 34 + (d.min||40)*0.24)));
+    return `<div class="disc" style="${d.img?`--img:url('${esc(d.img)}');`:''}--h:${alt}px">
+      <button class="coberta ${d.img?'amb-img':''}" data-fitxa="${d.id}" aria-label="Fitxa de ${esc(d.tit)}" data-src="§8.3·Portada">
+        ${d.img?IMG(d.img):''}<span class="a">${esc(d.art)}</span><span class="t">${esc(d.tit)}</span><span class="filet"></span>${dur}
+      </button>
+      <button class="escoltar" data-escoltar="${d.id}" aria-label="Escoltar ara ${esc(d.tit)}">▶</button>
+      <span class="dur-gran">${d.esperant?'—':(d.min||'?')}<small>${d.esperant?'esperant':'minuts'}</small></span>
+      <button class="nom-sota" data-fitxa="${d.id}" tabindex="-1"><span><b>${esc(d.tit)}</b><i>${esc(d.art)}</i></span></button>
+      <div class="peu">${part}${tags}</div>
+    </div>`;
+  }).join('');
+  pintaHistorial();
+}
+
+/* ===== historial (v7) ===== */
+const quanTxt = q => q===0 ? 'avui' : (q===1 ? 'ahir' : 'fa '+q+' dies');
+function pintaHistorial(){
+  const f=(estat.filtre||'').toLowerCase();
+  let grup='', h='';
+  estat.historial.forEach((x,i)=>{
+    if(f && !(x.art+' '+x.tit).toLowerCase().includes(f)) return;
+    const g = x.quan<7 ? 'Aquesta setmana' : (x.quan<31 ? 'Aquest mes' : 'Abans');
+    if(g!==grup){ grup=g; h+=`<div class="hgrup" data-inv="I33">${g}</div>`; }
+    h+=`<div class="hfila" style="${x.img?`--img:url('${esc(x.img)}')`:''}">
+      <button class="hcap" data-hescoltar="${i}" aria-label="Escoltar ara ${esc(x.tit)}">
+        <span class="hcob">${esc(inicials(x.art))}${x.img?IMG(x.img):''}</span>
+        <span class="htxt"><span class="htit">${esc(x.tit)}</span><span class="hart">${esc(x.art)}</span>
+          <span class="hmeta"><u>${quanTxt(x.quan)}</u> · ${x.n} ${x.n===1?'escolta':'escoltes'}</span></span>
+      </button>
+      <span class="hdreta"><span class="hdur ${x.confirmada?'':'prop'}">${x.min}′${x.confirmada?'':'?'}</span>
+      ${enRot(x) ? `<span class="hja">en rotació</span>` : `<button class="hrot" data-hrot="${i}">＋ Rotació</button>`}</span>
+    </div>`;
+  });
+  $('#hist').innerHTML = h || `<p class="subtitol" style="margin:18px 0 0">Res amb aquest nom.</p>`;
+  const top=estat.historial.find(x=>x.img);
+  $('#ambient').style.backgroundImage = top ? `url("${top.img}")` : 'none';
+}
+
+/* ===== preferents ===== */
+function enRotacioDe(p){ return estat.rotacio.find(r=>r.id===p.rot) || null; }
+function imatgeDe(p){            // foto pujada → foto real → portada de l'últim que ha sonat → text
+  if(estat.pujades[p.nom]) return {u:estat.pujades[p.nom], q:false};
+  if(p.foto) return {u:p.foto, q:false};
+  const r=enRotacioDe(p); if(r&&r.img) return {u:r.img, q:true};
+  return null;
+}
+function pintaFiles(){
+  $('#files').classList.toggle('ordenant', estat.ordena);
+  $('#files').innerHTML = estat.preferents.map((p,i)=>{
+    const r=enRotacioDe(p), im=imatgeDe(p);
+    const linia = r ? `Ara estudies <em>${esc(r.tit)}</em>` : p.proper ? `El proper: <em>${esc(p.proper.tit)}</em>` : (p.darrer ? `L'últim que ha sonat: <em>${esc(p.darrer)}</em>` : '');
+    const mou = estat.ordena ? `<span class="mou">
+        <button data-mou="${i}:-1" aria-label="Amunt" ${i===0?'disabled':''}>▲</button>
+        <button data-mou="${i}:1" aria-label="Avall" ${i===estat.preferents.length-1?'disabled':''}>▼</button></span>
+        <button class="nansa" aria-label="Arrossega ${esc(p.nom)}">⠿</button>` : '';
+    const cob = (r && r.img) ? `<span class="cob-fila" data-inv="v7">${IMG(r.img)}</span>` : '';
+    return `<div class="fila" data-fila="${i}">
+      <button class="fila-cap" data-artista="${i}">
+        <span class="foto ${im&&im.q?'quadrat':''} ${r?'viu':''}" data-src="§8.3·Retrat">${esc(inicials(p.nom))}${im?IMG(im.u):''}</span>
+        <span class="fila-txt">
+          <span class="nom" data-src="§7.7">${esc(p.nom)}</span>
+          ${linia?`<span class="estat" data-src="§7.7·v1.33">${linia}</span>`:''}
+        </span>${cob}
+      </button>${mou}
+    </div>`;
+  }).join('');
+}
+
+/* ===== pantalla d'artista ===== */
+function pintaArtista(i){
+  const p=estat.preferents[i], r=enRotacioDe(p), im=imatgeDe(p);
+  const pujada=!!estat.pujades[p.nom];
+  $('#s-artista').innerHTML=`<button class="enrere" data-tornar="1">← Tornar</button>
+    <div class="cap-artista">
+      <span class="retrat-gran" data-src="§8.3·Retrat">${esc(inicials(p.nom))}${im?IMG(im.u):''}</span>
+      <div><h1 data-src="§7.7">${esc(p.nom)}</h1>
+        <div class="estat" style="font-size:12.5px">${r?'Amb disc en rotació':'Preferent'}</div>
+        ${p.variant?`<div class="estat" style="font-size:11.5px;color:var(--os-3)">${esc(p.variant)}</div>`:''}</div>
+    </div>
+    ${r?`<div class="marcador ${r.img?'amb-cob':''}">${r.img?`<span class="cob-fila">${IMG(r.img)}</span>`:''}<div><p class="cita">Ara estudies ${esc(r.tit)}.</p><p>${r.alies?esc(r.art)+' és un dels seus noms.':'És a Discos en Rotació.'}</p></div></div>`
+       :(p.proper?`<div class="marcador" data-inv="I39"><p class="cita">El proper: ${esc(p.proper.tit)}.</p><p>L'has triat tu. Quan un disc seu entri en rotació, aquesta nota s'esborra.</p>
+           <div class="barra-accions" style="position:static;padding:4px 0 0"><button class="bt principal" data-escproper="${i}">Escoltar ara</button>
+           <button class="bt" data-triaproper="${i}">Canvia'l</button><button class="bt discret" data-treuproper="${i}">Treu-lo</button></div></div>`
+       :p.darrer?`<div class="marcador"><p class="cita">L'últim que ha sonat: ${esc(p.darrer)}.</p></div>`
+       :`<div class="marcador"><p class="cita">Encara no ha sonat res seu.</p><p>La màquina només sap el que passa des del dia que arrenca. Quan soni un disc seu, sortirà aquí.</p></div>`)}
+    <div class="canals" style="margin-top:14px">
+      ${(!r && !p.proper)?`<button data-triaproper="${i}" data-inv="I39">Tria el proper disc <small>el primer que vols escoltar</small></button>`:''}
+      <button data-foto="${i}" data-src="§3.5·v1.33">${pujada?'Canvia la foto':(p.foto?'Posa-hi una altra foto':'Puja una foto')} <small>${pujada?'la teva':(p.foto?'ara és la que ha arribat sola':'no n\'ha arribat cap')}</small></button>
+    </div>
+    <div class="barra-accions" style="position:static;padding:14px 0 0">
+      <button class="bt discret" data-desprefer="${i}">Treu-lo de preferents</button></div>`;
+}
+
+/* ===== fulls ===== */
+function obreFull(h){ $('#full').innerHTML='<button class="torna-full" data-tornafull="1">← Tornar</button>'+h;
+  $('#full').classList.add('obert'); $('#fons').classList.add('obert'); $('#full').scrollTop=0;
+  const b=$('#full').querySelector('input'); if(b)b.focus(); }
+function tancaFull(){ const f=$('#full'); if(f.dataset.encaraNo){ delete f.dataset.encaraNo; avisa('Sense nota, de moment. Tornarà.'); }
+  f.classList.remove('obert'); $('#fons').classList.remove('obert'); }
+function avisa(txt,desfes){ $('#avisTxt').textContent=txt; $('#avis').classList.add('obert');
+  $('#avisBt').style.display=desfes?'inline':'none'; estat.ultima=desfes||null;
+  clearTimeout(window._t); window._t=setTimeout(()=>$('#avis').classList.remove('obert'),6500); }
+
+function fullEscoltar(d, tots){
+  estat.escoltant=d;
+  const fisic = (estat.lloc==='Lleida' && d.posseit)
+    ? `<button data-fisic="1" data-src="§12·Posseït">Tinc el disc <small>a casa, a Lleida</small></button>` : '';
+  const k=CANALS[d.canal]?d.canal:'amazon', e=enllacCanal(k,d);
+  const altres=Object.keys(CANALS).filter(x=>x!==k);
+  obreFull(`<h3>${esc(d.tit)}</h3><p>${esc(d.art)}${d.min?' · '+d.min+'′':''}</p>
+   <div class="canals">${fisic}
+     <a class="canal-principal" href="${esc(e.href)}" ${e.ext?'target="_blank" rel="noopener"':''} data-src="§3.1">${CANALS[k].nom} <small>${e.nota}</small></a>
+   </div>
+   ${tots ? `<p style="margin:14px 0 8px">Tria el canal d'aquest disc. Queda recordat.</p>
+     <div class="canals">${altres.map(x=>`<button data-canvicanal="${x}" data-inv="I38">${CANALS[x].nom}</button>`).join('')}</div>`
+          : `<div class="barra-accions" style="position:static;padding:10px 0 0"><button class="bt discret" data-altrecanal="1" data-inv="I38">Un altre canal</button></div>`}`);
+}
+function fullFitxa(d){
+  const c=CANALS[d.canal]||CANALS.amazon;
+  const codi = d.canal==='bandcamp' ? (d.bc && !(d.part && d.part.n>1) ? ' · amb codi' : ' · sense codi') : '';
+  const jaPref = esPreferent(d.art) || (d.alies && esPreferent(d.alies));
+  obreFull(`<h3>${esc(d.tit)}</h3><p>${esc(d.art)}${d.alies?' · '+esc(d.alies):''}</p>
+   <ul class="fitxa-dades">
+     <li><b>Durada</b><span>${d.min?d.min+'′':'pendent'}</span></li>
+     <li><b>Canal</b><span>${c.nom}${codi}</span></li>
+     <li><b>Posseït</b><span>${d.posseit?'sí — CD a Lleida':'no'}</span></li>
+     <li><b>Portada</b><span>${d.img?'ha arribat sola':'no n\'ha arribat cap'}</span></li>
+     ${d.part?`<li><b>Part viva</b><span>${d.esperant?'cap: esperant la '+(d.part.n+1):(d.part.nom||d.tit)+' · '+d.part.n+' de '+d.part.de}</span></li>`:''}
+     ${d.nota?`<li><b>Nota</b><span>${esc(d.nota)}</span></li>`:''}
+   </ul>
+   <div class="barra-accions" style="position:static;padding:0">
+     ${d.esperant?`<button class="bt principal" data-repren="${d.id}" data-inv="I34">Reprèn</button>`
+                 :`<button class="bt principal" data-escoltar="${d.id}">Escoltar ara</button>`}
+     ${jaPref?'':`<button class="bt" data-fespref="${d.id}" data-src="§7.7·v1.33">Afegir a Artistes Preferents</button>`}
+     <button class="bt" data-treure="${d.id}" data-src="§7.7·v1.33">Treu de rotació</button>
+   </div>`);
+}
+function fullPuntuar(d){
+  estat.ultimPuntuat=d;
+  obreFull(`<h3 data-src="§7.1">${esc(d.tit)} surt de rotació</h3><p>Com el puntues?</p>
+   <div class="escala" data-src="§12·escala">${ESCALA.map(v=>`<button data-punt="${v}">${v}</button>`).join('')}</div>
+   <div class="barra-accions" style="position:static;padding:0">
+     <button class="bt" data-punt="Encara no" data-src="§7.1">Encara no</button>
+     <button class="bt discret" data-torna="1">Torna'l a la rotació</button></div>`);
+  $('#full').dataset.encaraNo='1';
+}
+function fullPart(d){
+  estat.ultimaPart=d;
+  if(d.part.n >= d.part.de){
+    obreFull(`<h3 data-src="§7.1·v1.33">${esc(d.part.nom||d.tit)} surt de rotació</h3>
+     <p>Era l'última part de ${esc(d.part.cont)}. L'edició es tanca, i la nota d'una caixa arriba en tancar la caixa.</p>
+     <p>Com la puntues?</p>
+     <div class="escala">${ESCALA.map(v=>`<button data-punt="${v}">${v}</button>`).join('')}</div>
+     <div class="barra-accions" style="position:static;padding:0"><button class="bt" data-punt="Encara no">Encara no</button></div>`);
+    $('#full').dataset.encaraNo='1'; return;
+  }
+  const info = d.parts && d.parts[d.part.n];
+  if(!info){
+    obreFull(`<h3 data-src="§7.1·v1.33">${esc(d.part.nom||d.tit)} surt de rotació</h3>
+     <p>És la part ${d.part.n} de ${d.part.de} de ${esc(d.part.cont)}, i la ${d.part.n+1} no està catalogada: la màquina no sap quin disc és ni quant dura. No se la pot inventar.</p>
+     <p>La part següent neix de l'escolta, o la pots reprendre tu a mà amb el botó <b>Reprèn</b>.</p>
+     <div class="barra-accions" style="position:static;padding:0">
+       <button class="bt principal" data-espera="1">Deixa ${esc(d.part.cont)} esperant</button>
+       <button class="bt" data-treuedicio="1">Treu-ho tot de rotació</button></div>`);
+    return;
+  }
+  obreFull(`<h3 data-src="§8.10·23">${esc(d.part.nom||d.tit)} surt de rotació</h3>
+   <p>Aquí no es puntua: la nota viu a l'edició sencera. Arriba quan es tanqui ${esc(d.part.cont)}.</p>
+   <p>Vols posar <em>${esc(info[0])}</em> en rotació?</p>
+   <div class="barra-accions" style="position:static;padding:0">
+     <button class="bt principal" data-seguent="1">Sí, posa-la</button>
+     <button class="bt" data-espera="1">No: deixa-la esperant</button>
+     <button class="bt discret" data-treuedicio="1">Treu-ho tot</button></div>`);
+}
+/* v7: reprendre a mà una caixa que espera */
+function fullRepren(d){
+  estat.repren=d.id;
+  if(d.parts){
+    obreFull(`<h3 data-inv="I34">Reprèn ${esc(d.part.cont)}</h3><p>Quina part poses en rotació?</p>
+     <div class="canals">${d.parts.map((p,k)=>`<button data-reprenpart="${k}">${esc(p[0])} <small>${p[1]}′${k===d.part.n?' · la següent':(k<d.part.n?' · ja escoltada':'')}</small></button>`).join('')}</div>`);
+    return;
+  }
+  obreFull(`<h3 data-inv="I34">Reprèn ${esc(d.part.cont)}</h3>
+   <p>Les parts d'aquesta caixa no estan catalogades. Digues quina poses, la següent o una d'anterior, i quant dura: cap disc entra sense durada.</p>
+   <label class="camp"><span>Número de la part, de ${d.part.de}</span><input id="inPartNum" type="number" inputmode="numeric" min="1" max="${d.part.de}" value="${d.part.n+1}"></label>
+   <label class="camp"><span>Títol de la part</span><input id="inPartNom" type="text" autocomplete="off"></label>
+   <label class="camp"><span>Durada en minuts</span><input id="inPartMin" type="number" inputmode="numeric"></label>
+   <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-desarepren="1">Posa-la en rotació</button></div>`);
+}
+function fullAfegeixDisc(){
+  const fora = estat.historial.map((h,i)=>({h,i})).filter(o=>!enRot(o.h)).slice(0,3);
+  obreFull(`<h3 data-src="§7.1·v1.33">Posa un disc en rotació</h3>
+   <p>D'allò que ha sonat fa poc:</p>
+   <div class="canals" style="margin-bottom:14px">
+     ${fora.map(o=>`<button data-hrot="${o.i}">${esc(o.h.tit)} <small>${esc(o.h.art)}</small></button>`).join('')}
+     <button data-sub="hist">Tot l'historial <small>→</small></button>
+   </div>
+   <p>O un disc físic, que no deixa rastre:</p>
+   <div class="canals"><button data-ama="1">Escriu-lo a mà <small>CD o vinil</small></button></div>`);
+}
+function fullConfirmaDurada(h){
+  estat.pendent=h;
+  obreFull(`<h3>${esc(h.tit)}</h3><p>${esc(h.art)}</p>
+   <div class="proposta" data-src="§8.7 bis·v1.33">Durada proposada: <b>${h.min}′</b><br>És la suma de les pistes que han sonat. Només és la del disc si l'has sentit sencer.</div>
+   <label class="camp"><span>Durada en minuts</span><input id="inDur" type="number" inputmode="numeric" value="${h.min}"></label>
+   <div class="barra-accions" style="position:static;padding:0">
+     <button class="bt principal" data-confirma="1">És correcta: posa'l en rotació</button></div>`);
+}
+function fullAMa(){
+  obreFull(`<h3 data-src="§7.1·v1.33">Un disc físic</h3><p>Cap disc entra sense durada: llegeix-la del disc, no de memòria.</p>
+   <label class="camp"><span>Artista</span><input id="inArt" type="text" autocomplete="off"></label>
+   <label class="camp"><span>Títol</span><input id="inTit" type="text" autocomplete="off"></label>
+   <label class="camp"><span>Durada en minuts</span><input id="inMin" type="number" inputmode="numeric"></label>
+   <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-desaama="1">Posa'l en rotació</button></div>`);
+}
+function fullProper(i){
+  const p=estat.preferents[i]; estat.properDe=i;
+  obreFull(`<h3 data-inv="I39">El proper disc de ${esc(p.nom)}</h3>
+   <p>El que has decidit escoltar primer. Només el títol: no entra a la rotació fins que l'hagis sentit.</p>
+   <label class="camp"><span>Títol</span><input id="inProper" type="text" autocomplete="off" value="${p.proper?esc(p.proper.tit):''}"></label>
+   <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-desaproper="1">Desa'l</button></div>`);
+}
+function fullAfegeixArtista(){
+  obreFull(`<h3 data-src="§7.7·v1.33">Afegeix un artista</h3>
+   <p>Encara que no tingui cap disc. Escriu-ne bé el nom: una errada en crea un de duplicat.</p>
+   <label class="camp"><span>Nom</span><input id="inNom" type="text" autocomplete="off"></label>
+   <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-desaartista="1">Afegeix-lo</button></div>`);
+}
+function fullAjustos(){
+  const p=estat.prova, pct=Math.round(100*p.nose/Math.max(1,p.sessions));
+  obreFull(`<div class="menu-net" data-inv="I42">
+   <div class="mesura" data-src="§8.7·v1.33"><b>Prova de la safata</b> <small>· només durant la prova</small><br><small>${p.nose} de ${p.sessions} sessions amb «No ho sé»: ${pct}%. El límit és un terç.</small>
+     <div class="barra"><i style="width:${Math.min(100,pct)}%"></i><u style="left:33.3%"></u></div></div>
+   <ul class="llista-ajust">
+     <li><button data-sincro="1">ListenBrainz <small>dos comptes · fa 6 min</small></button></li>
+     <li><button data-copia="1" data-inv="I45">Còpia i exportació <small>còpia del dilluns · Excel</small></button></li>
+     <li><button data-bandcamp="1" data-inv="I30">Proves d'enllaços <small>només durant la prova</small></button></li>
+   </ul>
+   <p style="margin-top:12px;font-size:12px">Les dates i xifres d'aquest menú són inventades, menys el límit del terç.</p></div>`);
+}
+function fullCopia(){
+  obreFull(`<h3 data-inv="I45">Còpia i exportació</h3>
+   <p>Cada dilluns la màquina desa al teu Drive una còpia de l'arxiu i un Excel amb data. Aquí en pots treure un ara mateix.</p>
+   <ul class="fitxa-dades"><li><b>Última còpia</b><span>dilluns 12-10 · 08:00</span></li><li><b>Últim Excel</b><span>dilluns 12-10 · 08:00</span></li></ul>
+   <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-exporta="1">Exporta a Excel ara</button></div>
+   <p style="margin-top:12px;font-size:12px">Una pestanya per cada cosa (discos, artistes, escoltes), amb les mateixes columnes que el volcat, perquè es pugui tornar a carregar a qualsevol màquina. Si passen més de vuit dies sense còpia, aquesta línia es posa en vermell.</p>`);
+}
+function exporta(){
+  const fer=()=>{ try{
+    const disc=totsElsDiscos().map(d=>({'Artista':d.art,'Títol':d.tit,'Durada total (min)':d.min||'','Canal':(CANALS[d.canal]||CANALS.amazon).nom,
+      'Codi Bandcamp':d.bc||'','Rotació actual':enRot(d)?'sí':'','Part viva':d.part?(d.part.n+' de '+d.part.de):'','Portada':d.img||''}));
+    const art=estat.preferents.map((p,i)=>({'Ordre':i+1,'Artista':p.nom,'Proper disc':p.proper?p.proper.tit:'','Retrat':p.foto||''}));
+    const esc2=estat.historial.map(h=>({'Artista':h.art,'Títol':h.tit,'Darrera escolta':quanTxt(h.quan),'Escoltes':h.n}));
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(disc), 'Edició');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(art), 'Preferent');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(esc2), 'Escolta');
+    const nom='la-meva-discoteca_'+new Date().toISOString().slice(0,10)+'.xlsx';
+    XLSX.writeFile(wb, nom); estat.exportat=nom; avisa('Exportat: '+nom);
+  }catch(err){ avisa('No s\'ha pogut exportar: '+err.message); } };
+  if(window.XLSX) return fer();
+  const sc=document.createElement('script'); sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  sc.onload=fer; sc.onerror=()=>avisa('Cal connexió per carregar l\'exportador.'); document.head.appendChild(sc);
+}
+function fullLloc(){
+  obreFull(`<h3 data-inv="I43">On ets?</h3>
+   <p>La màquina només necessita saber si ets a Lleida, que és on hi ha els discos físics. A qualsevol altre lloc, només streaming.</p>
+   <div class="canals">
+     <button data-lloc="Lleida">A Lleida <small>${estat.lloc==='Lleida'?'ara · ':''}físic i streaming</small></button>
+     <button data-lloc="Fora">Fora de Lleida <small>${estat.lloc==='Fora'?'ara · ':''}només streaming</small></button>
+     <button data-gps="1">Mira-ho per la ubicació <small>${esc(estat.gps)}</small></button>
+   </div>`);
+}
+const LLEIDA=[41.6176,0.6200];
+function km(a,b,c,d){ const R=6371, r=x=>x*Math.PI/180, dl=r(c-a), dg=r(d-b);
+  const h=Math.sin(dl/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(dg/2)**2; return 2*R*Math.asin(Math.sqrt(h)); }
+function detectaLloc(manual){
+  if(!window.isSecureContext){ estat.gps='Aquí no pot: la ubicació només funciona des d\'una adreça https.'; if(manual){ avisa(estat.gps); fullLloc(); } return; }
+  if(!navigator.geolocation){ estat.gps='Aquest navegador no dona la ubicació.'; if(manual){ avisa(estat.gps); fullLloc(); } return; }
+  navigator.geolocation.getCurrentPosition(p=>{
+    const k=km(p.coords.latitude,p.coords.longitude,LLEIDA[0],LLEIDA[1]), v=k<20?'Lleida':'Fora';
+    estat.gps='Mirat ara: '+(v==='Lleida'?'a Lleida':'fora de Lleida');
+    if(v!==estat.lloc) posaLloc(v,' (per la ubicació)'); else if(manual) avisa(estat.gps);
+    if(manual) fullLloc();
+  }, ()=>{ estat.gps='Sense permís d\'ubicació: tria-ho a mà.'; if(manual){ avisa(estat.gps); fullLloc(); } },
+  {timeout:12000, maximumAge:600000});
+}
+function fullBandcamp(){
+  const sch='x-bandcamp://show_tralbum?tralbum_type=a&tralbum_id=', web='echospace313.bandcamp.com/album/infinitati';
+  obreFull(`<h3 data-inv="I30">Proves d'enllaços</h3>
+   <p>Tres proves per fer al mòbil. Digues què fa cadascuna.</p>
+   <div class="canals">
+     <a href="${sch}3428588828">Infinitati, pel codi <small>prova A</small></a>
+     <a href="${AIMP_APP}">AIMP, amb un quart de segon de silenci <small>prova D bis</small></a>
+   </div>
+   <p style="margin-top:12px;font-size:12px">A ja va. D bis: el mateix camí que la D, però amb 250 mil·lisegons de silenci en lloc del so de prova. És el que fa servir el canal AIMP a tota la maqueta.</p>`);
+}
+
+/* ===== accions ===== */
+function posaEnRotacio(o, queda){
+  const nou=Object.assign({id:'n'+Date.now(), canal:'amazon'}, o);
+  estat.rotacio.unshift(nou);
+  estat.preferents.forEach(p=>{ if(p.nom.toLowerCase()===nou.art.toLowerCase()){ p.rot=nou.id; delete p.proper; } });
+  pintaReixa(); pintaFiles();
+  if(!queda){ vesA('faristol'); sub('rot'); }
+  avisa(nou.tit+' entra a Discos en Rotació', ()=>{ estat.rotacio=estat.rotacio.filter(r=>r.id!==nou.id);
+    estat.preferents.forEach(p=>{ if(p.rot===nou.id) delete p.rot; }); pintaReixa(); pintaFiles(); });
+}
+function treu(id){
+  const i=estat.rotacio.findIndex(d=>d.id===id); if(i<0)return;
+  const d=estat.rotacio[i]; estat.ultimaPos=i;
+  const lligats=estat.preferents.filter(p=>p.rot===id);
+  lligats.forEach(p=>{ delete p.rot; p.darrer=d.tit; });
+  estat.rotacio.splice(i,1); pintaReixa(); pintaFiles();
+  if(d.part && !d.esperant) fullPart(d); else fullPuntuar(d);
+  avisa(d.tit+' fora de rotació', ()=>{ estat.rotacio.splice(i,0,d); lligats.forEach(p=>{ p.rot=id; delete p.darrer; });
+    pintaReixa(); pintaFiles(); tancaFull(); });
+}
+function vesA(sup){
+  estat.superficie=sup;
+  document.querySelectorAll('.superficie').forEach(s=>s.classList.toggle('activa', s.id==='s-'+sup));
+  document.querySelectorAll('nav.peu button').forEach(b=>{
+    const act = b.dataset.anar===sup || (sup==='artista' && b.dataset.anar==='faristol');
+    if(act) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current');
+  });
+  window.scrollTo(0,0);
+}
+const SUBS=['rot','pref','hist'];
+function sub(v){
+  const de=SUBS.indexOf(estat.sub), a=SUBS.indexOf(v);
+  const p=$('#p-'+v); p.classList.remove('entra-dreta','entra-esquerra');
+  if(a!==de){ void p.offsetWidth; p.classList.add(a>de?'entra-dreta':'entra-esquerra'); window.scrollTo(0,0); }
+  estat.sub=v;
+  ['rot','pref','hist'].forEach(k=>{
+    $('#tab-'+k).setAttribute('aria-selected', v===k);
+    $('#p-'+k).classList.toggle('activa', v===k);
+  });
+}
+function tornaLaCaixa(v, esperant){
+  const nou=Object.assign({}, v, {id:'e'+Date.now(), esperant:esperant});
+  estat.rotacio.splice(Math.min(estat.ultimaPos||0, estat.rotacio.length), 0, nou);
+  estat.preferents.forEach(p=>{ if(p.nom.toLowerCase()===nou.art.toLowerCase()){ p.rot=nou.id; delete p.darrer; } });
+  pintaReixa(); pintaFiles(); return nou;
+}
+
+document.addEventListener('click', e=>{
+  const t=e.target.closest('button,a'); if(!t) return;
+  const d=t.dataset;
+  if(t.tagName==='A') return;
+
+  if(d.estil){ posaEstil(d.estil); return; }
+  if(d.tornafull){ tancaFull(); return; }
+  if(d.altrecanal){ fullEscoltar(estat.escoltant, true); return; }
+  if(d.canvicanal){ const x=estat.escoltant; if(!x) return; x.canal=d.canvicanal;
+    estat.rotacio.concat(estat.historial).forEach(o=>{ if(o.art===x.art && o.tit===x.tit) o.canal=x.canal; });
+    fullEscoltar(x); return; }
+  if(d.triaproper!==undefined){ fullProper(+d.triaproper); return; }
+  if(d.desaproper){ const t2=$('#inProper').value.trim(); if(!t2){ avisa('Cal un títol.'); return; }
+    const p=estat.preferents[estat.properDe]; p.proper=Object.assign({}, p.proper, {art:p.nom, tit:t2});
+    tancaFull(); pintaFiles(); pintaArtista(estat.properDe); avisa('El proper de '+p.nom+': '+t2); return; }
+  if(d.treuproper!==undefined){ const p=estat.preferents[+d.treuproper], v=p.proper; delete p.proper; pintaFiles(); pintaArtista(+d.treuproper);
+    avisa('Nota esborrada', ()=>{ p.proper=v; pintaFiles(); pintaArtista(estat.artista); }); return; }
+  if(d.escproper!==undefined){ fullEscoltar(estat.preferents[+d.escproper].proper); return; }
+  if(d.psub){ psub(d.psub); return; }
+  if(d.arxiu!==undefined){ fullFitxaArxiu(estat.arxiuLlista[+d.arxiu]); return; }
+  if(d.escarxiu){ fullEscoltar(estat.fitxaArxiu); return; }
+  if(d.catal){ const [i,r]=d.catal.split(':'), x=estat.perCatalogar.splice(+i,1)[0]; pintaPrestatgeria();
+    avisa(x.d.tit+': '+(r==='nou'?'disc nou. A la màquina, s\'obriria la fitxa per completar-la.':r==='altre'?'a la màquina, triaries amb quin s\'ajunta.':'a la màquina, triaries de quina caixa és part.'),
+      ()=>{ estat.perCatalogar.splice(+i,0,x); pintaPrestatgeria(); }); return; }
+  if(d.fons!==undefined){ avisa('A la màquina, s\'obriria la fitxa per omplir-la.'); return; }
+  if(d.sincro){ tancaFull(); avisa('Sincronitzat: cap escolta nova.'); return; }
+  if(d.copia){ fullCopia(); return; }
+  if(d.exporta){ exporta(); return; }
+  if(d.anar){ if(d.anar==='prestatgeria') pintaPrestatgeria(); vesA(d.anar); return; }
+  if(d.sub){ if($('#full').classList.contains('obert')) tancaFull(); sub(d.sub); return; }
+  if(d.tornar){ vesA('faristol'); sub('pref'); return; }
+  if(t.id==='btProcs'){ t.setAttribute('aria-pressed', document.body.classList.toggle('procs')); return; }
+  if(t.id==='btAjustos'){ fullAjustos(); return; }
+  if(t.id==='btLloc'){ fullLloc(); return; }
+  if(t.id==='btSafata'){ if(estat.superficie!=='safata') estat.abansSafata=estat.superficie; tancaFull(); pintaSafata(); vesA('safata'); return; }
+  if(d.tornasafata){ vesA(estat.abansSafata||'faristol'); return; }
+  if(d.gps){ estat.gps='Mirant…'; detectaLloc(true); return; }
+  if(d.sfctx!==undefined){ const [i,c]=d.sfctx.split(':'); const x=estat.safata[+i];
+    if(!c){ delete x.ctx; pintaSafata(); return; }
+    if(c==='A casa'||c==='No ho sé'){ x.ctx=c; pintaSafata(); return; }
+    resol(+i, c); return; }
+  if(d.sfatencio){ const [i,a2]=d.sfatencio.split(':'); const x=estat.safata[+i];
+    const r = (x.ctx==='A casa' && a2==='Dormint') ? 'Dormir (era «a casa»)' : x.ctx+' · '+a2; resol(+i, r); return; }
+  if(d.sftots!==undefined){ estat.safata[+d.sftots].tots=true; pintaSafata(); return; }
+  if(d.sfsepara!==undefined){ const i=+d.sfsepara, x=estat.safata[i];
+    estat.safata.splice(i,1,...x.discos.map(dd=>Object.assign({}, x, {id:'s'+(++sfId), discos:[dd]}))); pintaSafata(); return; }
+  if(d.sfdurada!==undefined){ const i=+d.sfdurada, x=estat.safata[i], m=parseInt($('#sfDur'+i).value,10);
+    if(!m||m<1){ avisa('Cap disc entra sense durada.'); return; }
+    x.disc.min=m; x.disc.confirmada=true; pintaHistorial(); resol(i, 'durada '+m+'′'); return; }
+  if(d.sfrot){ const [i,r]=d.sfrot.split(':'), x=estat.safata[+i];
+    if(r==='si'){ posaEnRotacio(copia(x.disc), true); estat.safata.splice(+i,1); estat.resoltes.unshift({titol:x.disc.tit, resposta:'a la rotació'}); pintaSafata(); }
+    else resol(+i, 'no, de moment'); return; }
+  if(d.sfreobre!==undefined){ const r=estat.resoltes.splice(+d.sfreobre,1)[0]; estat.safata.unshift(r.item);
+    estat.prova.sessions--; if(r.resposta.startsWith('No ho sé')) estat.prova.nose--; pintaSafata(); return; }
+  if(t.id==='btAfegeixDisc'){ fullAfegeixDisc(); return; }
+  if(t.id==='btAfegeixArtista'){ fullAfegeixArtista(); return; }
+  if(t.id==='btOrdena'){ estat.ordena=!estat.ordena; t.setAttribute('aria-pressed',estat.ordena);
+    t.textContent=estat.ordena?'Fet':'Ordena la llista'; pintaFiles(); return; }
+  if(t.id==='avisBt'){ if(estat.ultima){estat.ultima(); estat.ultima=null;} $('#avis').classList.remove('obert'); return; }
+
+  if(d.escoltar){ const x=estat.rotacio.find(r=>r.id===d.escoltar); tancaFull(); fullEscoltar(x); return; }
+  if(d.hescoltar!==undefined){ fullEscoltar(estat.historial[+d.hescoltar]); return; }
+  if(d.hrot!==undefined){ const x=estat.historial[+d.hrot]; const queda=estat.sub==='hist';
+    if($('#full').classList.contains('obert')) tancaFull();
+    if(x.confirmada) posaEnRotacio(copia(x), queda); else fullConfirmaDurada(x); return; }
+  if(d.fitxa){ fullFitxa(estat.rotacio.find(r=>r.id===d.fitxa)); return; }
+  if(d.treure){ delete $('#full').dataset.encaraNo; treu(d.treure); return; }
+  if(d.tanca){ delete $('#full').dataset.encaraNo; tancaFull(); return; }
+  if(d.bandcamp){ fullBandcamp(); return; }
+  if(d.fespref){ const x=estat.rotacio.find(r=>r.id===d.fespref); const nom=x.alies||x.art;
+    estat.preferents.unshift({nom:nom, rot:x.id}); pintaFiles(); tancaFull(); sub('pref');
+    avisa(nom+' ja és a Artistes Preferents', ()=>{ estat.preferents=estat.preferents.filter(p=>p.nom!==nom); pintaFiles(); }); return; }
+  if(d.punt){ delete $('#full').dataset.encaraNo; const v=d.punt, disc=estat.ultimPuntuat; tancaFull();
+    avisa(v==='Encara no'?'Sense nota, de moment. Tornarà.':'Puntuat: '+v, disc?()=>fullPuntuar(disc):null); return; }
+  if(d.torna){ const x=estat.ultimPuntuat; delete $('#full').dataset.encaraNo; tancaFull(); if(!x) return;
+    estat.rotacio.splice(Math.min(estat.ultimaPos||0, estat.rotacio.length), 0, x);
+    estat.preferents.forEach(p=>{ if(p.nom.toLowerCase()===x.art.toLowerCase()){ p.rot=x.id; delete p.darrer; } });
+    pintaReixa(); pintaFiles(); avisa(x.tit+' torna a la rotació'); return; }
+  if(d.espera){ const v=estat.ultimaPart; tancaFull(); if(!v) return; tornaLaCaixa(v,true);
+    avisa(v.part.cont+' espera la part '+(v.part.n+1)); return; }
+  if(d.treuedicio){ const v=estat.ultimaPart; tancaFull(); if(!v) return; fullPuntuar(v); return; }
+  if(d.seguent){ const v=estat.ultimaPart; tancaFull(); if(!v) return;
+    const n=v.part.n+1, info=v.parts[n-1];
+    const nou=tornaLaCaixa(Object.assign({}, v, {min:info[1], part:{n, de:v.part.de, cont:v.part.cont, nom:info[0]}}), false);
+    avisa(nou.part.nom+' entra en rotació'); return; }
+  /* v7: Reprèn */
+  if(d.repren){ const x=estat.rotacio.find(r=>r.id===d.repren); tancaFull(); if(x) fullRepren(x); return; }
+  if(d.reprenpart!==undefined){ const x=estat.rotacio.find(r=>r.id===estat.repren), k=+d.reprenpart; tancaFull(); if(!x) return;
+    const info=x.parts[k]; x.esperant=false; x.min=info[1]; x.part=Object.assign({}, x.part, {n:k+1, nom:info[0]});
+    pintaReixa(); pintaFiles(); avisa(info[0]+' entra en rotació'); return; }
+  if(d.desarepren){ const x=estat.rotacio.find(r=>r.id===estat.repren); if(!x){ tancaFull(); return; }
+    const nom=$('#inPartNom').value.trim(), m=parseInt($('#inPartMin').value,10);
+    if(!m||m<1){ avisa('Cap disc entra sense durada.'); return; }
+    const num=parseInt($('#inPartNum').value,10);
+    if(!num||num<1||num>x.part.de){ avisa('La caixa té '+x.part.de+' parts.'); return; }
+    tancaFull(); x.esperant=false; x.min=m; x.part=Object.assign({}, x.part, {n:num});
+    if(nom){ x.tit=nom; delete x.img; }
+    pintaReixa(); pintaFiles(); avisa('La part '+x.part.n+' entra en rotació'); return; }
+
+  if(d.fisic){ const x=estat.escoltant; estat.safata.unshift({t:'sessio', id:'s'+(++sfId), quan:'Ara mateix', compte:'disc físic, anotat a mà', discos:[x]});
+    pintaBadge(); tancaFull(); avisa('Escolta anotada a la safata. Falta el lloc i l\'atenció.'); return; }
+  if(d.confirma){ const h=estat.pendent, m=parseInt($('#inDur').value,10);
+    if(!m||m<1){ avisa('Cal una durada.'); return; }
+    h.min=m; h.confirmada=true; tancaFull(); posaEnRotacio(copia(h), estat.sub==='hist'); return; }
+  if(d.ama){ fullAMa(); return; }
+  if(d.desaama){ const a=$('#inArt').value.trim(), ti=$('#inTit').value.trim(), m=parseInt($('#inMin').value,10);
+    if(!a||!ti){ avisa('Calen l\'artista i el títol.'); return; }
+    if(!m||m<1){ avisa('Cap disc entra sense durada.'); return; }
+    tancaFull(); posaEnRotacio({art:a, tit:ti, min:m, posseit:true}); return; }
+  if(d.desaartista){ const n=$('#inNom').value.trim(); if(!n){ avisa('Cal un nom.'); return; }
+    if(esPreferent(n)){ avisa(n+' ja hi és.'); return; }
+    estat.preferents.unshift({nom:n}); tancaFull(); pintaFiles();
+    avisa(n+' afegit a Artistes Preferents', ()=>{ estat.preferents=estat.preferents.filter(p=>p.nom!==n); pintaFiles(); }); return; }
+  if(d.foto!==undefined){ estat.fotoDe=estat.preferents[+d.foto].nom; $('#fitxer').click(); return; }
+
+  if(d.artista!==undefined){ estat.artista=+d.artista; pintaArtista(+d.artista); vesA('artista'); return; }
+  if(d.mou){ const [i,dir]=d.mou.split(':').map(Number), j=i+dir;
+    if(j<0||j>=estat.preferents.length) return;
+    const a=estat.preferents.splice(i,1)[0]; estat.preferents.splice(j,0,a); pintaFiles(); return; }
+  if(d.desprefer!==undefined){
+    const i=+d.desprefer, p=estat.preferents[i];
+    estat.preferents.splice(i,1); pintaFiles(); tancaFull(); vesA('faristol'); sub('pref');
+    avisa(p.nom+' fora de preferents', ()=>{ estat.preferents.splice(i,0,p); pintaFiles(); }); return; }
+  if(d.lloc){ estat.gps='Triat a mà.'; posaLloc(d.lloc); tancaFull(); return; }
+});
+
+function posaEstil(v){
+  document.body.dataset.estil=v;
+  document.querySelectorAll('.estils button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.estil===v));
+  try{ localStorage.setItem('faristol-estil', v); }catch(_){}
+}
+function posaLloc(v){
+  estat.lloc=v; document.body.dataset.lloc=v; $('#llocTxt').textContent=v==='Lleida'?'Lleida':'';
+  if(arguments[1]!==false) avisa((v==='Lleida' ? 'A Lleida: físic i streaming' : 'Fora de Lleida: només streaming')+(arguments[1]||''));
+}
+$('#cerca').addEventListener('input', e=>{ estat.filtre=e.target.value.trim(); pintaHistorial(); });
+$('#fitxer').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f||!estat.fotoDe) return;
+  const r=new FileReader();
+  r.onload=()=>{ estat.pujades[estat.fotoDe]=r.result; pintaFiles();
+    if(estat.artista!==null) pintaArtista(estat.artista); avisa('Foto desada dins la maqueta. A la màquina aniria al teu Drive.'); };
+  r.readAsDataURL(f); e.target.value='';
+});
+/* arrossegar les files dels preferents per la nansa */
+let arros=null;
+document.addEventListener('pointerdown', e=>{
+  const nansa=e.target.closest('.nansa'); if(!nansa) return;
+  const fila=nansa.closest('.fila'); if(!fila) return;
+  e.preventDefault(); arros={fila}; fila.classList.add('agafat'); document.body.classList.add('arrossegant');
+  try{ nansa.setPointerCapture(e.pointerId) }catch(_){}
+});
+document.addEventListener('pointermove', e=>{
+  if(!arros) return; e.preventDefault();
+  const sota=document.elementFromPoint(e.clientX, e.clientY);
+  const altra=sota && sota.closest('#files .fila');
+  if(altra && altra!==arros.fila){
+    const r=altra.getBoundingClientRect();
+    altra.parentNode.insertBefore(arros.fila, (e.clientY < r.top + r.height/2) ? altra : altra.nextSibling);
+  }
+}, {passive:false});
+document.addEventListener('pointerup', ()=>{
+  if(!arros) return;
+  const ordre=[...document.querySelectorAll('#files .fila')].map(f=>+f.dataset.fila);
+  estat.preferents = ordre.map(i=>estat.preferents[i]);
+  arros.fila.classList.remove('agafat'); document.body.classList.remove('arrossegant');
+  arros=null; pintaFiles();
+});
+
+/* lliscar amb el dit entre les tres pestanyes del Faristol (v10) i de la Prestatgeria (v12) */
+function lliscar(el, llista, actual, ves){
+  let toc=null;
+  el.addEventListener('touchstart', e=>{
+    toc=null; if(e.touches.length!==1 || arros || e.target.closest('input,.nansa')) return;
+    toc={x:e.touches[0].clientX, y:e.touches[0].clientY};
+  }, {passive:true});
+  el.addEventListener('touchend', e=>{
+    if(!toc || arros) return;
+    const dx=e.changedTouches[0].clientX-toc.x, dy=e.changedTouches[0].clientY-toc.y; toc=null;
+    if(Math.abs(dx)<60 || Math.abs(dx)<1.6*Math.abs(dy)) return;
+    const i=llista.indexOf(actual())+(dx<0?1:-1);
+    if(i>=0 && i<llista.length) ves(llista[i]);
+  }, {passive:true});
+}
+lliscar($('#s-faristol'), SUBS, ()=>estat.sub, sub);
+lliscar($('#s-prestatgeria'), PSUBS, ()=>estat.psub, psub);
+$('#cercaArxiu').addEventListener('input', pintaPrestatgeria);
+
+$('#fons').addEventListener('click', tancaFull);
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') tancaFull(); });
+posaLloc('Fora', false); pintaBadge();
+try{ navigator.permissions && navigator.permissions.query({name:'geolocation'}).then(r=>{ if(r.state==='granted') detectaLloc(false); }).catch(()=>{}); }catch(_){}
+pintaReixa(); pintaFiles();
+</script>
+</body>
+</html>
