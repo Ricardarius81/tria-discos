@@ -6,7 +6,7 @@
 <title>Política de privadesa · Màquina Màgica Tria-Discos</title>
 <style>
   body { font: 16px/1.65 Georgia, serif; margin: 0 auto; padding: 40px 24px 80px;
-         max-width: 660px; color: #222; }
+         max-width: 660px; color: #222; background: #fff; }
   h1 { font-size: 22px; margin: 0 0 6px; }
   p.sub { color: #666; font-size: 14px; margin: 0 0 32px; font-family: system-ui, sans-serif; }
   h2 { font-size: 16px; margin: 32px 0 8px; }
@@ -18,7 +18,7 @@
 <body>
 
 <h1>Política de privadesa</h1>
-<p class="sub">Màquina Màgica Tria-Discos · actualitzada el 27 d'agost de 2026</p>
+<p class="sub">Màquina Màgica Tria-Discos · actualitzada el 13 d'octubre de 2026</p>
 
 <p>La Màquina Màgica Tria-Discos és una aplicació personal d'un sol usuari. Serveix per
 decidir quin disc escoltar en un moment donat, a partir d'un arxiu musical propi. No es
@@ -26,31 +26,53 @@ distribueix, no té comptes, no té usuaris registrats i no ofereix cap servei a
 
 <h2>Qui la fa funcionar</h2>
 <p>L'aplicació és una pàgina web estàtica. No hi ha cap servidor darrere: tot el que fa
-s'executa dins del navegador de l'usuari. No existeix cap ordinador intermediari que
-pugui veure, guardar ni processar cap dada.</p>
+s'executa dins del navegador de l'usuari. El codi, les tipografies i els fitxers auxiliars
+se serveixen des del mateix lloc que la pàgina, sense cap biblioteca carregada des de
+servidors de tercers.</p>
 
 <h2>Quines dades tracta</h2>
 <ul>
   <li><strong>L'arxiu musical de l'usuari</strong>: discos, edicions, durades, valoracions,
-      etiquetes i historial d'escoltes. Viu en un únic fitxer al Google Drive del propi
-      usuari.</li>
+      etiquetes, notes, l'historial d'escoltes i les respostes que l'usuari dona a
+      l'aplicació. Viu en un únic fitxer al Google Drive del propi usuari.</li>
+  <li><strong>Les fotos d'artista que l'usuari puja a mà</strong>, que també es desen al seu
+      Google Drive.</li>
   <li><strong>L'historial d'escoltes de ListenBrainz</strong>, que l'usuari ja publica pel
       seu compte en aquell servei i que l'aplicació només llegeix.</li>
 </ul>
 
-<h2>On van aquestes dades</h2>
-<p>Enlloc. L'aplicació no envia dades a cap servidor propi, perquè no en té. Les úniques
-connexions que fa són:</p>
+<h2>Amb qui es connecta, i què hi envia</h2>
+<p>L'aplicació no té servidor propi, així que no envia dades enlloc per guardar-les. Fa
+aquestes connexions, totes iniciades des del navegador de l'usuari:</p>
 <ul>
-  <li>A <strong>Google Drive</strong>, per llegir i escriure el fitxer de l'arxiu, que és
-      propietat de l'usuari i viu al seu compte.</li>
-  <li>A <strong>ListenBrainz</strong>, per llegir l'historial públic d'escoltes de l'usuari.</li>
+  <li><strong>Google Drive</strong>, per llegir i escriure el fitxer de l'arxiu, les seves
+      còpies de seguretat i les fotos d'artista. Tot és propietat de l'usuari i viu al seu
+      compte.</li>
+  <li><strong>ListenBrainz</strong>, per llegir l'historial públic d'escoltes de l'usuari.</li>
+  <li><strong>MusicBrainz</strong> i <strong>Cover Art Archive</strong>, per identificar els
+      discos i mostrar-ne la portada. Hi envia l'identificador públic del disc.</li>
+  <li><strong>Wikidata</strong> i <strong>Wikimedia Commons</strong>, per mostrar la foto
+      d'un artista. Hi envia l'identificador públic de l'artista.</li>
 </ul>
+<p>Aquestes quatre darreres connexions només demanen informació pública i no porten cap
+dada de l'usuari ni del seu arxiu. Com qualsevol pàgina web que es visita, aquests serveis
+veuen l'adreça IP des d'on es connecta el navegador. Si deixen de funcionar, l'aplicació
+funciona igual i mostra el text en lloc de la imatge.</p>
+<p>Quan l'usuari prem un botó per escoltar un disc, l'aplicació obre un altre servei
+(Amazon Music, YouTube Music, Bandcamp o el reproductor AIMP del mòbil), passant-li com a
+màxim l'artista i el títol del disc o l'identificador públic del disc en aquell servei.
+A partir d'aquí, és aquell servei qui tracta la visita, amb les seves pròpies condicions.</p>
 <p>No hi ha analítica, ni seguiment, ni publicitat, ni cap component de tercers que
-observi l'ús. No es venen ni es cedeixen dades a ningú, perquè no en surt cap.</p>
+observi l'ús. No es venen ni es cedeixen dades a ningú.</p>
+
+<h2>Què es guarda al mòbil</h2>
+<p>Per poder ensenyar portades i fotos sense connexió, el navegador en guarda una còpia.
+També hi queden les preferències de pantalla i, mentre no es poden desar, els canvis
+encara no pujats al Drive. Res d'això surt del dispositiu, i esborrar les dades del lloc
+web al navegador ho elimina sense tocar l'arxiu del Drive.</p>
 
 <h2>Quin permís de Google demana, i per què just aquest</h2>
-<p>L'aplicació demana un sol permís: <code>drive.file</code>. Aquest permís només dóna accés
+<p>L'aplicació demana un sol permís: <code>drive.file</code>. Aquest permís només dona accés
 als fitxers que la mateixa aplicació ha creat. La resta del Google Drive de l'usuari li és
 invisible, i això no és una promesa sinó una limitació imposada per Google. S'ha triat
 deliberadament el permís més estret que permet fer la feina.</p>
@@ -61,8 +83,9 @@ de tercers, en qualsevol moment i sense avisar ningú. El fitxer de l'arxiu cont
 de l'usuari i es pot descarregar, copiar o esborrar directament des del Drive.</p>
 
 <h2>Conservació</h2>
-<p>L'aplicació no conserva res: no té on fer-ho. Les dades duren el que l'usuari vulgui
-que durin al seu propi Drive.</p>
+<p>L'aplicació no conserva res fora del Drive de l'usuari. Allà hi guarda l'arxiu i les
+cinc còpies de seguretat més recents; quan en fa una de nova, esborra la més antiga. La
+resta dura el que l'usuari vulgui que duri.</p>
 
 <h2>Contacte</h2>
 <p>Aquesta aplicació té un únic usuari, que n'és també l'autor. Per a qualsevol qüestió,
