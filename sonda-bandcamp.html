@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sonda Bandcamp · MusicBrainz</title>
+<style>
+  :root{color-scheme:light dark}
+  body{font:15px/1.5 system-ui,sans-serif;margin:0 auto;padding:20px 16px 60px;max-width:640px;background:#fff;color:#222}
+  @media (prefers-color-scheme:dark){body{background:#111;color:#eee} td,th{border-color:#333!important} .no{color:#f88!important}}
+  h1{font-size:20px;margin:0 0 4px} p{margin:0 0 14px;color:#888;font-size:13.5px}
+  button{font:600 15px system-ui;padding:12px 18px;border-radius:22px;border:0;background:#D6A548;color:#1A1306;cursor:pointer}
+  table{border-collapse:collapse;width:100%;margin-top:16px;font-size:13px}
+  td,th{border-bottom:1px solid #ddd;padding:7px 4px;text-align:left;vertical-align:top;word-break:break-all}
+  .si{color:#2a8a3a;font-weight:600} .no{color:#b33;font-weight:600}
+  #resum{font-size:17px;font-weight:700;margin-top:16px}
+  textarea{width:100%;height:160px;margin-top:12px;font:12px ui-monospace,monospace}
+</style>
+</head>
+<body>
+<h1>Sonda: Bandcamp a MusicBrainz</h1>
+<p>Per a cada disc de Bandcamp en rotació que té identificador de MusicBrainz, mira si MusicBrainz sap la seva adreça de Bandcamp (al llançament o al grup de llançaments). Només llegeix. Triga uns 30 segons, perquè MusicBrainz demana una consulta per segon.</p>
+<button id="go">Comença</button>
+<div id="resum"></div>
+<table><thead><tr><th>Disc</th><th>Bandcamp a MusicBrainz</th></tr></thead><tbody id="t"></tbody></table>
+<textarea id="txt" readonly placeholder="Aquí sortirà el resultat en text, per copiar-lo al xat."></textarea>
+<script>
+const DISCS=[
+ ['Rafael Anton Irisarri — The North Bend','3ee9fc01-5545-4d9b-b49c-e78a90439191'],
+ ['Slow Reels — Everyday Exotic','9bfdaf31-ada2-461b-a31d-2445d549914f'],
+ ['Bvdub — Wrath and Apathy','b9b29263-5cf9-497a-b65d-b962bdf167c5'],
+ ['Sarah Davachi — The Will of Tongues','feb566a9-be7c-49e4-92b5-ea43c00b8143'],
+ ['Deepspace — The Atlas Sector','3169b5c6-a362-4d6a-8ae1-29527aa5945c'],
+ ['D York — The Italian Chronicles','3d954bba-d52b-4ff5-add6-4ade57114ce4'],
+ ['theAdelaidean — Airward','1eda8d1f-ace9-4647-9807-fb483eeb9b1c'],
+ ['Deaf Center — Reverie','d5c498bb-eaf8-4e9a-b8c8-e7947492fd73'],
+ ['The Inward Circles — I Have Heard a Music…','f8c9509f-46f7-4b31-ad32-a7ef7740805a'],
+ ['Tom Leclerc — A Brief Story of Slowness','15e283e6-2da5-47b8-ba1f-ae1eb736517c']];
+const espera=ms=>new Promise(r=>setTimeout(r,ms));
+const bc=rels=>(rels||[]).map(r=>r.url&&r.url.resource).filter(u=>u&&/bandcamp\.com/.test(u));
+async function mb(path){
+  const r=await fetch('https://musicbrainz.org/ws/2/'+path+(path.includes('?')?'&':'?')+'fmt=json');
+  if(!r.ok) throw new Error('HTTP '+r.status); return r.json();
+}
+document.getElementById('go').onclick=async e=>{
+  e.target.disabled=true; const t=document.getElementById('t'); t.innerHTML='';
+  let n=0, linies=['Sonda Bandcamp→MusicBrainz, '+new Date().toISOString()];
+  for(const [nom,id] of DISCS){
+    const tr=document.createElement('tr'); tr.innerHTML=`<td>${nom}</td><td>mirant…</td>`; t.appendChild(tr);
+    let res='';
+    try{
+      const rel=await mb('release/'+id+'?inc=url-rels+release-groups'); await espera(1100);
+      let u=bc(rel.relations), on='llançament';
+      if(!u.length && rel['release-group']){ const g=await mb('release-group/'+rel['release-group'].id+'?inc=url-rels'); await espera(1100); u=bc(g.relations); on='grup'; }
+      if(u.length){ n++; res=`<span class="si">sí</span> (${on}) ${u.join(' ')}`; linies.push('SI '+on+' | '+nom+' | '+u.join(' ')); }
+      else { res='<span class="no">no</span>'; linies.push('NO | '+nom); }
+    }catch(err){ res='<span class="no">error</span> '+err.message; linies.push('ERROR '+err.message+' | '+nom); await espera(1100); }
+    tr.lastChild.innerHTML=res;
+  }
+  document.getElementById('resum').textContent=n+' de '+DISCS.length+' tenen l\'adreça de Bandcamp a MusicBrainz';
+  linies.push('TOTAL '+n+'/'+DISCS.length);
+  document.getElementById('txt').value=linies.join('\n'); e.target.disabled=false;
+};
+</script>
+</body>
+</html>
