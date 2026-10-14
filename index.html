@@ -36,9 +36,15 @@
 </main>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="vendor/sqljs/sql-wasm.js"></script>
+<script>
+  // Si alguna peça no carrega, es diu a la pantalla en lloc de quedar-se en blanc.
+  window.addEventListener('error', e => { const m = document.getElementById('missatge'); if (m) { m.className = 'mal'; m.textContent = 'No s\'ha pogut carregar la màquina: ' + (e.message || e.filename || 'error') + '. Tanca la pestanya i torna-la a obrir.'; } }, true);
+  window.addEventListener('unhandledrejection', e => { const m = document.getElementById('missatge'); if (m) { m.className = 'mal'; m.textContent = 'Error: ' + (e.reason?.message || e.reason); } });
+  setTimeout(() => { if (!document.getElementById('accions').innerHTML) { const m = document.getElementById('missatge'); m.className = 'mal'; m.textContent = 'La màquina no ha arrencat. Tanca la pestanya, espera un minut i torna-la a obrir.'; } }, 8000);
+</script>
+<script src="vendor/sqljs/sql-wasm.js?v=1"></script>
 <script type="module">
-import * as A from './js/arxiu.js';
+import * as A from './js/arxiu.js?v=3';
 
 const $ = id => document.getElementById(id);
 const diu = (text, classe = '') => { $('missatge').className = classe; $('missatge').textContent = text; };
