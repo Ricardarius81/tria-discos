@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La Meva Discoteca</title>
+<style>
+  :root { --bg:#f7f5f0; --fg:#1f1d1a; --mut:#6d675e; --linia:#ddd7cc; --ok:#2f7a45; --mal:#b3261e; --avis:#9a6b00; --acc:#2d5d8a; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#151412; --fg:#ece8e0; --mut:#9b958b; --linia:#34312c; --ok:#6fcf8a; --mal:#ff8a80; --avis:#e0b04a; --acc:#8ab4dc; } }
+  :root[data-theme="dark"] { --bg:#151412; --fg:#ece8e0; --mut:#9b958b; --linia:#34312c; --ok:#6fcf8a; --mal:#ff8a80; --avis:#e0b04a; --acc:#8ab4dc; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:640px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font:600 20px/1.2 Georgia, serif; margin:0 0 2px; }
+  .sub { color:var(--mut); font-size:13px; margin:0 0 20px; }
+  .targeta { border:1px solid var(--linia); border-radius:10px; padding:14px 16px; margin:0 0 14px; }
+  .fila { display:flex; justify-content:space-between; gap:12px; padding:3px 0; }
+  .fila span:first-child { color:var(--mut); }
+  .fila span:last-child { text-align:right; overflow-wrap:anywhere; }
+  button { font:inherit; padding:10px 16px; margin:4px 8px 4px 0; border-radius:8px; border:1px solid var(--linia); background:transparent; color:var(--fg); cursor:pointer; }
+  button.principal { background:var(--acc); border-color:var(--acc); color:var(--bg); }
+  button[disabled] { opacity:.5; cursor:default; }
+  .ok { color:var(--ok); } .mal { color:var(--mal); } .avis { color:var(--avis); }
+  #missatge:empty { display:none; }
+  #missatge { margin:0 0 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>La Meva Discoteca</h1>
+  <p class="sub">Tram 1 de la construcció · l'arxiu. Aquesta pantalla és provisional: serveix per comprovar que l'arxiu es crea, es desa i torna.</p>
+
+  <p id="missatge"></p>
+  <div id="accions"></div>
+  <div id="estat"></div>
+</main>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="vendor/sqljs/sql-wasm.js"></script>
+<script type="module">
+import * as A from './js/arxiu.js';
+
+const $ = id => document.getElementById(id);
+const diu = (text, classe = '') => { $('missatge').className = classe; $('missatge').textContent = text; };
+const accions = html => { $('accions').innerHTML = html; };
+const hora = iso => iso ? new Date(iso).toLocaleString('ca-ES', { dateStyle: 'short', timeStyle: 'medium' }) : '—';
+let casPendent = null;
+
+function pintaEstat() {
+  if (!A.estat.db) { $('estat').innerHTML = ''; return; }
+  const r = A.recomptes();
+  const proves = A.llegeixMeta('proves_desat') || '0';
+  $('estat').innerHTML = `
+    <div class="targeta">
+      <div class="fila"><span>Arxiu</span><span>${A.NOM_CARPETA} / ${A.NOM_ARXIU}</span></div>
+      <div class="fila"><span>Darrera versió al Drive</span><span>${hora(A.estat.base)}</span></div>
+      <div class="fila"><span>Estat</span><span class="${A.estat.pendent ? 'avis' : 'ok'}">${A.estat.pendent ? 'pendent de desar' : 'desat'}</span></div>
+      <div class="fila"><span>Obert des de</span><span>${A.estat.origen === 'drive' ? 'el Drive' : 'aquest navegador'}</span></div>
+      <div class="fila"><span>Estructura</span><span>versió ${A.versioEsquema()}</span></div>
+      <div class="fila"><span>Integritat</span><span class="${A.comprovaIntegritat() === 'ok' ? 'ok' : 'mal'}">${A.comprovaIntegritat()}</span></div>
+      <div class="fila"><span>Creat</span><span>${hora(A.llegeixMeta('creat'))}</span></div>
+      <div class="fila"><span>Proves de desat</span><span>${proves}</span></div>
+    </div>
+    <div class="targeta">${Object.entries(r).map(([t, n]) => `<div class="fila"><span>${t}</span><span>${n}</span></div>`).join('')}</div>`;
+  accions(`<button class="principal" id="prova">Prova de desat</button><button id="reobre">Torna a obrir des del Drive</button>`);
+  $('prova').onclick = provaDeDesat;
+  $('reobre').onclick = () => arrenca(true);
+}
+
+async function provaDeDesat() {
+  $('prova').disabled = true;
+  const r = await A.canvia(db => {
+    const n = Number(A.llegeixMeta('proves_desat') || 0) + 1;
+    db.run('INSERT INTO meta (clau, valor) VALUES (?, ?) ON CONFLICT(clau) DO UPDATE SET valor = excluded.valor', ['proves_desat', String(n)]);
+  });
+  if (r.desat) diu('Desat al Drive.', 'ok');
+  else diu('No s\'ha pogut desar al Drive: ' + r.motiu + '. El canvi queda en aquest navegador.', 'avis');
+  pintaEstat();
+}
+
+async function arrenca(ambGest = false) {
+  diu('Obrint l\'arxiu…');
+  try {
+    if (ambGest) await A.permis();
+    const r = await A.obre();
+    casPendent = r;
+    if (r.cas === 'obert') { diu(r.fora ? 'Sense connexió: treballes amb la còpia d\'aquest navegador.' : (r.avis || ''), r.avis || r.fora ? 'avis' : ''); pintaEstat(); return; }
+    $('estat').innerHTML = '';
+    if (r.cas === 'sense-res') { diu(r.detall + ' Entra amb Google per obrir l\'arxiu.', 'avis'); accions('<button class="principal" id="entra">Entra amb Google</button>'); $('entra').onclick = () => arrenca(true); return; }
+    if (r.cas === 'primera-vegada') {
+      diu('No hi ha cap arxiu al teu Drive, ni a la paperera, ni cap còpia en aquest navegador. És la primera vegada?');
+      accions('<button class="principal" id="crea">Sí, crea l\'arxiu</button>');
+      $('crea').onclick = async () => { $('crea').disabled = true; await A.creaPerPrimeraVegada(); diu('Arxiu creat.', 'ok'); pintaEstat(); };
+      return;
+    }
+    if (r.cas === 'a-la-paperera') {
+      diu(`L'arxiu és a la paperera del Drive (darrera modificació ${hora(r.fitxer.modifiedTime)}). No en creo cap de nou.`, 'mal');
+      accions('<button class="principal" id="recupera">Treu-lo de la paperera</button>');
+      $('recupera').onclick = async () => { await A.recuperaDeLaPaperera(r.fitxer); arrenca(); };
+      return;
+    }
+    if (r.cas === 'nomes-local') {
+      diu(`No trobo l'arxiu al Drive, però aquest navegador en té una còpia (${hora(r.copia.desat)}). No en creo cap de buit.`, 'mal');
+      accions('<button class="principal" id="puja">Torna a pujar aquesta còpia</button>');
+      $('puja').onclick = async () => { await A.pujaCopiaLocal(r.copia); diu('Còpia pujada al Drive.', 'ok'); pintaEstat(); };
+      return;
+    }
+    if (r.cas === 'carpeta-sense-arxiu') {
+      diu(`La carpeta «${A.NOM_CARPETA}» existeix però l'arxiu no hi és, ni a la paperera. No en creo cap de buit: caldrà recuperar-lo d'una còpia de seguretat.`, 'mal');
+      accions(''); return;
+    }
+    if (r.cas === 'malmes') { diu('L\'arxiu del Drive no passa la comprovació d\'integritat: ' + r.detall + '. No el toco.', 'mal'); accions(''); return; }
+    if (r.cas === 'conflicte') {
+      diu(`L'arxiu ha canviat en un altre lloc (${hora(r.drive.modifiedTime)}) i aquest navegador té canvis sense pujar. Quin mana? L'altre no s'esborra: es desa apart al Drive.`, 'avis');
+      accions('<button id="drive">Mana el Drive</button><button id="aqui">Mana aquest dispositiu</button>');
+      $('drive').onclick = async () => { await A.resolConflicte('drive', r); arrenca(); };
+      $('aqui').onclick = async () => { await A.resolConflicte('aqui', r); pintaEstat(); };
+      return;
+    }
+  } catch (e) {
+    diu('Error: ' + e.message, 'mal');
+    accions('<button class="principal" id="entra">Entra amb Google</button>');
+    $('entra').onclick = () => arrenca(true);
+  }
+}
+
+window.addEventListener('online', async () => { if (A.estat.pendent) { const r = await A.desa(); if (r.desat) diu('Connexió recuperada: desat al Drive.', 'ok'); pintaEstat(); } });
+accions('<button class="principal" id="entra">Entra amb Google</button>');
+$('entra').onclick = () => arrenca(true);
+</script>
+</body>
+</html>
