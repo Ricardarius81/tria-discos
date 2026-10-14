@@ -84,7 +84,13 @@ async function arrenca(ambGest = false) {
     if (ambGest) await A.permis();
     const r = await A.obre();
     casPendent = r;
-    if (r.cas === 'obert') { diu(r.fora ? 'Sense connexió: treballes amb la còpia d\'aquest navegador.' : (r.avis || ''), r.avis || r.fora ? 'avis' : ''); pintaEstat(); return; }
+    if (r.cas === 'obert') {
+      if (r.fora) diu('Sense connexió: treballes amb la còpia d\'aquest navegador.', 'avis');
+      else if (r.desat && r.desat.desat) diu('Hi havia canvis d\'aquest mòbil pendents: ara ja són al Drive.', 'ok');
+      else if (r.desat) diu('Hi ha canvis d\'aquest mòbil que encara no s\'han pogut desar: ' + r.desat.motiu + '. Es torna a provar sol.', 'avis');
+      else diu(r.avis || '', r.avis ? 'avis' : '');
+      pintaEstat(); return;
+    }
     $('estat').innerHTML = '';
     if (r.cas === 'sense-res') { diu(r.detall + ' Entra amb Google per obrir l\'arxiu.', 'avis'); accions('<button class="principal" id="entra">Entra amb Google</button>'); $('entra').onclick = () => arrenca(true); return; }
     if (r.cas === 'primera-vegada') {
@@ -124,7 +130,11 @@ async function arrenca(ambGest = false) {
   }
 }
 
-window.addEventListener('online', async () => { if (A.estat.pendent) { const r = await A.desa(); if (r.desat) diu('Connexió recuperada: desat al Drive.', 'ok'); pintaEstat(); } });
+A.vigilaPendents(r => {
+  if (r.desat) diu('Desat al Drive (' + hora(new Date().toISOString()) + ').', 'ok');
+  else diu('Encara no s\'ha pogut desar: ' + r.motiu + '. Es torna a provar sol.', 'avis');
+  pintaEstat();
+});
 accions('<button class="principal" id="entra">Entra amb Google</button>');
 $('entra').onclick = () => arrenca(true);
 </script>

@@ -151,7 +151,8 @@ export async function obre() {
     if (copia?.pendent && copia.fitxerId === f.id) {
       if (copia.base === f.modifiedTime) {           // els canvis locals parteixen de la versió que hi ha al Drive
         obreBytes(copia.bytes); Object.assign(estat, { fitxerId: f.id, carpetaId: copia.carpetaId, base: f.modifiedTime, pendent: true, origen: 'local' });
-        return { cas: 'obert', avis };
+        const r = await desa();                      // i es pugen ara mateix: no s'esperen a un altre canvi
+        return { cas: 'obert', avis, desat: r };
       }
       return { cas: 'conflicte', drive: f, copia };  // el Drive ha canviat des d'un altre lloc i aquí hi ha canvis sense pujar
     }
@@ -242,6 +243,28 @@ export async function desa({ forca = false } = {}) {
     await desaLocal();
     return { desat: true };
   } catch (e) { return { desat: false, motiu: e.message }; }
+}
+
+// Mentre hi hagi canvis pendents, es torna a provar: quan torna la xarxa (que a Android avisa abans
+// de funcionar de veritat), quan la pantalla torna a ser visible, i cada 30 segons. Cada intent avisa.
+let rellotge = null, provant = false;
+export function vigilaPendents(avisa) {
+  const prova = async (esperes = [0]) => {
+    if (provant || !estat.pendent || !estat.db) return;
+    provant = true;
+    try {
+      for (const ms of esperes) {
+        if (ms) await new Promise(r => setTimeout(r, ms));
+        const r = await desa();
+        avisa(r);
+        if (r.desat || r.motiu === 'conflicte' || r.motiu?.includes('paperera')) break;
+      }
+    } finally { provant = false; }
+  };
+  window.addEventListener('online', () => prova([1500, 4000, 10000]));
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') prova(); });
+  clearInterval(rellotge);
+  rellotge = setInterval(() => { if (navigator.onLine) prova(); }, 30_000);
 }
 
 export function recomptes() {
