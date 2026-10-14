@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prova de bústia</title>
+<style>
+  :root { --bg:#fff; --fg:#222; --mut:#666; --ok:#0a7c2f; --bad:#b3261e; --line:#ddd; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#141414; --fg:#eee; --mut:#999; --ok:#5fd28a; --bad:#ff8a80; --line:#333; } }
+  body { font: 15px/1.5 system-ui, sans-serif; margin: 0; padding: 24px 16px; max-width: 780px;
+         background: var(--bg); color: var(--fg); }
+  h1 { font-size: 17px; margin: 0 0 4px; }
+  p.sub { color: var(--mut); margin: 0 0 20px; font-size: 13px; }
+  button { font: inherit; padding: 10px 16px; margin: 0 8px 8px 0; cursor: pointer; }
+  button[disabled] { opacity: .5; cursor: default; }
+  #log { margin-top: 16px; font: 13px/1.6 ui-monospace, monospace; white-space: pre-wrap;
+         border-top: 1px solid var(--line); padding-top: 14px; overflow-wrap: anywhere; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .note { color: var(--mut); }
+  .head { font-weight: 600; display: block; margin-top: 14px; }
+</style>
+</head>
+<body>
+
+<h1>Prova de bústia</h1>
+<p class="sub">Mesura si una tasca programada de Claude pot deixar dades en fitxers que ha creat la màquina,
+i si la màquina les pot llegir. Només toca els dos fitxers que crea aquesta pàgina.</p>
+
+<button id="crear">1 · Crear els dos fitxers</button>
+<button id="llegir">2 · Llegir el que hi ha escrit Claude</button>
+
+<div id="log"></div>
+
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+const CLIENT_ID = '918975060033-hs8so80pee5mjlrlpeu9gnleuoqjib3a.apps.googleusercontent.com';
+const SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const NOM_FULL = 'tria-discos-prova-bustia';
+const NOM_JSON = 'tria-discos-prova-pendents.json';
+
+const logEl = document.getElementById('log');
+function say(t, c) { const s = document.createElement('span'); if (c) s.className = c; s.textContent = t + '\n'; logEl.appendChild(s); }
+function head(t) { say(t, 'head'); }
+
+let token = null;
+function ambPermis(fn) {
+  if (token) return fn();
+  const client = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID, scope: SCOPE,
+    callback: async (r) => {
+      if (r.error) { say('Permís denegat: ' + r.error, 'bad'); return; }
+      token = r.access_token;
+      try { await fn(); } catch (e) { say('ERROR: ' + e.message, 'bad'); }
+    }
+  });
+  client.requestAccessToken();
+}
+
+const B = 'prova-bustia-boundary';
+async function crearFitxer(nom, mimeDesti, mimeCos, cos) {
+  const meta = { name: nom, mimeType: mimeDesti };
+  const body = new Blob(['\r\n--' + B + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(meta)
+    + '\r\n--' + B + '\r\nContent-Type: ' + mimeCos + '\r\n\r\n', cos, '\r\n--' + B + '--']);
+  const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType',
+    { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + B }, body });
+  if (!r.ok) throw new Error('crear ' + nom + ': ' + r.status + ' ' + await r.text());
+  return r.json();
+}
+
+async function buscar(nom) {
+  const q = encodeURIComponent("name = '" + nom + "' and trashed = false");
+  const r = await fetch('https://www.googleapis.com/drive/v3/files?q=' + q + '&orderBy=modifiedTime desc&fields=files(id,name,modifiedTime)',
+    { headers: { Authorization: 'Bearer ' + token } });
+  if (!r.ok) throw new Error('buscar: ' + r.status + ' ' + await r.text());
+  return (await r.json()).files || [];
+}
+
+document.getElementById('crear').onclick = () => { logEl.textContent = ''; ambPermis(async () => {
+  head('1 · Fitxer de peticions (el que la màquina escriu i Claude llegeix)');
+  const pendents = { creat: new Date().toISOString(), pendents: [
+    { edicio: 'PROVA-1', artista: 'Phase 90', titol: 'Infinitati' },
+    { edicio: 'PROVA-2', artista: 'Celer', titol: 'Capri' } ] };
+  const j = await crearFitxer(NOM_JSON, 'application/json', 'application/json', JSON.stringify(pendents, null, 1));
+  say('  Creat: ' + j.name, 'ok');
+
+  head('2 · Full de respostes (el que Claude escriu i la màquina llegeix)');
+  const f = await crearFitxer(NOM_FULL, 'application/vnd.google-apps.spreadsheet', 'text/csv', 'edicio,codi,data\n');
+  say('  Creat: ' + f.name + ' (' + f.mimeType + ')', 'ok');
+
+  head('Fet. Ara digues-li a Claude que ja hi són, i quan t\'avisi, prem el botó 2.');
+}); };
+
+document.getElementById('llegir').onclick = () => { logEl.textContent = ''; ambPermis(async () => {
+  head('Què veu la màquina al full de respostes');
+  const fs = await buscar(NOM_FULL);
+  if (!fs.length) { say('  No trobo el full. Has premut el botó 1?', 'bad'); return; }
+  const f = fs[0];
+  say('  Darrera modificació: ' + f.modifiedTime, 'note');
+  const r = await fetch('https://www.googleapis.com/drive/v3/files/' + f.id + '/export?mimeType=text/csv',
+    { headers: { Authorization: 'Bearer ' + token } });
+  if (!r.ok) { say('  No el puc llegir: ' + r.status + ' ' + await r.text(), 'bad'); return; }
+  const files = (await r.text()).trim().split(/\r?\n/);
+  files.forEach(l => say('    ' + l, 'note'));
+  const respostes = files.length - 1;
+  if (respostes > 0) say('  ' + respostes + ' fila(es) escrites per algú altre, i la màquina les llegeix.', 'ok');
+  else say('  Encara només hi ha la capçalera.', 'bad');
+}); };
+</script>
+</body>
+</html>
