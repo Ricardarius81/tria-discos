@@ -6,7 +6,7 @@
 //  · «Pendent de desar» fins que la data de modificació del fitxer al Drive canvia (§3.5, v1.35).
 //  · Comprovació d'integritat en obrir (§3.5).
 
-import { MIGRACIONS, TAULES } from './esquema.js?v=1';
+import { MIGRACIONS, TAULES } from './esquema.js?v=2';
 
 export const CLIENT_ID = '918975060033-hs8so80pee5mjlrlpeu9gnleuoqjib3a.apps.googleusercontent.com';
 const ABAST = 'https://www.googleapis.com/auth/drive.file';

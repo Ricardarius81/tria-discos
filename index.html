@@ -23,12 +23,13 @@
   .ok { color:var(--ok); } .mal { color:var(--mal); } .avis { color:var(--avis); }
   #missatge:empty { display:none; }
   #missatge { margin:0 0 14px; }
+  .fila.disc span:last-child { white-space:nowrap; }
 </style>
 </head>
 <body>
 <main>
   <h1>La Meva Discoteca</h1>
-  <p class="sub">Tram 1 de la construcció · l'arxiu. Aquesta pantalla és provisional: serveix per comprovar que l'arxiu es crea, es desa i torna.</p>
+  <p class="sub">Tram 2 de la construcció · la llavor. Aquesta pantalla és provisional: serveix per carregar la llavor i comprovar què ha entrat.</p>
 
   <p id="missatge"></p>
   <div id="accions"></div>
@@ -44,7 +45,8 @@
 </script>
 <script src="vendor/sqljs/sql-wasm.js?v=1"></script>
 <script type="module">
-import * as A from './js/arxiu.js?v=3';
+import * as A from './js/arxiu.js?v=4';
+import * as L from './js/llavor.js?v=1';
 
 const $ = id => document.getElementById(id);
 const diu = (text, classe = '') => { $('missatge').className = classe; $('missatge').textContent = text; };
@@ -67,10 +69,45 @@ function pintaEstat() {
       <div class="fila"><span>Creat</span><span>${hora(A.llegeixMeta('creat'))}</span></div>
       <div class="fila"><span>Proves de desat</span><span>${proves}</span></div>
     </div>
-    <div class="targeta">${Object.entries(r).map(([t, n]) => `<div class="fila"><span>${t}</span><span>${n}</span></div>`).join('')}</div>`;
-  accions(`<button class="principal" id="prova">Prova de desat</button><button id="reobre">Torna a obrir des del Drive</button>`);
+    <div class="targeta">${Object.entries(r).map(([t, n]) => `<div class="fila"><span>${t}</span><span>${n}</span></div>`).join('')}</div>
+    ${pintaLlavor()}`;
+  const teLlavor = !!A.llegeixMeta('llavor');
+  accions(`${teLlavor ? '' : '<button class="principal" id="llavor">Carrega la llavor</button>'}<button ${teLlavor ? 'class="principal"' : ''} id="prova">Prova de desat</button><button id="reobre">Torna a obrir des del Drive</button>`);
+  if (!teLlavor) $('llavor').onclick = carregaLlavor;
   $('prova').onclick = provaDeDesat;
   $('reobre').onclick = () => arrenca(true);
+}
+
+// Tram 2 · la llavor del «car pendent» del 22-10. Un sol toc, una sola vegada.
+const CANAL = { amazon: 'Amazon Music', bandcamp: 'Bandcamp', youtube: 'YouTube Music', aimp: 'AIMP' };
+const net = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function pintaLlavor() {
+  const m = A.llegeixMeta('llavor');
+  if (!m) {
+    const rot = L.ROTACIO.filter(d => !d.foraDeRotacio).length;
+    return `<div class="targeta"><div class="fila"><span>Llavor</span><span class="avis">sense carregar</span></div>
+      <div class="fila"><span>Discos en rotació</span><span>${rot}</span></div>
+      <div class="fila"><span>Artistes preferents</span><span>${L.PREFERENTS.length}</span></div>
+      <div class="fila"><span>Del «car pendent» del</span><span>22-10-2026</span></div></div>`;
+  }
+  const info = JSON.parse(m), r = L.resum(A.estat.db);
+  return `<div class="targeta"><div class="fila"><span>Llavor</span><span class="ok">carregada · ${hora(info.data)}</span></div></div>
+    <div class="targeta"><div class="fila"><span><b>Discos en rotació</b></span><span>${r.rotacio.length}</span></div>
+      ${r.rotacio.map(d => `<div class="fila disc"><span>${net(d.art)} — ${net(d.tit)}${d.ed ? ' · ' + net(d.ed) : ''}${d.viva ? ' · part viva: ' + net(d.viva) + ' de ' + d.nParts : ''}</span><span>${d.min}′ · ${CANAL[d.canal] || net(d.canal)}</span></div>`).join('')}</div>
+    <div class="targeta"><div class="fila"><span><b>Artistes preferents</b></span><span>${r.preferents.length}</span></div>
+      ${r.preferents.map((p, i) => `<div class="fila"><span>${i + 1}. ${net(p.nom)}</span><span>${p.proper ? 'el proper: ' + net(p.proper) : ''}</span></div>`).join('')}</div>`;
+}
+
+async function carregaLlavor() {
+  $('llavor').disabled = true;
+  try {
+    const r = await A.canvia(db => L.carrega(db));
+    if (r.desat) diu('Llavor carregada i desada al Drive.', 'ok');
+    else diu('Llavor carregada en aquest mòbil, però encara no al Drive: ' + r.motiu + '. Es torna a provar sol.', 'avis');
+  } catch (e) {
+    diu(e.message, 'mal');
+  }
+  pintaEstat();
 }
 
 async function provaDeDesat() {

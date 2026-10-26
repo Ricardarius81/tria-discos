@@ -106,6 +106,12 @@ export const MIGRACIONS = [
   CREATE INDEX escolta_edicio ON escolta(edicio_id, data_hora);
   CREATE INDEX edicio_album ON edicio(album_id);
   CREATE INDEX album_artista ON album(artista_id);
+  `,
+  // v2 · el «proper disc» d'un preferent és només un títol, sense fitxa ni durada (§7.7, v1.34).
+  // La v1 el feia apuntar a una edició, i tota edició exigeix durada: cap «proper» no s'hauria pogut desar.
+  // preferent.proper_edicio_id es queda sense ús, com els camps congelats de la v1.33.
+  `
+  ALTER TABLE preferent ADD COLUMN proper_titol TEXT;
   `
 ];
 
