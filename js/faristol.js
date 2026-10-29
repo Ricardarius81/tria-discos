@@ -3,7 +3,7 @@
 // Encara no hi ha ListenBrainz (3.3), portades (3.2), safata viva (3.4) ni Bandcamp automàtic (3.5).
 
 import * as A from './arxiu.js?v=6';
-import * as D from './dades.js?v=1';
+import * as D from './dades.js?v=2';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -236,7 +236,7 @@ function fullAfegeixDisc() {
     <p>Fins que arribin les escoltes de ListenBrainz (bloc 3.3), els discos entren així, a mà. Cap disc entra sense durada: llegeix-la del disc o de l'app, no de memòria.</p>
     <label class="camp"><span>Artista</span><input id="inArt" type="text" autocomplete="off"></label>
     <label class="camp"><span>Títol</span><input id="inTit" type="text" autocomplete="off"></label>
-    <label class="camp"><span>Durada en minuts</span><input id="inMin" type="number" inputmode="numeric" min="1"></label>
+    <label class="camp"><span>Durada en minuts</span><input id="inMin" type="number" inputmode="numeric" min="1"><span class="ajuda">Si el disc ja té fitxa a l'arxiu, es queda la seva durada i aquí no cal res.</span></label>
     <div class="camp"><span>Per on l'escoltes</span></div>
     <div class="canals-tria" id="nousCanals">${botons()}</div>
     <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-desaama="1">Posa'l en rotació</button></div>`);
@@ -383,7 +383,7 @@ document.addEventListener('click', e => {
   if (d.desaama) {
     const art = $('#inArt').value.trim(), tit = $('#inTit').value.trim(), min = parseInt($('#inMin').value, 10);
     if (!art || !tit) { avisa('Calen l\'artista i el títol.'); return; }
-    if (!min || min < 1) { avisa('Cap disc entra sense durada.'); return; }
+    if ((!min || min < 1) && !D.trobaEdicio(db(), art, tit)) { avisa('Cap disc entra sense durada.'); return; }
     tancaFull(); vesA('faristol'); sub('rot');
     fes(D.posaEnRotacio({ art, tit, min, canal: estat.nouCanal }), r => r.nou ? `${tit} entra a Discos en Rotació` : `${tit} ja era a l'arxiu: torna a la rotació amb la seva fitxa`);
     return;

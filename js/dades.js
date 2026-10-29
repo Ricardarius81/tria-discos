@@ -74,6 +74,13 @@ export function trobaArtista(db, nom) {
   return null;
 }
 
+// Si el disc ja té fitxa a l'arxiu (mateix artista i títol), la seva edició. Llavors no cal tornar a escriure la durada.
+export function trobaEdicio(db, art, tit) {
+  const a = trobaArtista(db, art); if (!a) return null;
+  const al = files(db, 'SELECT id, titol FROM album WHERE artista_id = ?', [a.id]).find(x => norm(x.titol) === norm(tit));
+  return al ? un(db, 'SELECT id, durada_total FROM edicio WHERE album_id = ? ORDER BY id DESC LIMIT 1', [al.id]) : null;
+}
+
 // ───────── escriptures ─────────
 // Totes reben db i el que calgui, i no pinten res.
 
