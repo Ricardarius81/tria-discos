@@ -3,7 +3,7 @@
 // Encara no hi ha ListenBrainz (3.3), portades (3.2), safata viva (3.4) ni Bandcamp automàtic (3.5).
 
 import * as A from './arxiu.js?v=6';
-import * as D from './dades.js?v=2';
+import * as D from './dades.js?v=3';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -172,7 +172,7 @@ function fullFitxa(d) {
   const jaPref = D.preferents(db()).some(p => p.artista_id === d.artista_id);
   obreFull(`<h3>${esc(d.titol)}</h3><p>${esc(d.art)}</p>
     <ul class="fitxa-dades">
-      <li><b>Durada</b><span>${d.min ? d.min + '′' : 'pendent'}</span></li>
+      <li><b>Durada</b><span>${d.min ? d.min + '′' : 'pendent'} <button class="sf-link" style="padding:0 0 0 8px" data-durada="${d.id}">canvia-la</button></span></li>
       <li><b>Canal</b><span>${esc(canal)}${codi}</span></li>
       ${d.formats.length ? `<li><b>Format</b><span>${esc(d.formats.map(f => NOMS_FISICS[f] || f).join(', '))}</span></li>` : ''}
       ${d.nom_edicio ? `<li><b>Edició</b><span>${esc(d.nom_edicio)}</span></li>` : ''}
@@ -184,6 +184,13 @@ function fullFitxa(d) {
       ${jaPref ? '' : `<button class="bt" data-fespref="${d.artista_id}">Afegir a Artistes Preferents</button>`}
       <button class="bt" data-treure="${d.id}">Treu de rotació</button>
     </div>`);
+}
+
+function fullDurada(d) {
+  obreFull(`<h3>${esc(d.viva?.nom || d.titol)}</h3><p>${esc(d.art)}${d.viva ? ' · durada de la part ' + d.viva.numero : ''}</p>
+    <label class="camp"><span>Durada en minuts</span><input id="inDurada" type="number" inputmode="numeric" min="1" value="${d.min || ''}"></label>
+    <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-desadurada="${d.id}">Desa-la</button></div>`);
+  setTimeout(() => $('#inDurada')?.select(), 50);
 }
 
 function fullPuntuar(d, encara = true) {
@@ -389,6 +396,10 @@ document.addEventListener('click', e => {
     return;
   }
   if (d.fitxa) { const x = rot(d.fitxa); if (x) fullFitxa(x); return; }
+  if (d.durada) { const x = rot(d.durada); if (x) fullDurada(x); return; }
+  if (d.desadurada) { const x = rot(d.desadurada), m = parseInt($('#inDurada').value, 10);
+    if (!x) return; if (!m || m < 1) { avisa('Cap disc es queda sense durada.'); return; }
+    tancaFull(); fes(D.canviaDurada(x.id, m, x.viva?.id), `Durada: ${m}′`); return; }
   if (d.escoltar) { const x = rot(d.escoltar); if (!x) return; tancaFull();
     fullEscoltar({ id: x.id, art: x.art, tit: x.titol, min: x.min, canal: x.app_escolta, bc: x.bc, fisic: x.fisic }); return; }
   if (d.altrecanal) { fullEscoltar(estat.escoltant, true); return; }

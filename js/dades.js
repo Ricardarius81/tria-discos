@@ -87,6 +87,10 @@ export function trobaEdicio(db, art, tit) {
 // «Escoltar ara»: queda la data, que mou el disc al capdavant (opció C). No és una escolta: l'escolta la porta ListenBrainz.
 export const obre = id => db => db.run('UPDATE edicio SET darrera_obertura = ? WHERE id = ?', [ara(), id]);
 
+// Corregir la durada: de la part viva si n'hi ha, si no de l'edició. Mai buida (ACT-188).
+export const canviaDurada = (id, min, partId) => db => partId
+  ? db.run('UPDATE part SET durada = ? WHERE id = ?', [min, partId])
+  : db.run('UPDATE edicio SET durada_total = ? WHERE id = ?', [min, id]);
 export const canviaCanal = (id, canal) => db => db.run('UPDATE edicio SET app_escolta = ? WHERE id = ?', [canal, id]);
 
 // Treure una edició sencera de la rotació (amb totes les seves parts).

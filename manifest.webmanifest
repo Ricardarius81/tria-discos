@@ -1,0 +1,17 @@
+{
+  "name": "La Meva Discoteca",
+  "short_name": "Discoteca",
+  "description": "El Faristol de la Màquina Màgica Tria-Discos",
+  "lang": "ca",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07151B",
+  "theme_color": "#7FC0CF",
+  "icons": [
+    { "src": "icones/icona-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icones/icona-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icones/icona-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
