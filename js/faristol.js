@@ -2,7 +2,7 @@
 // Tot el que es toca s'escriu a l'arxiu (arxiu.canvia) i es desa al Drive. Cada canvi porta «Desfés».
 // Encara no hi ha ListenBrainz (3.3), portades (3.2), safata viva (3.4) ni Bandcamp automàtic (3.5).
 
-import * as A from './arxiu.js?v=5';
+import * as A from './arxiu.js?v=6';
 import * as D from './dades.js?v=1';
 
 const $ = s => document.querySelector(s);
@@ -51,7 +51,7 @@ function obreFull(h) {
 }
 function tancaFull() {
   const f = $('#full');
-  if (f.dataset.encaraNo) { const id = +f.dataset.encaraNo; delete f.dataset.encaraNo; fes(D.encaraNo(id), 'Sense nota, de moment. Tornarà.', { desfes: false }); }
+  if (f.dataset.encaraNo) { const id = +f.dataset.encaraNo; delete f.dataset.encaraNo; fes(D.encaraNo(id), 'Sense nota, de moment. Tornarà.', { abans: estat.abansSortida }); }
   f.classList.remove('obert'); $('#fons').classList.remove('obert');
 }
 function marcaDesat(r) {
@@ -65,8 +65,8 @@ function marcaDesat(r) {
 }
 
 // Fer un canvi: s'escriu a l'arxiu, es pinta de seguida i es desa. «Desfés» torna l'arxiu a com era abans.
-async function fes(fn, text, { desfes = true } = {}) {
-  const abans = A.estat.db.export();
+async function fes(fn, text, { desfes = true, abans = null } = {}) {
+  abans = abans || A.estat.db.export();
   let res;
   const p = A.canvia(d => { res = fn(d); });
   pinta();
@@ -199,7 +199,7 @@ function fullPart(d) {
   const n = d.viva.numero, ultima = Math.max(...d.parts.map(p => p.numero));
   const nom = d.viva.nom || d.titol;
   if (n >= ultima) {
-    fes(D.treu(d.id), `${d.titol} fora de rotació`);
+    fes(D.treu(d.id), `${d.titol} fora de rotació`, { abans: estat.abansSortida });
     obreFull(`<h3>${esc(nom)} surt de rotació</h3><p>Era l'última part de ${esc(d.titol)}. L'edició es tanca, i la nota d'una caixa arriba en tancar la caixa.</p><p>Com la puntues?</p>
       <div class="escala">${D.ESCALA.map(([k, v]) => `<button data-punt="${v}" data-id="${d.id}">${k}</button>`).join('')}</div>
       <div class="barra-accions" style="position:static;padding:0"><button class="bt" data-puntencara="${d.id}">Encara no</button></div>`);
@@ -401,17 +401,18 @@ document.addEventListener('click', e => {
   if (d.fisic) { const x = estat.escoltant; tancaFull(); if (x?.id) fes(D.obre(x.id), 'Bona escolta.', { desfes: false }); return; }
   if (d.treure) {
     const x = rot(d.treure); if (!x) return; delete $('#full').dataset.encaraNo;
+    estat.abansSortida = A.estat.db.export();
     if (x.viva) { fullPart(x); return; }
-    fes(D.treu(x.id), `${x.titol} fora de rotació`); fullPuntuar(x); return;
+    fes(D.treu(x.id), `${x.titol} fora de rotació`, { abans: estat.abansSortida }); fullPuntuar(x); return;
   }
   if (d.punt !== undefined) { const id = +d.id; delete $('#full').dataset.encaraNo; tancaFull();
     const nom = D.ESCALA.find(([, v]) => v === +d.punt)[0];
-    fes(D.puntua(id, +d.punt), 'Puntuat: ' + nom); return; }
-  if (d.puntencara) { delete $('#full').dataset.encaraNo; tancaFull(); fes(D.encaraNo(+d.puntencara), 'Sense nota, de moment. Tornarà.', { desfes: false }); return; }
-  if (d.torna) { delete $('#full').dataset.encaraNo; tancaFull(); fes(D.tornaARotacio(+d.torna), 'Torna a la rotació'); return; }
-  if (d.espera) { tancaFull(); fes(D.deixaEsperant(+d.espera), 'La caixa queda esperant'); return; }
-  if (d.treuedicio) { const id = +d.treuedicio; const x = rot(id); tancaFull(); fes(D.treu(id), 'Fora de rotació'); if (x) fullPuntuar(x); return; }
-  if (d.seguent) { const [id, n] = d.seguent.split(':').map(Number); tancaFull(); fes(D.posaPart(id, n), 'La part ' + n + ' entra en rotació'); return; }
+    fes(D.puntua(id, +d.punt), 'Puntuat: ' + nom, { abans: estat.abansSortida }); return; }
+  if (d.puntencara) { delete $('#full').dataset.encaraNo; tancaFull(); fes(D.encaraNo(+d.puntencara), 'Sense nota, de moment. Tornarà.', { abans: estat.abansSortida }); return; }
+  if (d.torna) { delete $('#full').dataset.encaraNo; tancaFull(); fes(D.tornaARotacio(+d.torna), 'Torna a la rotació', { abans: estat.abansSortida }); return; }
+  if (d.espera) { tancaFull(); fes(D.deixaEsperant(+d.espera), 'La caixa queda esperant', { abans: estat.abansSortida }); return; }
+  if (d.treuedicio) { const id = +d.treuedicio; const x = rot(id); tancaFull(); fes(D.treu(id), 'Fora de rotació', { abans: estat.abansSortida }); if (x) fullPuntuar(x); return; }
+  if (d.seguent) { const [id, n] = d.seguent.split(':').map(Number); tancaFull(); fes(D.posaPart(id, n), 'La part ' + n + ' entra en rotació', { abans: estat.abansSortida }); return; }
   if (d.repren) { const x = rot(d.repren); tancaFull(); if (x) fullRepren(x); return; }
   if (d.reprenpart) { const [id, n] = d.reprenpart.split(':').map(Number); tancaFull(); fes(D.posaPart(id, n), 'La part ' + n + ' entra en rotació'); return; }
   if (d.fespref) { const aid = +d.fespref; tancaFull(); fes(D.afegeixPreferentId(aid), 'Afegit a Artistes Preferents'); sub('pref'); return; }

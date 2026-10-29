@@ -24,16 +24,26 @@ export function permis({ silenci = false } = {}) {
   if (testimoni && Date.now() < caducitat - 60_000) return Promise.resolve(testimoni);
   return new Promise((resol, rebutja) => {
     if (!window.google?.accounts?.oauth2) return rebutja(new Error('El component d\'inici de sessió de Google no s\'ha carregat.'));
-    client = client || google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: ABAST, callback: () => {} });
+    // El compte de l'última vegada (tram 3): amb la pista, Google no pregunta quin compte i la finestra es tanca sola.
+    let pista = ''; try { pista = localStorage.getItem('tria-compte') || ''; } catch {}
+    client = client || google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: ABAST, callback: () => {}, ...(pista ? { hint: pista } : {}) });
     client.callback = r => {
       if (r.error) return rebutja(new Error('Permís de Google: ' + r.error));
       testimoni = r.access_token; caducitat = Date.now() + r.expires_in * 1000; resol(testimoni);
+      recordaCompte();
     };
     client.error_callback = e => rebutja(new Error('Permís de Google: ' + (e?.type || 'cancel·lat')));
     client.requestAccessToken({ prompt: silenci ? '' : undefined });
   });
 }
 export const tePermis = () => !!testimoni && Date.now() < caducitat;
+// Desa el correu del compte al navegador (no surt d'aquest mòbil) per fer-lo servir de pista la propera vegada.
+async function recordaCompte() {
+  try {
+    const r = await fetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)', { headers: { Authorization: 'Bearer ' + testimoni } });
+    const c = (await r.json())?.user?.emailAddress; if (c) localStorage.setItem('tria-compte', c);
+  } catch {}
+}
 
 async function g(url, opcions = {}) {
   const t = await permis({ silenci: true });
