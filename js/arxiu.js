@@ -229,10 +229,21 @@ export async function canvia(fn) {
   return desa();
 }
 
+// Els desats van en fila: dos tocs seguits no han de pujar alhora, perquè el segon veuria la data
+// que acaba de canviar el primer i ho prendria per un conflicte (tram 3).
+let cua = Promise.resolve();
+export function desa(opcions) {
+  const p = cua.then(() => desaAra(opcions));
+  cua = p.catch(() => {});
+  return p;
+}
+
 // Puja l'arxiu sencer. Si el Drive ha canviat des d'un altre lloc, no el trepitja.
-export async function desa({ forca = false } = {}) {
+async function desaAra({ forca = false } = {}) {
   if (!estat.pendent) return { desat: true };
   if (!navigator.onLine) return { desat: false, motiu: 'sense connexió' };
+  // Sense permís vigent no es demana res a Google: demanar-lo sense un toc obriria una finestra a destemps (tram 3).
+  if (!tePermis()) return { desat: false, motiu: 'sense connectar amb el Drive' };
   try {
     const ara = await metadades(estat.fitxerId);
     if (ara.trashed) return { desat: false, motiu: 'l\'arxiu del Drive és a la paperera' };
@@ -265,6 +276,27 @@ export function vigilaPendents(avisa) {
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') prova(); });
   clearInterval(rellotge);
   rellotge = setInterval(() => { if (navigator.onLine) prova(); }, 30_000);
+}
+
+// Desfés (tram 3): torna l'arxiu a l'estat d'abans d'un canvi, i ho desa com un canvi més.
+export async function restaura(bytes) {
+  obreBytes(bytes);
+  estat.pendent = true;
+  await desaLocal();
+  return desa();
+}
+
+// Obrir sense esperar el Drive (tram 3): la còpia d'aquest navegador, si n'hi ha, per pintar de seguida.
+// La connexió amb el Drive la fa després obre(), amb el toc de Ricard. Retorna false si no hi ha còpia.
+export async function obreLocal() {
+  await motor();
+  const copia = await local('get');
+  if (!copia?.bytes) return false;
+  obreBytes(copia.bytes);
+  if (integritat(estat.db) !== 'ok') { estat.db.close(); estat.db = null; return false; }
+  Object.assign(estat, { fitxerId: copia.fitxerId, carpetaId: copia.carpetaId, base: copia.base, pendent: copia.pendent, origen: 'local' });
+  if (migra(estat.db)) { estat.pendent = true; await desaLocal(); }
+  return true;
 }
 
 export function recomptes() {

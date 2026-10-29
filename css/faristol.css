@@ -1,0 +1,501 @@
+/* L'aspecte del Faristol: el de la maqueta v13, estil «ricard» (v9-v13), portat tal qual a la màquina (tram 3).
+   La lletra Archivo viu al repositori: la pàgina no carrega res de fora fora del component d'inici de sessió de Google (§3.6). */
+@font-face{font-family:'Archivo'; font-style:normal; font-display:swap; font-weight:100 900; font-stretch:62% 125%;
+  src:url('../vendor/fonts/archivo-latin-wdth-normal.woff2') format('woff2-variations'), url('../vendor/fonts/archivo-latin-wdth-normal.woff2') format('woff2')}
+:root{
+  --r:3px;
+  --serif:'Iowan Old Style','Palatino Linotype',Palatino,'Book Antiqua',Georgia,serif;
+  --sans:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  color-scheme:dark;
+}
+/* LLEIDA — terra i blat. Hi ha físic. */
+body[data-lloc="Lleida"]{
+  --fons:#3A2A07; --fons-2:#4A3710; --fons-3:#5A451A; --marc:#1D1403;
+  --os:#FDF3DC; --os-2:#CBB284; --os-3:#95805A;
+  --accent:#FFE49B; --accent-2:#B8913B;
+  --vora:rgba(253,243,220,.15); --vora-2:rgba(253,243,220,.3);
+}
+/* MANACOR — mar de nit. Només streaming. */
+body[data-lloc="Fora"]{
+  --fons:#062639; --fons-2:#0B3450; --fons-3:#134463; --marc:#01111C;
+  --os:#E9F4FB; --os-2:#96B7CC; --os-3:#5F8299;
+  --accent:#FFC24D; --accent-2:#C08A25;
+  --vora:rgba(233,244,251,.15); --vora-2:rgba(233,244,251,.3);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--marc); color:var(--os); font-family:var(--sans); font-size:15px; line-height:1.45;
+  -webkit-font-smoothing:antialiased;
+}
+#telefon{
+  max-width:430px; margin:0 auto; min-height:100vh; position:relative; overflow:hidden;
+  background:var(--fons); box-shadow:0 0 60px rgba(0,0,0,.6);
+  display:flex; flex-direction:column;
+  transition:background .45s ease;
+  padding-top:env(safe-area-inset-top,0px);
+}
+/* ---------- capçalera ---------- */
+header.barra{
+  position:sticky; top:0; z-index:30; display:flex; align-items:center; gap:8px;
+  padding:14px 16px 10px; background:var(--fons); border-bottom:1px solid var(--vora);
+}
+.marca{font-family:var(--serif); font-size:15px; flex:1; color:var(--os)}
+.lloc{
+  font-size:11px; color:var(--os-2); border:1px solid var(--vora-2); border-radius:20px;
+  padding:3px 9px; background:none; cursor:pointer; font-family:var(--sans);
+}
+.lloc:hover{color:var(--accent); border-color:var(--accent)}
+.icona-btn{
+  appearance:none; border:1px solid var(--vora-2); background:transparent; color:var(--os-2);
+  width:32px; height:29px; border-radius:var(--r); font-size:13px; cursor:pointer; line-height:1;
+}
+.icona-btn:hover{color:var(--os); border-color:var(--accent)}
+.icona-btn[aria-pressed="true"]{color:var(--fons); background:var(--accent); border-color:var(--accent)}
+/* ---------- safata ---------- */
+.safata-tira{
+  display:flex; align-items:center; gap:10px; padding:11px 16px; width:100%; text-align:left;
+  border:0; border-bottom:1px solid var(--vora); background:var(--fons-2); cursor:pointer;
+  font-size:14px; color:var(--os); font-family:var(--sans); position:relative; z-index:2;
+}
+.pastilla{min-width:22px; height:22px; border-radius:11px; background:var(--accent); color:var(--fons);
+  font-size:12.5px; font-weight:700; display:grid; place-items:center; padding:0 7px}
+.safata-tira .tanca{margin-left:auto; color:var(--os-3); font-size:18px; line-height:1}
+/* ---------- superfícies ---------- */
+main{flex:1; padding:0 0 78px}
+.superficie{display:none; padding:20px 16px 0}
+.superficie.activa{display:block}
+h1{font-family:var(--serif); font-weight:400; font-size:29px; line-height:1.1; margin:0 0 16px; letter-spacing:-.01em}
+h2{font-family:var(--serif); font-weight:400; font-size:19px; margin:0 0 10px}
+.subtitol{color:var(--os-2); font-size:13.5px; margin:-10px 0 18px}
+/* ---------- subpestanyes: tres, en dues línies ---------- */
+.subpestanyes{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; align-items:end;
+  border-bottom:1px solid var(--vora); margin-bottom:16px}
+.subpestanyes button{
+  font-family:var(--serif); font-size:15.5px; line-height:1.15; padding:0 0 9px; background:none; border:0; cursor:pointer;
+  color:var(--os-3); border-bottom:2px solid transparent; margin-bottom:-1px; text-align:left;
+}
+.subpestanyes button[aria-selected="true"]{color:var(--os); border-bottom-color:var(--accent)}
+.panell{display:none}
+.panell.activa{display:block}
+.eina{display:flex; justify-content:flex-end; margin:-6px 0 8px}
+.eina button{background:none; border:0; color:var(--os-2); font-size:12px; cursor:pointer; font-family:var(--sans); padding:4px}
+.eina button[aria-pressed="true"]{color:var(--accent)}
+/* ---------- coberta de text ---------- */
+.coberta{
+  position:relative; width:100%; aspect-ratio:1/1; background:var(--fons-2); border:1px solid var(--vora);
+  padding:9px; display:flex; flex-direction:column; gap:4px; overflow:hidden; cursor:pointer;
+  text-align:left; font-family:var(--sans); color:inherit; border-radius:1px;
+}
+.coberta:hover{border-color:var(--accent-2)}
+.coberta .a{font-size:9.5px; color:var(--os-2); line-height:1.25;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+.coberta .t{font-family:var(--serif); font-size:13.5px; line-height:1.18; color:var(--os);
+  display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden}
+.coberta img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
+.coberta .filet{position:absolute; left:9px; right:9px; bottom:8px; height:1px; background:var(--vora-2)}
+/* ---------- reixa de rotació ---------- */
+.reixa{display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:16px 10px}
+.disc{position:relative}
+.escoltar{
+  position:absolute; top:6px; right:6px; width:30px; height:30px; border-radius:50%;
+  background:rgba(0,0,0,.5); border:1px solid var(--vora-2); color:var(--os);
+  font-size:11px; line-height:1; cursor:pointer; padding:0; display:grid; place-items:center;
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+}
+.escoltar:hover{background:var(--accent); color:var(--fons); border-color:var(--accent)}
+.disc .peu{display:flex; align-items:center; gap:5px; margin-top:5px; font-size:10.5px; color:var(--os-3); flex-wrap:wrap}
+.tag{border:1px solid var(--vora-2); border-radius:2px; padding:0 4px; color:var(--os-2); font-size:9.5px}
+.part{color:var(--accent)}
+.repren{background:var(--accent); color:var(--fons); border:0; border-radius:10px; font-size:10.5px; font-weight:600;
+  padding:2px 9px; cursor:pointer; font-family:var(--sans)}
+/* ---------- files de preferents ---------- */
+.files{border-top:1px solid var(--vora)}
+.fila{border-bottom:1px solid var(--vora); display:flex; align-items:center}
+.fila-cap{
+  display:flex; align-items:center; gap:12px; flex:1; min-width:0; padding:10px 2px;
+  background:none; border:0; color:inherit; text-align:left; cursor:pointer; font-family:var(--sans);
+}
+.fila-cap:hover .nom{color:var(--accent)}
+.fila-txt{flex:1; min-width:0}
+.nom{font-family:var(--serif); font-size:16px; line-height:1.15; display:block}
+.estat{font-size:12px; color:var(--os-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; margin-top:2px}
+.estat em{font-style:italic; color:var(--os)}
+.nansa{width:32px; height:40px; border:1px solid var(--vora); border-radius:2px; background:none;
+  color:var(--os-2); font-size:14px; line-height:1; cursor:grab; touch-action:none; margin-right:2px;
+  display:grid; place-items:center}
+.nansa:hover{border-color:var(--accent); color:var(--accent)}
+.fila.agafat{background:var(--fons-3); box-shadow:0 10px 24px rgba(0,0,0,.45); position:relative; z-index:5}
+body.arrossegant{user-select:none; -webkit-user-select:none}
+.mou{display:flex; flex-direction:column; gap:2px; padding-right:2px}
+.mou button{background:none; border:1px solid var(--vora); color:var(--os-2); border-radius:2px;
+  width:30px; height:21px; font-size:10px; cursor:pointer; line-height:1}
+.mou button:hover{border-color:var(--accent); color:var(--accent)}
+/* la portada del disc que estudies, a la dreta de la fila (v7) */
+.cob-fila{position:relative; width:42px; height:42px; flex:0 0 42px; border-radius:4px; overflow:hidden;
+  background:var(--fons-2); box-shadow:0 3px 10px rgba(0,0,0,.35); display:block}
+.cob-fila img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
+#files.ordenant .cob-fila{display:none}
+/* ---------- pantalla d'artista ---------- */
+.enrere{background:none; border:0; color:var(--os-2); font-size:13px; cursor:pointer; padding:0 0 12px; font-family:var(--sans)}
+.enrere:hover{color:var(--accent)}
+.cap-artista{display:flex; gap:14px; align-items:flex-start; margin-bottom:16px}
+.cap-artista h1{margin:2px 0 6px; font-size:26px}
+.barra-accions{
+  position:sticky; bottom:56px; background:linear-gradient(transparent, var(--fons) 24%);
+  padding:18px 0 14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+}
+/* ---------- botons ---------- */
+.bt{font-family:var(--sans); font-size:13px; padding:9px 13px; border-radius:var(--r); cursor:pointer;
+  background:transparent; color:var(--os); border:1px solid var(--vora-2)}
+.bt:hover{border-color:var(--accent); color:var(--accent)}
+.bt.principal{background:var(--accent); border-color:var(--accent); color:var(--fons); font-weight:600}
+.bt.principal:hover{background:var(--accent-2); border-color:var(--accent-2); color:var(--os)}
+.bt.discret{border-color:transparent; color:var(--os-2)}
+/* ---------- marcadors ---------- */
+.marcador{border:1px dashed var(--vora-2); border-radius:var(--r); padding:20px 16px; margin-top:20px}
+.marcador p{margin:0 0 10px; color:var(--os-2); font-size:13.5px}
+.marcador p:last-child{margin-bottom:0}
+.marcador .cita{font-family:var(--serif); font-size:17px; color:var(--os); line-height:1.35}
+.marcador.amb-cob{display:flex; gap:14px; align-items:center}
+.marcador.amb-cob .cob-fila{width:68px; height:68px; flex-basis:68px}
+/* ---------- navegació ---------- */
+nav.peu{position:fixed; left:50%; transform:translateX(-50%); bottom:0; width:100%; max-width:430px;
+  z-index:35; display:grid; grid-template-columns:repeat(3,1fr); background:var(--fons-2);
+  border-top:1px solid var(--vora-2); padding-bottom:env(safe-area-inset-bottom,0px);
+  box-shadow:0 -10px 24px rgba(0,0,0,.35)}
+nav.peu button{font-family:var(--serif); font-size:14px; padding:13px 4px 14px; background:none; border:0;
+  color:var(--os-3); cursor:pointer; border-top:2px solid transparent; margin-top:-1px}
+nav.peu button[aria-current="page"]{color:var(--os); border-top-color:var(--accent)}
+/* ---------- fulls ---------- */
+.fons-fosc{position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:40; display:none}
+.fons-fosc.obert{display:block}
+.full{position:fixed; left:50%; transform:translateX(-50%); bottom:0; width:100%; max-width:430px; z-index:41;
+  background:var(--fons-2); border-top:1px solid var(--accent-2); border-radius:14px 14px 0 0;
+  padding:20px 18px calc(24px + env(safe-area-inset-bottom,0px)); display:none; max-height:84vh; overflow:auto}
+.full.obert{display:block; animation:puja .2s ease-out}
+@keyframes puja{from{transform:translate(-50%,14px); opacity:0} to{transform:translate(-50%,0); opacity:1}}
+.full h3{font-family:var(--serif); font-weight:400; font-size:20px; margin:0 0 4px}
+.full p{color:var(--os-2); font-size:13px; margin:0 0 14px; line-height:1.5}
+.escala{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px}
+.escala button{font-family:var(--serif); font-size:15px; padding:13px 6px; background:var(--fons-3);
+  border:1px solid var(--vora); border-radius:var(--r); color:var(--os); cursor:pointer}
+.escala button:hover{border-color:var(--accent); color:var(--accent)}
+.canals{display:flex; flex-direction:column; gap:8px; margin-bottom:6px}
+.canals a,.canals button{display:flex; align-items:center; gap:10px; padding:13px 14px; border-radius:var(--r);
+  border:1px solid var(--vora-2); background:var(--fons-3); color:var(--os); text-decoration:none;
+  font-size:14px; cursor:pointer; font-family:var(--sans); text-align:left}
+.canals a:hover,.canals button:hover{border-color:var(--accent); color:var(--accent)}
+.canals small{margin-left:auto; color:var(--os-3); font-size:11px}
+.fitxa-dades{list-style:none; margin:0 0 14px; padding:0; font-size:13px}
+.fitxa-dades li{display:flex; gap:10px; padding:7px 0; border-bottom:1px solid var(--vora); color:var(--os-2)}
+.fitxa-dades b{font-weight:400; color:var(--os-3); min-width:96px}
+.fitxa-dades span{color:var(--os)}
+.llista-ajust{list-style:none; margin:0; padding:0}
+.llista-ajust li{border-bottom:1px solid var(--vora)}
+.llista-ajust button{width:100%; text-align:left; background:none; border:0; color:var(--os); padding:13px 2px;
+  font-size:14px; cursor:pointer; font-family:var(--sans); display:flex; gap:10px; align-items:baseline}
+.llista-ajust small{color:var(--os-3); font-size:11.5px; margin-left:auto}
+/* ---------- avís (a dalt, i d'un altre material) ---------- */
+.avis{
+  position:fixed; left:50%; transform:translateX(-50%); top:14px; z-index:60; max-width:400px;
+  width:calc(100% - 32px); background:#EFE7D9; color:#2A241A; border-left:3px solid var(--accent-2);
+  border-radius:2px; padding:10px 13px; display:none; align-items:center; gap:12px; font-size:13px;
+  box-shadow:0 10px 30px rgba(0,0,0,.45);
+}
+.avis.obert{display:flex}
+.avis button{margin-left:auto; background:none; border:0; color:#7A5E12; font-size:13px; cursor:pointer;
+  font-family:var(--sans); text-decoration:underline; white-space:nowrap}
+/* ---------- bastida ---------- */
+[data-src],[data-inv]{position:relative}
+body.procs [data-src]::after,body.procs [data-inv]::after{
+  content:attr(data-src); position:absolute; top:-7px; left:-3px; z-index:9;
+  font-family:var(--sans); font-size:8.5px; line-height:1.5; background:var(--accent); color:#1A1509;
+  padding:0 4px; border-radius:2px; pointer-events:none; white-space:nowrap}
+body.procs [data-inv]::after{content:attr(data-inv); background:var(--accent-2); color:#F0E8DA}
+.nota-maqueta{border:1px dashed var(--accent-2); border-radius:var(--r); padding:10px 12px; margin:16px 0 0;
+  font-size:11.5px; line-height:1.5; color:var(--os-2); display:none}
+body.procs .nota-maqueta{display:block}
+.nota-maqueta b{color:var(--accent)}
+@media (prefers-reduced-motion:reduce){*{animation:none !important; transition:none !important}}
+:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+/* ---------- durada, fotos, camps ---------- */
+.coberta .durada{
+  position:absolute; left:6px; bottom:6px; z-index:2; background:rgba(0,0,0,.72); color:var(--accent);
+  font-family:var(--serif); font-size:17px; line-height:1; padding:5px 8px 4px; border-radius:4px;
+  font-variant-numeric:tabular-nums; letter-spacing:.01em;
+}
+.coberta .durada.falta{font-family:var(--sans); font-size:10.5px; color:var(--os)}
+.coberta.amb-img .a,.coberta.amb-img .t,.coberta.amb-img .filet{display:none}
+.reixa .coberta{padding-bottom:36px}
+.reixa .coberta .t{-webkit-line-clamp:3}
+.reixa .coberta .a,.reixa .coberta .t{padding-right:28px}
+.reixa .coberta .filet{display:none}
+.disc .nom-sota{background:none; border:0; padding:0; width:100%; text-align:left; cursor:pointer; font-family:var(--sans);
+  font-size:11px; line-height:1.25; color:var(--os-2); margin-top:6px; display:block}
+.disc .nom-sota span{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+.disc .nom-sota b{font-weight:400; color:var(--os)}
+.disc .nom-sota i{font-style:normal}
+body[data-estil="original"] .disc .nom-sota i::before{content:' · '}
+body[data-estil="original"] .coberta:not(.amb-img) ~ .nom-sota,
+body[data-estil="galeria"] .coberta:not(.amb-img) ~ .nom-sota{display:none}
+.dur-gran{display:none}
+.foto{position:relative; width:46px; height:46px; flex:0 0 46px; border-radius:50%; overflow:hidden; background:var(--fons-2);
+  border:1px solid var(--vora); display:grid; place-items:center; font-family:var(--serif); font-size:15px; color:var(--os-2)}
+.foto img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
+.foto.quadrat{border-radius:4px}
+.afegeix{display:flex; align-items:center; gap:8px; width:100%; margin:0 0 16px; padding:12px 12px; background:none;
+  border:1px dashed var(--vora-2); border-radius:var(--r); color:var(--os-2); font-family:var(--sans); font-size:13.5px; cursor:pointer}
+.afegeix.sota{margin:14px 0 0}
+.afegeix:hover{border-color:var(--accent); color:var(--accent)}
+.camp{display:block; margin:0 0 10px}
+.camp span{display:block; font-size:11.5px; color:var(--os-3); margin-bottom:3px}
+.camp input{width:100%; background:var(--fons-3); border:1px solid var(--vora-2); border-radius:var(--r); color:var(--os);
+  font:inherit; padding:10px 10px}
+.camp input:focus{outline:2px solid var(--accent); outline-offset:1px}
+.proposta{border:1px solid var(--accent-2); border-radius:var(--r); padding:10px 12px; margin:0 0 12px; font-size:13px; color:var(--os-2)}
+.proposta b{font-family:var(--serif); font-size:20px; font-weight:400; color:var(--accent)}
+.retrat-gran{position:relative; width:104px; height:104px; flex:0 0 104px; border-radius:50%; overflow:hidden; background:var(--fons-2);
+  border:1px solid var(--vora-2); display:grid; place-items:center; font-family:var(--serif); font-size:30px; color:var(--os-2)}
+.retrat-gran img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
+
+/* ===========================================================
+   AFEGITS DE LA V7
+   =========================================================== */
+/* --- l'historial --- */
+.cerca{width:100%; background:var(--fons-2); border:1px solid var(--vora); border-radius:20px; color:var(--os);
+  font:inherit; font-size:14px; padding:9px 14px; margin:0 0 4px}
+.cerca::placeholder{color:var(--os-3)}
+.cerca:focus{outline:2px solid var(--accent); outline-offset:1px}
+.hgrup{font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--os-3); margin:18px 0 2px}
+.hfila{display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--vora)}
+.hcap{display:flex; gap:12px; align-items:center; flex:1; min-width:0; background:none; border:0; color:inherit;
+  text-align:left; cursor:pointer; font-family:var(--sans); padding:0}
+.hcob{position:relative; width:60px; height:60px; flex:0 0 60px; border-radius:5px; overflow:hidden; background:var(--fons-2);
+  display:grid; place-items:center; font-family:var(--serif); font-size:14px; color:var(--os-3);
+  box-shadow:0 4px 12px rgba(0,0,0,.35)}
+.hcob img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
+.hcob::after{content:'▶'; position:absolute; right:3px; bottom:3px; width:18px; height:18px; border-radius:50%;
+  background:rgba(0,0,0,.6); color:var(--os); font-size:7.5px; display:grid; place-items:center; font-family:var(--sans)}
+.htxt{flex:1; min-width:0; display:block}
+.htit{font-family:var(--serif); font-size:15px; line-height:1.2; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.hart{font-size:12px; color:var(--os-2); display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.hmeta{font-size:13px; color:var(--os-2); display:block; margin-top:3px; font-variant-numeric:tabular-nums}
+.hmeta b{font-weight:400; color:var(--accent); font-family:var(--serif); font-size:15.5px}
+.hmeta u{text-decoration:none; color:var(--os)}
+.hmeta b.prop{color:var(--os-2)}
+.hcap:hover .htit{color:var(--accent)}
+.hrot{flex:0 0 auto; background:none; border:1px solid var(--accent-2); color:var(--accent); border-radius:16px;
+  font-family:var(--sans); font-size:11.5px; padding:6px 10px; cursor:pointer; white-space:nowrap}
+.hrot:hover{background:var(--accent); color:var(--fons); border-color:var(--accent)}
+.hja{flex:0 0 auto; font-size:11px; color:var(--os-3); white-space:nowrap; padding-right:2px}
+.hja::before{content:''; display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--accent); margin-right:5px; vertical-align:1px}
+
+/* --- més vistós: el color el posen els discos --- */
+#s-faristol{position:relative}
+.ambient{position:absolute; left:-40px; right:-40px; top:-40px; height:250px; background-size:cover; background-position:center;
+  filter:blur(40px) saturate(1.6); opacity:.5; pointer-events:none; z-index:0; transition:background-image .6s ease;
+  -webkit-mask-image:linear-gradient(#000 30%,transparent); mask-image:linear-gradient(#000 30%,transparent)}
+#s-faristol > h1, #s-faristol > .subpestanyes, #s-faristol > .panell{position:relative; z-index:1}
+.reixa .coberta{border-radius:7px; transition:transform .12s ease, box-shadow .2s ease}
+.reixa .coberta.amb-img{border-color:transparent; box-shadow:0 8px 18px rgba(0,0,0,.4)}
+.reixa .coberta:active, .hcap:active .hcob, .fila-cap:active .foto{transform:scale(.96)}
+.coberta img,.hcob img,.foto img,.cob-fila img{animation:apareix .45s ease both}
+@keyframes apareix{from{opacity:0} to{opacity:1}}
+.foto.viu{box-shadow:0 0 0 2px var(--fons), 0 0 0 3.5px var(--accent); border-color:transparent}
+/* aspecte sobri: com la v6, per comparar */
+body.sobri .ambient{display:none}
+body.sobri .reixa .coberta{border-radius:1px; box-shadow:none; border-color:var(--vora)}
+body.sobri .hcob, body.sobri .cob-fila{border-radius:1px; box-shadow:none}
+body.sobri .foto.viu{box-shadow:none; border-color:var(--vora)}
+
+/* ===========================================================
+   V9 — UN SOL ESTIL, la barreja: portades senceres i grans (Galeria),
+   el color del LLOC en un bloc pla amb tinta (Cartell, suavitzat),
+   i l'Historial com una pila de lloms (Lloms).
+   =========================================================== */
+.dur-gran{display:none}
+.hdreta{display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:0 0 auto}
+.hdur{font-family:var(--titol); font-weight:800; font-stretch:72%; font-size:25px; line-height:1; color:#fff; font-variant-numeric:tabular-nums}
+.hdur.prop{opacity:.72}
+body[data-estil="ricard"]{--titol:'Archivo','sans-serif-condensed','Arial Narrow',sans-serif; --serif:var(--sans); --r:12px}
+body[data-estil="ricard"][data-lloc="Lleida"]{--c1:#D6A548; --tinta:#1A1306;
+  --fons:#16110A; --fons-2:#231B10; --fons-3:#30261A; --marc:#0B0805;
+  --os:#FFF8EA; --os-2:rgba(255,248,234,.76); --os-3:rgba(255,248,234,.56);
+  --accent:#F0C469; --accent-2:#B98A30; --vora:rgba(255,248,234,.12); --vora-2:rgba(255,248,234,.28)}
+body[data-estil="ricard"][data-lloc="Fora"]{--c1:#7FC0CF; --tinta:#04202B;
+  --fons:#07151B; --fons-2:#0F232C; --fons-3:#18323D; --marc:#020A0E;
+  --os:#EEF9FC; --os-2:rgba(238,249,252,.76); --os-3:rgba(238,249,252,.56);
+  --accent:#93D6E5; --accent-2:#3F97AF; --vora:rgba(238,249,252,.12); --vora-2:rgba(238,249,252,.28)}
+body[data-estil="ricard"] .ambient{display:none}
+/* el bloc de color del Lloc: capçalera, safata i cap del Faristol */
+body[data-estil="ricard"] header.barra{background:var(--c1); border-bottom:0; transition:background .45s ease}
+body[data-estil="ricard"] .marca{color:var(--tinta); font-family:var(--titol); font-weight:800; font-stretch:88%; font-size:16.5px}
+body[data-estil="ricard"] .lloc{background:var(--tinta); color:var(--c1); border-color:var(--tinta); font-weight:700; font-size:12px; padding:4px 11px}
+body[data-estil="ricard"] .icona-btn{border-color:rgba(0,0,0,.45); color:var(--tinta)}
+body[data-estil="ricard"] .icona-btn[aria-pressed="true"]{background:var(--tinta); color:var(--c1); border-color:var(--tinta)}
+body[data-estil="ricard"] .safata-tira{background:var(--c1); color:var(--tinta); border-top:1px solid rgba(0,0,0,.16); border-bottom:1px solid rgba(0,0,0,.16); font-weight:600; transition:background .45s ease}
+body[data-estil="ricard"] .safata-tira .tanca{color:var(--tinta)}
+body[data-estil="ricard"] .pastilla{background:var(--tinta); color:var(--c1)}
+body[data-estil="ricard"] .cap{background:var(--c1); color:var(--tinta); margin:-20px -16px 18px; padding:22px 16px 0; position:relative; z-index:1; transition:background .45s ease}
+body[data-estil="ricard"] h1{font-family:var(--titol); font-weight:900; font-stretch:70%; font-size:44px; line-height:.92; letter-spacing:-.02em}
+body[data-estil="ricard"] .cap h1{font-size:56px; font-stretch:68%; margin:0 0 16px; color:var(--tinta)}
+body[data-estil="ricard"] .subpestanyes{border-bottom:0; margin:0; gap:12px}
+body[data-estil="ricard"] .subpestanyes button{font-family:var(--titol); font-weight:800; font-stretch:84%; font-size:15.5px; line-height:1.08;
+  color:var(--tinta); opacity:.56; border-bottom:5px solid transparent; margin:0; padding-bottom:9px}
+body[data-estil="ricard"] .subpestanyes button[aria-selected="true"]{opacity:1; color:var(--tinta); border-bottom-color:var(--tinta)}
+/* discos en rotació: portades senceres i grans */
+body[data-estil="ricard"] .afegeix{margin:0 0 18px; border:0; background:var(--fons-2); border-radius:26px; color:var(--os); font-weight:600; justify-content:center; padding:13px}
+body[data-estil="ricard"] .afegeix.sota{margin:16px 0 0}
+body[data-estil="ricard"] .reixa{grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px 10px}
+body[data-estil="ricard"] .disc{min-width:0}
+body[data-estil="ricard"] .reixa .coberta{border-radius:12px; border:0; box-shadow:0 12px 26px rgba(0,0,0,.5); padding:14px 14px 44px; background:var(--fons-3)}
+body[data-estil="ricard"] .reixa .coberta .a{display:none}
+body[data-estil="ricard"] .reixa .coberta .t{font-family:var(--titol); font-weight:800; font-stretch:80%; font-size:20px; line-height:1.05; padding:0 34px 0 0; -webkit-line-clamp:4; color:var(--os-2)}
+body[data-estil="ricard"] .coberta .durada{left:8px; bottom:8px; border-radius:9px; background:rgba(0,0,0,.64); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  color:#fff; font-family:var(--titol); font-weight:800; font-stretch:72%; font-size:23px; padding:5px 9px 4px}
+body[data-estil="ricard"] .coberta .durada.falta{font-size:11px; font-stretch:100%; font-weight:600}
+body[data-estil="ricard"] .escoltar{width:38px; height:38px; top:8px; right:8px; background:var(--accent); color:var(--tinta); border:0; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,.45)}
+body[data-estil="ricard"] .disc .nom-sota{margin-top:9px}
+body[data-estil="ricard"] .disc .nom-sota span{display:block}
+body[data-estil="ricard"] .disc .nom-sota b{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  font-family:var(--titol); font-weight:700; font-stretch:88%; font-size:15.5px; line-height:1.12; color:var(--os)}
+body[data-estil="ricard"] .disc .nom-sota i{display:block; font-size:12.5px; color:var(--os-2); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+body[data-estil="ricard"] .disc .peu{margin-top:5px; font-size:11.5px}
+body[data-estil="ricard"] .repren{color:var(--tinta)}
+/* historial: la pila de lloms, amb la portada sencera a l'esquerra */
+body[data-estil="ricard"] .cerca{border:0; border-radius:26px; background:var(--fons-2); padding:12px 16px}
+body[data-estil="ricard"] .hgrup{font-family:var(--titol); font-weight:800; font-stretch:80%; font-size:19px; letter-spacing:0; text-transform:none; color:var(--os); margin:20px 0 8px}
+body[data-estil="ricard"] .hfila{position:relative; overflow:hidden; border:0; border-radius:8px; margin-bottom:5px; padding:6px 10px 6px 6px; background:var(--fons-2);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.16), inset 0 -1px 0 rgba(0,0,0,.45)}
+body[data-estil="ricard"] .hfila::before{content:''; position:absolute; inset:-16px; background:var(--img,none) center/cover; filter:blur(9px) saturate(1.5)}
+body[data-estil="ricard"] .hfila::after{content:''; position:absolute; inset:0; background:linear-gradient(90deg,rgba(0,0,0,.5),rgba(0,0,0,.36) 50%,rgba(0,0,0,.64))}
+body[data-estil="ricard"] .hfila > *{position:relative; z-index:1}
+body[data-estil="ricard"] .hcob{width:58px; height:58px; flex-basis:58px; border-radius:5px; box-shadow:0 4px 12px rgba(0,0,0,.5)}
+body[data-estil="ricard"] .htit{font-family:var(--titol); font-weight:700; font-stretch:86%; font-size:16.5px; color:#fff}
+body[data-estil="ricard"] .hart{color:rgba(255,255,255,.84); font-size:12.5px}
+body[data-estil="ricard"] .hmeta{color:rgba(255,255,255,.82); font-size:12.5px}
+body[data-estil="ricard"] .hmeta u{color:#fff; font-weight:600}
+body[data-estil="ricard"] .hrot{border:0; background:rgba(255,255,255,.93); color:#111; font-weight:700; font-size:11.5px; padding:5px 10px; border-radius:14px}
+body[data-estil="ricard"] .hja{color:#fff; font-size:11.5px; padding:0}
+/* preferents */
+body[data-estil="ricard"] .files{border-top:0}
+body[data-estil="ricard"] .foto{width:54px; height:54px; flex-basis:54px}
+body[data-estil="ricard"] .foto.quadrat{border-radius:8px}
+body[data-estil="ricard"] .nom{font-family:var(--titol); font-weight:700; font-stretch:88%; font-size:17.5px}
+body[data-estil="ricard"] .estat{font-size:12.5px}
+body[data-estil="ricard"] .cob-fila{width:48px; height:48px; flex-basis:48px; border-radius:6px}
+body[data-estil="ricard"] .marcador.amb-cob .cob-fila{width:76px; height:76px; flex-basis:76px}
+body[data-estil="ricard"] .eina button{font-size:13px}
+body[data-estil="ricard"] .marcador{border-style:solid; border-color:var(--vora); border-radius:14px; background:var(--fons-2)}
+/* peu, fulls, botons */
+body[data-estil="ricard"] nav.peu{border-top:3px solid var(--c1)}
+body[data-estil="ricard"] nav.peu button{font-family:var(--titol); font-weight:700; font-stretch:88%; font-size:15px; border-top:0; margin:0}
+body[data-estil="ricard"] nav.peu button[aria-current="page"]{color:var(--accent)}
+body[data-estil="ricard"] .full{border-radius:22px 22px 0 0; border-top:0}
+body[data-estil="ricard"] .full h3{font-family:var(--titol); font-weight:800; font-stretch:82%; font-size:24px; line-height:1.05; margin-bottom:6px}
+body[data-estil="ricard"] .bt{border-radius:24px; padding:11px 16px; font-weight:600}
+body[data-estil="ricard"] .bt.principal{color:var(--tinta)}
+body[data-estil="ricard"] .canals a,
+body[data-estil="ricard"] .canals button{border-radius:12px; border-color:var(--vora)}
+body[data-estil="ricard"] .escala button{font-family:var(--titol); font-weight:700; border-radius:12px}
+/* ---------- v10 ---------- */
+.marcador .barra-accions,.full .barra-accions,.superficie#s-artista .barra-accions{background:none}
+body[data-estil="ricard"] .reixa .coberta{border-radius:9px; padding:9px 9px 34px; box-shadow:0 8px 18px rgba(0,0,0,.5)}
+body[data-estil="ricard"] .reixa .coberta .t{font-size:14.5px; padding:0 26px 0 0}
+body[data-estil="ricard"] .coberta .durada{left:6px; bottom:6px; font-size:18px; padding:4px 7px 3px; border-radius:7px}
+body[data-estil="ricard"] .escoltar{width:31px; height:31px; top:6px; right:6px; font-size:11px}
+body[data-estil="ricard"] .disc .nom-sota{margin-top:7px}
+body[data-estil="ricard"] .disc .nom-sota b{font-size:13.5px}
+body[data-estil="ricard"] .disc .nom-sota i{font-size:11.5px}
+.torna-full{display:inline-flex; align-items:center; gap:6px; margin:0 0 14px; padding:9px 15px 9px 12px; border:0; border-radius:22px;
+  background:var(--fons-3); color:var(--os); font:600 14px var(--sans); cursor:pointer}
+body[data-estil="ricard"] .enrere{display:inline-flex; align-items:center; gap:6px; margin:0 0 16px; padding:10px 16px 10px 13px; border-radius:22px;
+  background:var(--fons-2); color:var(--os); font-weight:600; font-size:14.5px}
+.canals a.canal-principal{background:var(--accent); border-color:var(--accent); color:var(--tinta,#111); font-weight:700}
+.canals a.canal-principal small{color:inherit; opacity:.75}
+.panell.entra-dreta{animation:entraD .22s ease-out}
+.panell.entra-esquerra{animation:entraE .22s ease-out}
+@keyframes entraD{from{transform:translateX(26px); opacity:.2} to{transform:none; opacity:1}}
+@keyframes entraE{from{transform:translateX(-26px); opacity:.2} to{transform:none; opacity:1}}
+/* ---------- v11: capçalera amb icones, safata ---------- */
+header.barra{gap:6px}
+.marca{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
+body[data-estil="ricard"] .marca{font-size:15.5px}
+.ic-safata{position:relative; display:grid; place-items:center; width:38px; height:32px}
+/* ---------- v13 ---------- */
+#btAjustos{position:relative}
+.alerta{position:absolute; top:-7px; right:-7px; width:18px; height:18px; border-radius:50%; background:#E0412F; color:#fff;
+  font:800 12px/18px var(--sans); text-align:center; box-shadow:0 0 0 2px var(--c1,var(--fons)); display:none}
+body.sense-copia .alerta{display:block}
+.copies{list-style:none; margin:0 0 14px; padding:0; font-size:13px}
+.copies li{display:flex; gap:10px; align-items:baseline; padding:8px 0; border-bottom:1px solid var(--vora); color:var(--os-2)}
+.copies li b{font-weight:600; color:var(--os); min-width:112px}
+.copies li span{margin-left:auto; font-variant-numeric:tabular-nums}
+.vermell{color:#FF7A66 !important; font-weight:700}
+.sf-chips button.triat,.sf-chips button.triat:hover{background:var(--accent); border-color:var(--accent); color:var(--tinta,#111); font-weight:700}
+.ic-safata .pastilla{position:absolute; top:-7px; right:-8px; min-width:19px; height:19px; font-size:11px; padding:0 5px; border-radius:10px}
+.ic-safata .pastilla.zero{opacity:.45}
+.lloc{display:inline-flex; align-items:center; gap:5px; min-height:32px}
+body[data-lloc="Fora"] #llocTxt{display:none}
+body[data-estil="ricard"][data-lloc="Fora"] .lloc{background:none; color:var(--tinta); border-color:rgba(0,0,0,.45); padding:4px 8px}
+body.procs-off #btProcs{display:none}
+.sf-card{background:var(--fons-2); border-radius:16px; padding:14px 14px 12px; margin:0 0 12px}
+.sf-cap{display:flex; align-items:baseline; gap:8px; justify-content:space-between; margin-bottom:10px}
+.sf-cap b{font-family:var(--titol); font-weight:800; font-stretch:84%; font-size:17px}
+.sf-cap span{font-size:12px; color:var(--os-3); white-space:nowrap}
+.sf-disc{display:flex; gap:10px; align-items:center; padding:5px 0}
+.sf-disc .hcob{width:44px; height:44px; flex-basis:44px; border-radius:5px; font-size:12px}
+.sf-disc .hcob::after{display:none}
+.sf-disc .t{font-family:var(--titol); font-weight:700; font-stretch:88%; font-size:15px; line-height:1.15; display:block}
+.sf-disc .a{font-size:12.5px; color:var(--os-2); display:block}
+.sf-disc .m{margin-left:auto; font-family:var(--titol); font-weight:800; font-stretch:72%; font-size:19px; color:var(--os-2)}
+.sf-q{font-weight:600; font-size:14px; margin:12px 0 8px; color:var(--os)}
+.sf-pre{font-size:13px; color:var(--os-2); margin:10px 0 0}
+.sf-chips{display:flex; flex-wrap:wrap; gap:7px}
+.sf-chips button{border:1px solid var(--vora-2); background:var(--fons-3); color:var(--os); border-radius:18px; padding:8px 12px;
+  font:500 13.5px var(--sans); cursor:pointer}
+.sf-chips button:hover{border-color:var(--accent); color:var(--accent)}
+.sf-chips button.principal{background:var(--accent); border-color:var(--accent); color:var(--tinta,#111); font-weight:700}
+.sf-chips button.nose{border-style:dashed}
+.sf-chips button.mes{border-color:transparent; background:none; color:var(--os-2); text-decoration:underline; text-underline-offset:3px}
+.sf-link{background:none; border:0; color:var(--os-2); font:13px var(--sans); padding:8px 0 0; cursor:pointer; text-decoration:underline; text-underline-offset:3px}
+.sf-tipus{font-size:12px; color:var(--accent); font-weight:600; margin-bottom:6px; display:block}
+.sf-buit{text-align:center; padding:28px 10px; color:var(--os-2)}
+.sf-buit b{display:block; font-family:var(--titol); font-weight:800; font-stretch:80%; font-size:24px; color:var(--os); margin-bottom:6px}
+.sf-resolta{display:flex; gap:10px; align-items:center; padding:10px 2px; border-bottom:1px solid var(--vora); font-size:13.5px}
+.sf-resolta span{flex:1; min-width:0; color:var(--os-2)}
+.sf-resolta span b{color:var(--os); font-weight:600}
+.sf-resolta button{background:none; border:1px solid var(--vora-2); color:var(--os-2); border-radius:14px; padding:5px 10px; font:12px var(--sans); cursor:pointer}
+.mesura{background:var(--fons-3); border-radius:12px; padding:12px 14px; margin:0 0 12px}
+.mesura .barra{height:8px; border-radius:4px; background:var(--vora); position:relative; margin:10px 0 6px; overflow:hidden}
+.mesura .barra i{position:absolute; left:0; top:0; bottom:0; background:var(--accent); border-radius:4px}
+.mesura .barra u{position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--os)}
+.mesura small{color:var(--os-3); font-size:12px}
+/* ---------- v12 ---------- */
+.ar-fila{display:flex; gap:12px; align-items:center; width:100%; padding:8px 2px; border:0; border-bottom:1px solid var(--vora); background:none;
+  color:inherit; text-align:left; cursor:pointer; font-family:var(--sans)}
+.ar-fila .hcob{width:48px; height:48px; flex-basis:48px; border-radius:5px; font-size:12px}
+.ar-fila .hcob::after{display:none}
+.ar-fila .m{margin-left:auto; font-family:var(--titol); font-weight:800; font-stretch:72%; font-size:20px; color:var(--os-2)}
+.menu-net .llista-ajust button{font-size:15px; padding:15px 2px}
+/* ===========================================================
+   TRAM 3 · el que la màquina afegeix a la maqueta
+   =========================================================== */
+.desat{font-size:11px; font-weight:700; color:var(--tinta); background:rgba(0,0,0,.14); border-radius:10px; padding:2px 7px; white-space:nowrap; display:none}
+.desat.visible{display:inline-block}
+.conn-tira{display:none}
+body.desconnectat .conn-tira{display:flex}
+.entrada{padding:28px 16px}
+.entrada p{color:var(--os-2); font-size:14px}
+.entrada .bt{margin:6px 8px 6px 0}
+.dades-arxiu{list-style:none; margin:0 0 14px; padding:0; font-size:13px}
+.dades-arxiu li{display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-bottom:1px solid var(--vora); color:var(--os-2)}
+.dades-arxiu li span:last-child{color:var(--os); text-align:right}
+.ok{color:#8FD49E} .mal{color:#FF7A66}
+.canals-tria{display:flex; flex-wrap:wrap; gap:7px; margin:0 0 12px}
+.canals-tria button{border:1px solid var(--vora-2); background:var(--fons-3); color:var(--os); border-radius:18px; padding:8px 12px; font:500 13.5px var(--sans); cursor:pointer}
+.canals-tria button.triat{background:var(--accent); border-color:var(--accent); color:var(--tinta,#111); font-weight:700}
+.camp span.ajuda{display:block; font-size:11.5px; color:var(--os-3); margin:4px 0 0}
+nav.peu[hidden]{display:none}
+a.escoltar{text-decoration:none}

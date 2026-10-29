@@ -2,184 +2,92 @@
 <html lang="ca">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0F232C">
 <title>La Meva Discoteca</title>
-<style>
-  :root { --bg:#f7f5f0; --fg:#1f1d1a; --mut:#6d675e; --linia:#ddd7cc; --ok:#2f7a45; --mal:#b3261e; --avis:#9a6b00; --acc:#2d5d8a; }
-  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg:#151412; --fg:#ece8e0; --mut:#9b958b; --linia:#34312c; --ok:#6fcf8a; --mal:#ff8a80; --avis:#e0b04a; --acc:#8ab4dc; } }
-  :root[data-theme="dark"] { --bg:#151412; --fg:#ece8e0; --mut:#9b958b; --linia:#34312c; --ok:#6fcf8a; --mal:#ff8a80; --avis:#e0b04a; --acc:#8ab4dc; }
-  * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
-  main { max-width:640px; margin:0 auto; padding:24px 16px 64px; }
-  h1 { font:600 20px/1.2 Georgia, serif; margin:0 0 2px; }
-  .sub { color:var(--mut); font-size:13px; margin:0 0 20px; }
-  .targeta { border:1px solid var(--linia); border-radius:10px; padding:14px 16px; margin:0 0 14px; }
-  .fila { display:flex; justify-content:space-between; gap:12px; padding:3px 0; }
-  .fila span:first-child { color:var(--mut); }
-  .fila span:last-child { text-align:right; overflow-wrap:anywhere; }
-  button { font:inherit; padding:10px 16px; margin:4px 8px 4px 0; border-radius:8px; border:1px solid var(--linia); background:transparent; color:var(--fg); cursor:pointer; }
-  button.principal { background:var(--acc); border-color:var(--acc); color:var(--bg); }
-  button[disabled] { opacity:.5; cursor:default; }
-  .ok { color:var(--ok); } .mal { color:var(--mal); } .avis { color:var(--avis); }
-  #missatge:empty { display:none; }
-  #missatge { margin:0 0 14px; }
-  .fila.disc span:last-child { white-space:nowrap; }
-</style>
+<link rel="stylesheet" href="css/faristol.css?v=1">
 </head>
-<body>
-<main>
-  <h1>La Meva Discoteca</h1>
-  <p class="sub">Tram 2 de la construcció · la llavor. Aquesta pantalla és provisional: serveix per carregar la llavor i comprovar què ha entrat.</p>
+<body data-lloc="Fora" data-estil="ricard">
+<div id="telefon">
 
-  <p id="missatge"></p>
-  <div id="accions"></div>
-  <div id="estat"></div>
-</main>
+  <header class="barra">
+    <span class="marca">La Meva Discoteca</span>
+    <span class="desat" id="desat">sense desar</span>
+    <button class="lloc" id="btLloc" aria-label="On ets"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 21s-6.5-6.1-6.5-11.2A6.5 6.5 0 0 1 18.5 9.8C18.5 14.9 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.3"/></svg><span id="llocTxt"></span></button>
+    <button class="icona-btn ic-safata" id="btSafata" aria-label="La safata"><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><path d="M3 13.5 5.4 5.6A1.5 1.5 0 0 1 6.8 4.5h10.4a1.5 1.5 0 0 1 1.4 1.1L21 13.5V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18z"/><path d="M3 13.5h5l1.3 2.4h5.4l1.3-2.4h5"/></svg><span class="pastilla zero" id="safataNum">0</span></button>
+    <button class="icona-btn" id="btAjustos" title="La Cabina" aria-label="La Cabina">≡<span class="alerta" aria-hidden="true">!</span></button>
+  </header>
+
+  <button class="safata-tira conn-tira" id="btConnecta">Connecta amb el Drive <span class="tanca">→</span></button>
+
+  <main>
+    <section class="superficie activa entrada" id="s-entrada">
+      <h1>La Meva Discoteca</h1>
+      <p id="entradaTxt">Obrint…</p>
+      <div id="entradaAccions"></div>
+    </section>
+
+    <section class="superficie" id="s-prestatgeria">
+      <div class="cap"><h1 style="font-size:46px">La Prestatgeria</h1></div>
+      <div class="marcador"><p class="cita">Encara no construïda.</p><p>Tots els discos, Agrupacions i L'Afinació arriben més endavant a la seqüència (§9.2).</p></div>
+    </section>
+
+    <section class="superficie" id="s-safata">
+      <button class="enrere" data-tornasafata="1">← Tornar</button>
+      <h1>La safata</h1>
+      <div class="sf-buit"><b>Res per resoldre</b>La safata s'omple amb les escoltes de ListenBrainz, que arriben en el bloc 3.3. Fins llavors, els discos nous entren a mà des de «Posa un disc en rotació».</div>
+    </section>
+
+    <section class="superficie" id="s-faristol">
+      <div class="cap">
+        <h1>El Faristol</h1>
+        <div class="subpestanyes" role="tablist">
+          <button id="tab-rot" role="tab" aria-selected="true" data-sub="rot">Discos<br>en Rotació</button>
+          <button id="tab-pref" role="tab" aria-selected="false" data-sub="pref">Artistes<br>Preferents</button>
+          <button id="tab-hist" role="tab" aria-selected="false" data-sub="hist">Historial</button>
+        </div>
+      </div>
+      <div class="panell activa" id="p-rot">
+        <button class="afegeix" id="btAfegeixDisc">＋ Posa un disc en rotació</button>
+        <div class="reixa" id="reixa"></div>
+      </div>
+      <div class="panell" id="p-pref">
+        <button class="afegeix" id="btAfegeixArtista">＋ Afegeix un artista</button>
+        <div class="eina"><button id="btOrdena" aria-pressed="false">Ordena la llista</button></div>
+        <div class="files" id="files"></div>
+      </div>
+      <div class="panell" id="p-hist">
+        <div class="marcador"><p class="cita">L'Historial encara és buit.</p><p>S'omple amb les escoltes de ListenBrainz, que arriben en el bloc 3.3. La màquina només sap el que passa des del dia que arrenca.</p></div>
+      </div>
+    </section>
+
+    <section class="superficie" id="s-artista"></section>
+
+    <section class="superficie" id="s-gramola">
+      <h1>La Gramola</h1>
+      <p class="subtitol">Aquí la màquina proposa.</p>
+      <div class="marcador"><p class="cita">Encara no construïda.</p><p>És la prioritat 3, i a la seqüència va darrere dels tres trams del Faristol (§9.2).</p></div>
+    </section>
+  </main>
+
+  <nav class="peu" id="peu" hidden>
+    <button data-anar="prestatgeria">Prestatgeria</button>
+    <button data-anar="faristol" aria-current="page">Faristol</button>
+    <button data-anar="gramola">Gramola</button>
+  </nav>
+</div>
+
+<div class="fons-fosc" id="fons"></div>
+<div class="full" id="full" role="dialog" aria-modal="true"></div>
+<div class="avis" id="avis"><span id="avisTxt"></span><button id="avisBt">Desfés</button></div>
 
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
   // Si alguna peça no carrega, es diu a la pantalla en lloc de quedar-se en blanc.
-  window.addEventListener('error', e => { const m = document.getElementById('missatge'); if (m) { m.className = 'mal'; m.textContent = 'No s\'ha pogut carregar la màquina: ' + (e.message || e.filename || 'error') + '. Tanca la pestanya i torna-la a obrir.'; } }, true);
-  window.addEventListener('unhandledrejection', e => { const m = document.getElementById('missatge'); if (m) { m.className = 'mal'; m.textContent = 'Error: ' + (e.reason?.message || e.reason); } });
-  setTimeout(() => { if (!document.getElementById('accions').innerHTML) { const m = document.getElementById('missatge'); m.className = 'mal'; m.textContent = 'La màquina no ha arrencat. Tanca la pestanya, espera un minut i torna-la a obrir.'; } }, 8000);
+  window.addEventListener('error', e => { const m = document.getElementById('entradaTxt'); if (m && document.getElementById('s-entrada').classList.contains('activa')) { m.className = 'mal'; m.textContent = 'No s\'ha pogut carregar la màquina: ' + (e.message || e.filename || 'error') + '. Tanca la pestanya i torna-la a obrir.'; } }, true);
+  setTimeout(() => { const m = document.getElementById('entradaTxt'); if (m && m.textContent === 'Obrint…') { m.className = 'mal'; m.textContent = 'La màquina no ha arrencat. Tanca la pestanya, espera un minut i torna-la a obrir.'; } }, 10000);
 </script>
 <script src="vendor/sqljs/sql-wasm.js?v=1"></script>
-<script type="module">
-import * as A from './js/arxiu.js?v=4';
-import * as L from './js/llavor.js?v=1';
-
-const $ = id => document.getElementById(id);
-const diu = (text, classe = '') => { $('missatge').className = classe; $('missatge').textContent = text; };
-const accions = html => { $('accions').innerHTML = html; };
-const hora = iso => iso ? new Date(iso).toLocaleString('ca-ES', { dateStyle: 'short', timeStyle: 'medium' }) : '—';
-let casPendent = null;
-
-function pintaEstat() {
-  if (!A.estat.db) { $('estat').innerHTML = ''; return; }
-  const r = A.recomptes();
-  const proves = A.llegeixMeta('proves_desat') || '0';
-  $('estat').innerHTML = `
-    <div class="targeta">
-      <div class="fila"><span>Arxiu</span><span>${A.NOM_CARPETA} / ${A.NOM_ARXIU}</span></div>
-      <div class="fila"><span>Darrera versió al Drive</span><span>${hora(A.estat.base)}</span></div>
-      <div class="fila"><span>Estat</span><span class="${A.estat.pendent ? 'avis' : 'ok'}">${A.estat.pendent ? 'pendent de desar' : 'desat'}</span></div>
-      <div class="fila"><span>Obert des de</span><span>${A.estat.origen === 'drive' ? 'el Drive' : 'aquest navegador'}</span></div>
-      <div class="fila"><span>Estructura</span><span>versió ${A.versioEsquema()}</span></div>
-      <div class="fila"><span>Integritat</span><span class="${A.comprovaIntegritat() === 'ok' ? 'ok' : 'mal'}">${A.comprovaIntegritat()}</span></div>
-      <div class="fila"><span>Creat</span><span>${hora(A.llegeixMeta('creat'))}</span></div>
-      <div class="fila"><span>Proves de desat</span><span>${proves}</span></div>
-    </div>
-    <div class="targeta">${Object.entries(r).map(([t, n]) => `<div class="fila"><span>${t}</span><span>${n}</span></div>`).join('')}</div>
-    ${pintaLlavor()}`;
-  const teLlavor = !!A.llegeixMeta('llavor');
-  accions(`${teLlavor ? '' : '<button class="principal" id="llavor">Carrega la llavor</button>'}<button ${teLlavor ? 'class="principal"' : ''} id="prova">Prova de desat</button><button id="reobre">Torna a obrir des del Drive</button>`);
-  if (!teLlavor) $('llavor').onclick = carregaLlavor;
-  $('prova').onclick = provaDeDesat;
-  $('reobre').onclick = () => arrenca(true);
-}
-
-// Tram 2 · la llavor del «car pendent» del 22-10. Un sol toc, una sola vegada.
-const CANAL = { amazon: 'Amazon Music', bandcamp: 'Bandcamp', youtube: 'YouTube Music', aimp: 'AIMP' };
-const net = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-function pintaLlavor() {
-  const m = A.llegeixMeta('llavor');
-  if (!m) {
-    const rot = L.ROTACIO.filter(d => !d.foraDeRotacio).length;
-    return `<div class="targeta"><div class="fila"><span>Llavor</span><span class="avis">sense carregar</span></div>
-      <div class="fila"><span>Discos en rotació</span><span>${rot}</span></div>
-      <div class="fila"><span>Artistes preferents</span><span>${L.PREFERENTS.length}</span></div>
-      <div class="fila"><span>Del «car pendent» del</span><span>22-10-2026</span></div></div>`;
-  }
-  const info = JSON.parse(m), r = L.resum(A.estat.db);
-  return `<div class="targeta"><div class="fila"><span>Llavor</span><span class="ok">carregada · ${hora(info.data)}</span></div></div>
-    <div class="targeta"><div class="fila"><span><b>Discos en rotació</b></span><span>${r.rotacio.length}</span></div>
-      ${r.rotacio.map(d => `<div class="fila disc"><span>${net(d.art)} — ${net(d.tit)}${d.ed ? ' · ' + net(d.ed) : ''}${d.viva ? ' · part viva: ' + net(d.viva) + ' de ' + d.nParts : ''}</span><span>${d.min}′ · ${CANAL[d.canal] || net(d.canal)}</span></div>`).join('')}</div>
-    <div class="targeta"><div class="fila"><span><b>Artistes preferents</b></span><span>${r.preferents.length}</span></div>
-      ${r.preferents.map((p, i) => `<div class="fila"><span>${i + 1}. ${net(p.nom)}</span><span>${p.proper ? 'el proper: ' + net(p.proper) : ''}</span></div>`).join('')}</div>`;
-}
-
-async function carregaLlavor() {
-  $('llavor').disabled = true;
-  try {
-    const r = await A.canvia(db => L.carrega(db));
-    if (r.desat) diu('Llavor carregada i desada al Drive.', 'ok');
-    else diu('Llavor carregada en aquest mòbil, però encara no al Drive: ' + r.motiu + '. Es torna a provar sol.', 'avis');
-  } catch (e) {
-    diu(e.message, 'mal');
-  }
-  pintaEstat();
-}
-
-async function provaDeDesat() {
-  $('prova').disabled = true;
-  const r = await A.canvia(db => {
-    const n = Number(A.llegeixMeta('proves_desat') || 0) + 1;
-    db.run('INSERT INTO meta (clau, valor) VALUES (?, ?) ON CONFLICT(clau) DO UPDATE SET valor = excluded.valor', ['proves_desat', String(n)]);
-  });
-  if (r.desat) diu('Desat al Drive.', 'ok');
-  else diu('No s\'ha pogut desar al Drive: ' + r.motiu + '. El canvi queda en aquest navegador.', 'avis');
-  pintaEstat();
-}
-
-async function arrenca(ambGest = false) {
-  diu('Obrint l\'arxiu…');
-  try {
-    if (ambGest) await A.permis();
-    const r = await A.obre();
-    casPendent = r;
-    if (r.cas === 'obert') {
-      if (r.fora) diu('Sense connexió: treballes amb la còpia d\'aquest navegador.', 'avis');
-      else if (r.desat && r.desat.desat) diu('Hi havia canvis d\'aquest mòbil pendents: ara ja són al Drive.', 'ok');
-      else if (r.desat) diu('Hi ha canvis d\'aquest mòbil que encara no s\'han pogut desar: ' + r.desat.motiu + '. Es torna a provar sol.', 'avis');
-      else diu(r.avis || '', r.avis ? 'avis' : '');
-      pintaEstat(); return;
-    }
-    $('estat').innerHTML = '';
-    if (r.cas === 'sense-res') { diu(r.detall + ' Entra amb Google per obrir l\'arxiu.', 'avis'); accions('<button class="principal" id="entra">Entra amb Google</button>'); $('entra').onclick = () => arrenca(true); return; }
-    if (r.cas === 'primera-vegada') {
-      diu('No hi ha cap arxiu al teu Drive, ni a la paperera, ni cap còpia en aquest navegador. És la primera vegada?');
-      accions('<button class="principal" id="crea">Sí, crea l\'arxiu</button>');
-      $('crea').onclick = async () => { $('crea').disabled = true; await A.creaPerPrimeraVegada(); diu('Arxiu creat.', 'ok'); pintaEstat(); };
-      return;
-    }
-    if (r.cas === 'a-la-paperera') {
-      diu(`L'arxiu és a la paperera del Drive (darrera modificació ${hora(r.fitxer.modifiedTime)}). No en creo cap de nou.`, 'mal');
-      accions('<button class="principal" id="recupera">Treu-lo de la paperera</button>');
-      $('recupera').onclick = async () => { await A.recuperaDeLaPaperera(r.fitxer); arrenca(); };
-      return;
-    }
-    if (r.cas === 'nomes-local') {
-      diu(`No trobo l'arxiu al Drive, però aquest navegador en té una còpia (${hora(r.copia.desat)}). No en creo cap de buit.`, 'mal');
-      accions('<button class="principal" id="puja">Torna a pujar aquesta còpia</button>');
-      $('puja').onclick = async () => { await A.pujaCopiaLocal(r.copia); diu('Còpia pujada al Drive.', 'ok'); pintaEstat(); };
-      return;
-    }
-    if (r.cas === 'carpeta-sense-arxiu') {
-      diu(`La carpeta «${A.NOM_CARPETA}» existeix però l'arxiu no hi és, ni a la paperera. No en creo cap de buit: caldrà recuperar-lo d'una còpia de seguretat.`, 'mal');
-      accions(''); return;
-    }
-    if (r.cas === 'malmes') { diu('L\'arxiu del Drive no passa la comprovació d\'integritat: ' + r.detall + '. No el toco.', 'mal'); accions(''); return; }
-    if (r.cas === 'conflicte') {
-      diu(`L'arxiu ha canviat en un altre lloc (${hora(r.drive.modifiedTime)}) i aquest navegador té canvis sense pujar. Quin mana? L'altre no s'esborra: es desa apart al Drive.`, 'avis');
-      accions('<button id="drive">Mana el Drive</button><button id="aqui">Mana aquest dispositiu</button>');
-      $('drive').onclick = async () => { await A.resolConflicte('drive', r); arrenca(); };
-      $('aqui').onclick = async () => { await A.resolConflicte('aqui', r); pintaEstat(); };
-      return;
-    }
-  } catch (e) {
-    diu('Error: ' + e.message, 'mal');
-    accions('<button class="principal" id="entra">Entra amb Google</button>');
-    $('entra').onclick = () => arrenca(true);
-  }
-}
-
-A.vigilaPendents(r => {
-  if (r.desat) diu('Desat al Drive (' + hora(new Date().toISOString()) + ').', 'ok');
-  else diu('Encara no s\'ha pogut desar: ' + r.motiu + '. Es torna a provar sol.', 'avis');
-  pintaEstat();
-});
-accions('<button class="principal" id="entra">Entra amb Google</button>');
-$('entra').onclick = () => arrenca(true);
-</script>
+<script type="module" src="js/faristol.js?v=1"></script>
 </body>
 </html>
