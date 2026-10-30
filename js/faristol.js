@@ -4,9 +4,9 @@
 // connexió amb el Drive en un toc, i l'ajust del «car pendent» del 30-10.
 // Encara no hi ha ListenBrainz (3.3), safata viva (3.4) ni Bandcamp automàtic (3.5).
 
-import * as A from './arxiu.js?v=7';
-import * as D from './dades.js?v=4';
-import * as I from './imatges.js?v=1';
+import * as A from './arxiu.js?v=8';
+import * as D from './dades.js?v=5';
+import * as I from './imatges.js?v=2';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -158,14 +158,9 @@ function pintaArtista(id) {
       : `<div class="marcador"><p class="cita">Encara no ha sonat res seu.</p><p>La màquina només sap el que passa des del dia que arrenca. Quan arribin les escoltes, sortirà aquí.</p></div>`}
     <div class="canals" style="margin-top:14px">
       ${(!r && !p.proper_titol) ? `<button data-triaproper="${p.id}">Tria el proper disc <small>el primer que vols escoltar</small></button>` : ''}
-      <button data-pujafoto="${p.artista_id}">${p.retrat_origen === 'ma' ? 'Canvia la foto' : 'Puja una foto'} <small>${
-        p.retrat_origen === 'ma' ? 'la teva: no la trepitja res' : p.retrat_origen === 'sonda' ? 'la d\'ara l\'ha trobat la sonda' :
-        p.retrat_origen === 'rebutjat' ? 'la de la sonda no era' : 'no n\'ha arribat cap de sola'}</small></button>
-      ${p.retrat_origen === 'sonda' ? `<button data-noretrat="${p.artista_id}">No és aquesta <small>torna a la portada o al text</small></button>` : ''}
+      <button data-canviafoto="${p.id}">Canvia la foto <small>${{ ma: 'la vas pujar tu', sonda: 'la va trobar la màquina', rebutjat: 'la de la màquina no era' }[p.retrat_origen] || 'no n\'ha arribat cap de sola'}</small></button>
     </div>
-    <input type="file" id="inFoto" accept="image/*" hidden>
     <div class="barra-accions" style="position:static;padding:14px 0 0"><button class="bt discret" data-desprefer="${p.id}">Treu-lo de preferents</button></div>`;
-  $('#inFoto').onchange = e => { const f = e.target.files?.[0]; if (f) pujaFoto(p, f); };
   I.omple($('#s-artista'));
 }
 
@@ -177,11 +172,68 @@ async function pujaFoto(p, fitxer) {
     const blob = await I.redueix(fitxer);
     const ref = 'drive:' + await A.pujaRetrat(p.nom, blob);
     await I.guardaJa(ref, blob);
-    fes(D.posaRetratMa(p.artista_id, ref), 'Foto de ' + p.nom + ' desada');
+    tancaFull(); fes(D.posaRetratMa(p.artista_id, ref), 'Foto de ' + p.nom + ' desada');
   } catch (e) { avisa('No s\'ha pogut pujar la foto: ' + e.message); }
 }
 
 // ───────── fulls ─────────
+const ORIGEN_PORTADA = { sonda: 'endevinada pel títol', escolta: 'la de l\'edició que has escoltat', triada: 'triada per tu', pujada: 'pujada per tu',
+  rebutjada: 'cap: la que va trobar la màquina no era', cap: 'no n\'ha arribat cap' };
+
+// «Canvia la portada» (decisió de Ricard, 30-10): primer triar-la entre les que troba MusicBrainz; pujar-la, l'últim recurs.
+function fullPortada(d) {
+  estat.portadaDe = d;
+  const t = d.titol.includes(':') ? d.titol.split(':').slice(1).join(':').trim() : d.titol;   // «Bartók: …» → sense el compositor
+  obreFull(`<h3>La portada de ${esc(d.titol)}</h3><p>${esc(d.art)}</p>
+    <p style="margin:10px 0 6px"><b>Tria-la tu.</b> Si no surt, canvia el títol o buida l'artista: a la clàssica, el disc sol anar a nom del compositor.</p>
+    <label class="camp"><span>Títol</span><input id="inPTit" type="text" autocomplete="off" value="${esc(t)}"></label>
+    <label class="camp"><span>Artista</span><input id="inPArt" type="text" autocomplete="off" value="${esc(d.art)}"></label>
+    <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-cercaportada="1">Cerca</button></div>
+    <div class="candidats" id="candidats"></div>
+    <div class="canals" style="margin-top:16px">
+      <button data-pujaportada="1">Puja-la <small>si no surt enlloc: una foto o una imatge teva</small></button>
+      ${d.portada ? `<button data-noportada="${d.id}">Treu-la <small>no és aquesta, i no en tinc cap altra</small></button>` : ''}
+    </div>
+    <input type="file" id="inPortada" accept="image/*" hidden>`);
+  $('#inPortada').onchange = e => { const f = e.target.files?.[0]; if (f) pujaPortada(d, f); };
+  cercaPortada();
+}
+async function cercaPortada() {
+  const caixa = $('#candidats'); if (!caixa) return;
+  if (!navigator.onLine) { caixa.innerHTML = '<p class="subtitol">Sense connexió: la cerca necessita xarxa.</p>'; return; }
+  caixa.innerHTML = '<p class="subtitol">Cercant…</p>';
+  try {
+    const c = await I.candidats({ titol: $('#inPTit').value, art: $('#inPArt').value });
+    if (!$('#candidats')) return;
+    caixa.innerHTML = c.map(x => `<button class="candidat" data-triaportada="${esc(x.ref)}">
+        <img src="${esc(I.miniatura(x.ref))}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.closest('.candidat').remove()">
+        <span><b>${esc(x.titol)}</b>${esc(x.art)}${x.any ? ' · ' + x.any : ''}</span></button>`).join('')
+      || '<p class="subtitol">Res. Prova un altre títol, o buida l\'artista.</p>';
+  } catch (e) { caixa.innerHTML = `<p class="subtitol">MusicBrainz no respon (${esc(e.message)}). Torna-hi d'aquí a una estona.</p>`; }
+}
+async function pujaPortada(d, fitxer) {
+  if (!A.tePermis()) { avisa('Per pujar una portada cal estar connectat amb el Drive.'); return; }
+  avisa('Pujant la portada…');
+  try {
+    const blob = await I.redueix(fitxer);
+    const ref = 'drive:' + await A.pujaPortada(d.art + ' - ' + d.titol, blob);
+    await I.guardaJa(ref, blob);
+    tancaFull(); fes(D.posaPortada(d.id, ref, 'pujada'), 'Portada desada');
+  } catch (e) { avisa('No s\'ha pogut pujar la portada: ' + e.message); }
+}
+
+// «Canvia la foto» d'un artista: pujar-ne una, o treure la que hi ha.
+function fullFoto(p) {
+  obreFull(`<h3>La foto de ${esc(p.nom)}</h3>
+    <p>${{ ma: 'És la que vas pujar tu.', sonda: 'La va trobar la màquina pel nom.', rebutjat: 'La que va trobar la màquina no era.' }[p.retrat_origen] || 'No n\'ha arribat cap de sola.'}
+       Sense foto, la fila fa servir la portada del disc que tens en rotació, o les inicials.</p>
+    <div class="canals">
+      <button data-pujafoto="1">Puja'n una <small>es desa al teu Drive</small></button>
+      ${p.retrat ? `<button data-noretrat="${p.artista_id}">Treu-la <small>no és ell, i no en tinc cap altra</small></button>` : ''}
+    </div>
+    <input type="file" id="inFoto" accept="image/*" hidden>`);
+  $('#inFoto').onchange = e => { const f = e.target.files?.[0]; if (f) pujaFoto(p, f); };
+}
 function fullEscoltar(d, tots) {
   estat.escoltant = d;
   const lleida = estat.lloc === 'Lleida';
@@ -208,10 +260,8 @@ function fullFitxa(d) {
       ${d.formats.length ? `<li><b>Format</b><span>${esc(d.formats.map(f => NOMS_FISICS[f] || f).join(', '))}</span></li>` : ''}
       ${d.nom_edicio ? `<li><b>Edició</b><span>${esc(d.nom_edicio)}</span></li>` : ''}
       ${d.parts.length ? `<li><b>Part viva</b><span>${d.esperant ? 'cap: la caixa espera' : esc(d.viva.nom || '') + ' · ' + d.viva.numero + ' de ' + d.parts.length}</span></li>` : ''}
-      <li><b>Portada</b><span>${
-        d.portada && d.portada_origen === 'sonda' ? `endevinada pel títol <button class="sf-link" style="padding:0 0 0 8px" data-noportada="${d.id}">no és aquesta</button>`
-        : d.portada ? 'la de l\'edició que has escoltat'
-        : d.portada_origen === 'rebutjada' ? 'cap: arribarà amb les escoltes (bloc 3.3)' : 'no n\'ha arribat cap'}</span></li>
+      <li><b>Portada</b><span>${ORIGEN_PORTADA[d.portada ? d.portada_origen || 'escolta' : d.portada_origen === 'rebutjada' ? 'rebutjada' : 'cap']}
+        <button class="sf-link" style="padding:0 0 0 8px" data-canviaportada="${d.id}">canvia-la</button></span></li>
     </ul>
     <div class="barra-accions" style="position:static;padding:0">
       ${d.esperant ? `<button class="bt principal" data-repren="${d.id}">Reprèn</button>` : `<button class="bt principal" data-escoltar="${d.id}">Escoltar ara</button>`}
@@ -464,8 +514,14 @@ document.addEventListener('click', e => {
   if (d.fespref) { const aid = +d.fespref; tancaFull(); fes(D.afegeixPreferentId(aid), 'Afegit a Artistes Preferents'); sub('pref'); return; }
 
   // Imatges (bloc 3.2)
-  if (d.noportada) { const id = +d.noportada; tancaFull(); fes(D.rebutjaPortada(id), 'Portada fora. Arribarà la bona amb les escoltes.'); return; }
-  if (d.noretrat) { fes(D.rebutjaRetrat(+d.noretrat), 'Foto fora.'); return; }
+  if (d.canviaportada) { const x = rot(d.canviaportada); if (x) fullPortada(x); return; }
+  if (d.cercaportada) { cercaPortada(); return; }
+  if (d.triaportada) { const x = estat.portadaDe; if (!x) return; tancaFull();
+    fes(D.posaPortada(x.id, d.triaportada, 'triada'), 'Portada triada'); return; }
+  if (d.pujaportada) { $('#inPortada')?.click(); return; }
+  if (d.noportada) { const id = +d.noportada; tancaFull(); fes(D.rebutjaPortada(id), 'Portada fora. Arribarà amb les escoltes, o la tries tu.'); return; }
+  if (d.canviafoto) { const p = D.preferents(db()).find(x => x.id === +d.canviafoto); if (p) fullFoto(p); return; }
+  if (d.noretrat) { tancaFull(); fes(D.rebutjaRetrat(+d.noretrat), 'Foto fora.'); return; }
   if (d.pujafoto) { $('#inFoto')?.click(); return; }
 
   // Artistes Preferents
@@ -562,7 +618,7 @@ async function connecta(ambGest) {
 
 // Després de connectar: l'ajust únic del «car pendent» i, en segon pla, la sonda d'imatges.
 async function despresDeConnectar() {
-  if (!D.ajustFet(db())) {
+  if (!D.ajustFet(db())) {   // (amb l'arxiu d'abans del 30-10; ja aplicat, no torna a passar)
     try { await A.copiaAlDrive('abans del car pendent del 30-10'); }
     catch (e) { avisa('No he pogut fer la còpia de seguretat (' + e.message + '): l\'ajust del car pendent espera a la propera connexió.'); return; }
     const fets = await fes(D.ajustaCarPendent3010, 'Car pendent del 30-10 aplicat');
@@ -574,7 +630,7 @@ async function despresDeConnectar() {
 }
 
 // La sonda no torna a provar cada dia el que no ha trobat: espera una setmana (es recorda en aquest mòbil).
-const PROVATS = 'tria-sonda-provats', SETMANA = 7 * 864e5;
+const PROVATS = 'tria-sonda-provats-2', SETMANA = 7 * 864e5;   // -2: la cerca millorada del 30-10 torna a provar-ho tot
 function provats() { try { return JSON.parse(localStorage.getItem(PROVATS) || '{}'); } catch { return {}; } }
 function apunta(clau) { const p = provats(); p[clau] = Date.now(); try { localStorage.setItem(PROVATS, JSON.stringify(p)); } catch {} }
 let sondant = false;
@@ -586,9 +642,9 @@ async function sondes() {
     const arts = D.artistesSenseRetrat(db()).filter(x => fresc('a' + x.id));
     if (!discos.length && !arts.length) return;
     const n1 = await I.passa(discos, async x => { const r = await I.sondaPortada(x); if (!r) apunta('e' + x.id); return r; },
-      lot => fes(D.posaPortadaSonda(lot), null, { desfes: false }));
+      lot => fes(D.posaPortadaSonda(lot), null, { desfes: false }), { cada: 2 });
     const n2 = await I.passa(arts, async x => { const r = await I.sondaRetrat(x); if (!r) apunta('a' + x.id); return r; },
-      lot => fes(D.posaRetratSonda(lot), null, { desfes: false }));
+      lot => fes(D.posaRetratSonda(lot), null, { desfes: false }), { cada: 2 });
     avisa(`La sonda: ${n1} portades de ${discos.length} i ${n2} fotos de ${arts.length}.`);
   } finally { sondant = false; }
 }
@@ -605,7 +661,8 @@ try { navigator.permissions?.query({ name: 'geolocation' }).then(r => { if (r.st
 // Després, un toc a «Connecta amb el Drive» (Google el demana amb un gest) i es desa tot el que hagi quedat pendent.
 (async () => {
   try {
-    if (await A.obreLocal()) { document.body.classList.add('desconnectat'); mostraMaquina(); return; }
+    // La sonda no espera el Drive: busca sempre que hi ha xarxa, i el que troba es desa quan es connecti.
+    if (await A.obreLocal()) { document.body.classList.add('desconnectat'); mostraMaquina(); sondes(); return; }
   } catch {}
   entrada('Entra amb Google per obrir l\'arxiu del teu Drive.', BT('entra', 'Entra amb Google', true));
   $('#entra').onclick = () => connecta(true);

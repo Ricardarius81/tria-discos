@@ -173,7 +173,8 @@ export const posaProper = (id, titol) => db => db.run('UPDATE preferent SET prop
 function senseportada(db) {
   return files(db, `SELECT e.id, a.titol, ar.nom_canonic AS art FROM edicio e JOIN album a ON a.id = e.album_id
                     JOIN artista ar ON ar.id = a.artista_id
-                    WHERE e.rotacio_actual = 1 AND e.portada IS NULL AND e.portada_origen IS NULL ORDER BY e.id`);
+                    WHERE e.rotacio_actual = 1 AND e.portada IS NULL AND e.portada_origen IS NULL ORDER BY e.id DESC`);
+  // Els més nous primer: són els que es miren ara, i si la sonda es talla, que no siguin sempre ells els que esperen.
 }
 export const discosSensePortada = senseportada;
 // Els preferents sense foto que la sonda pot provar.
@@ -189,6 +190,8 @@ export const posaRetratSonda = llistaRes => db => llistaRes.forEach(([id, url]) 
 // «No és aquesta»: la imatge marxa i es recorda que no era, perquè la sonda no la torni a posar.
 export const rebutjaPortada = id => db => db.run("UPDATE edicio SET portada = NULL, portada_origen = 'rebutjada' WHERE id = ?", [id]);
 export const rebutjaRetrat = id => db => db.run("UPDATE artista SET retrat = NULL, retrat_origen = 'rebutjat' WHERE id = ?", [id]);
+// La portada que tria o puja Ricard: mana sobre tot, també sobre la de l'escolta (3.3). origen: 'triada' · 'pujada'.
+export const posaPortada = (id, ref, origen) => db => db.run('UPDATE edicio SET portada = ?, portada_origen = ? WHERE id = ?', [ref, origen, id]);
 // La foto pujada a mà: mana sobre tot.
 export const posaRetratMa = (id, ref) => db => db.run("UPDATE artista SET retrat = ?, retrat_origen = 'ma' WHERE id = ?", [ref, id]);
 

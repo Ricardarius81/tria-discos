@@ -504,3 +504,10 @@ a.escoltar{text-decoration:none}
 .fitxa-portada { width: 150px; aspect-ratio: 1; margin: 0 0 14px; border-radius: 6px; overflow: hidden; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
 .fitxa-portada img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .llista-ajust a { display: flex; gap: 10px; align-items: baseline; padding: 15px 2px; font-size: 15px; color: var(--os); text-decoration: none; font-family: var(--sans); }
+/* bloc 3.2 · «Tria-la tu»: les portades candidates */
+.candidats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+.candidats .subtitol { grid-column: 1 / -1; margin: 0; }
+.candidat { background: none; border: 0; padding: 0; text-align: left; color: var(--os); cursor: pointer; font-family: var(--sans); }
+.candidat img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 5px; display: block; background: var(--vora); }
+.candidat span { display: block; font-size: 10.5px; line-height: 1.3; color: var(--os-3); margin-top: 4px; }
+.candidat b { display: block; color: var(--os-2); font-weight: 600; }

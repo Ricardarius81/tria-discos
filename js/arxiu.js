@@ -325,19 +325,21 @@ export const comprovaIntegritat = () => integritat(estat.db);
 export async function baixaImatge(id) {
   return (await g(`${DRIVE}/${id}?alt=media`)).blob();
 }
-// La carpeta «Retrats», dins de «La Meva Discoteca». Es crea la primera vegada que es puja una foto.
-async function carpetaRetrats() {
+// Les carpetes «Retrats» i «Portades», dins de «La Meva Discoteca». Es creen la primera vegada que es puja una imatge.
+async function subcarpeta(nom) {
   const pare = estat.carpetaId;
-  const ja = (await buscar('Retrats', { pare, mime: 'application/vnd.google-apps.folder' }))[0];
+  const ja = (await buscar(nom, { pare, mime: 'application/vnd.google-apps.folder' }))[0];
   if (ja) return ja.id;
-  return (await creaFitxer('Retrats', 'application/vnd.google-apps.folder', pare ? [pare] : null, null)).id;
+  return (await creaFitxer(nom, 'application/vnd.google-apps.folder', pare ? [pare] : null, null)).id;
 }
-// Puja una foto d'artista i torna l'id del fitxer al Drive.
-export async function pujaRetrat(nom, blob) {
+// Puja una imatge (foto d'artista o portada) i torna l'id del fitxer al Drive.
+async function pujaImatge(carpeta, nom, blob) {
   if (!tePermis()) throw new Error('cal connectar amb el Drive');
   const net = nom.replace(/[\\/:*?"<>|]+/g, ' ').trim();
-  return (await creaFitxer(`${net}.jpg`, 'image/jpeg', [await carpetaRetrats()], blob)).id;
+  return (await creaFitxer(`${net}.jpg`, 'image/jpeg', [await subcarpeta(carpeta)], blob)).id;
 }
+export const pujaRetrat = (nom, blob) => pujaImatge('Retrats', nom, blob);
+export const pujaPortada = (nom, blob) => pujaImatge('Portades', nom, blob);
 // Una còpia de l'arxiu tal com és ara, al costat de l'original. Abans d'un canvi que toca moltes files.
 export async function copiaAlDrive(etiqueta) {
   if (!tePermis()) throw new Error('cal connectar amb el Drive');

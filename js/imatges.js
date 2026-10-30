@@ -116,10 +116,13 @@ const ESPERA_MB = 1100;            // MusicBrainz demana com a màxim una consul
 // Una portada: el grup de llançament amb el títol i l'artista exactes (el més antic si n'hi ha uns quants)
 // que tingui portada a Cover Art Archive. Torna la referència o null.
 export async function sondaPortada({ art, titol }) {
-  const q = encodeURIComponent(`releasegroup:"${titol}" AND artist:"${art}"`);
-  const j = await json(`${MB}/release-group/?query=${q}&fmt=json&limit=15`);
+  // Dues formes del títol: tal com és, i sense el que va entre parèntesis («Weezer (Blue Album)» → «Weezer»).
+  const t2 = titol.replace(/\s*\([^)]*\)\s*/g, ' ').trim() || titol;
+  const q = encodeURIComponent(`releasegroup:"${t2}" AND artist:"${art}"`);
+  const j = await json(`${MB}/release-group/?query=${q}&fmt=json&limit=25`);
+  const titols = new Set([norm(titol), norm(t2)]);
   const bons = (j['release-groups'] || [])
-    .filter(g => norm(g.title) === norm(titol) && (g['artist-credit'] || []).some(a => norm(a.name) === norm(art) || norm(a.artist?.name) === norm(art)))
+    .filter(g => titols.has(norm(g.title)) && creditEs(g['artist-credit'], art))
     .sort((a, b) => (a['first-release-date'] || '9').localeCompare(b['first-release-date'] || '9'));
   for (const g of bons.slice(0, 3)) {
     const ref = 'release-group/' + g.id;
@@ -127,6 +130,28 @@ export async function sondaPortada({ art, titol }) {
   }
   return null;
 }
+// L'artista coincideix si és un dels noms del crèdit o el crèdit sencer («Steve Roach & Serena Gabriel»).
+function creditEs(credit = [], art) {
+  const n = norm(art);
+  const sencer = credit.map(a => (a.name || '') + (a.joinphrase || '')).join('');
+  return norm(sencer) === n || credit.some(a => norm(a.name) === n || norm(a.artist?.name) === n);
+}
+
+// «Tria-la tu» (decisió de Ricard, 30-10): els grups de llançament que MusicBrainz troba amb una cerca més ampla.
+// Ricard toca el bo. Torna [{ ref, titol, art, any }]; la pantalla els pinta i amaga els que no tenen portada.
+const net = s => String(s || '').replace(/[+\-&|!(){}[\]^"~*?:\\/]/g, ' ').replace(/\s+/g, ' ').trim();
+export async function candidats({ titol, art }) {
+  const t = net(titol), a = net(art);
+  if (!t) return [];
+  const q = `releasegroup:(${t})` + (a ? ` AND artist:(${a})` : '');
+  const j = await json(`${MB}/release-group/?query=${encodeURIComponent(q)}&fmt=json&limit=18`);
+  return (j['release-groups'] || []).map(g => ({
+    ref: 'release-group/' + g.id, titol: g.title, any: (g['first-release-date'] || '').slice(0, 4),
+    art: (g['artist-credit'] || []).map(x => (x.name || '') + (x.joinphrase || '')).join('')
+  }));
+}
+export const miniatura = ref => `https://coverartarchive.org/${ref}/front-250`;
+
 // Sense baixar-la sencera: n'hi ha prou que el navegador la pugui obrir.
 function existeix(u) {
   return new Promise(r => { const im = new Image(); im.referrerPolicy = 'no-referrer';

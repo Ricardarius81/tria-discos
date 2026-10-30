@@ -116,7 +116,8 @@ export const MIGRACIONS = [
   // v3 · d'on ve la imatge (bloc 3.2, decisió de Ricard del 30-10). La marca «endevinada» que es va aprovar
   // es desa com a origen, perquè «No és aquesta» també s'ha de recordar: si no, la sonda tornaria a posar la mateixa.
   //   edicio.portada_origen: 'sonda' (endevinada pel títol) · 'rebutjada' (Ricard ha dit «No és aquesta»)
-  //                          · 'escolta' (arribarà amb el scrobble, bloc 3.3, i mana sobre la sonda). Buit = cap.
+  //                          · 'escolta' (arribarà amb el scrobble, bloc 3.3, i mana sobre la sonda)
+  //                          · 'triada' o 'pujada' (la tria Ricard, 30-10: no la trepitja res). Buit = cap.
   //   artista.retrat_origen: 'sonda' · 'rebutjat' · 'ma' (pujada per Ricard: no la trepitja res). Buit = cap.
   `
   ALTER TABLE edicio ADD COLUMN portada_origen TEXT;
