@@ -150,6 +150,34 @@ export async function candidats({ titol, art }) {
     art: (g['artist-credit'] || []).map(x => (x.name || '') + (x.joinphrase || '')).join('')
   }));
 }
+// «Tria-la tu» per a la foto d'un artista (decisió de Ricard, 30-10). Dues fonts, i cada foto es lliura en arribar
+// (crida «dona»), perquè la cerca és lenta: Wikipedia (resum de la pàgina en anglès, castellà i català) i, per a cada
+// artista de MusicBrainz amb aquest nom (fins a cinc), la imatge de Wikidata. Res no es tria sol: tria Ricard.
+export async function candidatsRetrat(nom, dona) {
+  const vistos = new Set(), afegeix = (url, peu) => { if (url && !vistos.has(url)) { vistos.add(url); dona({ url, peu }); } };
+  const n = String(nom || '').trim(); if (!n) return;
+  for (const w of ['en', 'es', 'ca']) {
+    try {
+      const j = await json(`https://${w}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(n.replace(/ /g, '_'))}`);
+      if (j.type === 'standard' && j.thumbnail?.source) afegeix(j.originalimage?.source && j.originalimage.width <= 800 ? j.originalimage.source : j.thumbnail.source, `Wikipedia (${w}) · ${j.description || j.title}`);
+    } catch {}
+  }
+  let arts = [];
+  try { arts = (await json(`${MB}/artist/?query=${encodeURIComponent(`artist:"${n}"`)}&fmt=json&limit=5`)).artists || []; } catch {}
+  for (const a of arts.slice(0, 5)) {
+    await espera(ESPERA_MB);
+    try {
+      const r = await json(`${MB}/artist/${a.id}?inc=url-rels&fmt=json`);
+      const wd = (r.relations || []).find(x => x.type === 'wikidata')?.url?.resource?.match(/Q\d+$/)?.[0];
+      if (!wd) continue;
+      const w = await json(`https://www.wikidata.org/w/api.php?action=wbgetentities&ids=${wd}&props=claims&format=json&origin=*`);
+      const fitxer = w.entities?.[wd]?.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
+      if (!fitxer) continue;
+      const c = await json(`https://commons.wikimedia.org/w/api.php?action=query&titles=${encodeURIComponent('File:' + fitxer)}&prop=imageinfo&iiprop=url&iiurlwidth=400&format=json&origin=*`);
+      afegeix(Object.values(c.query?.pages || {})[0]?.imageinfo?.[0]?.thumburl, `MusicBrainz · ${a.name}${a.disambiguation ? ' (' + a.disambiguation + ')' : ''}${a.country ? ' · ' + a.country : ''}`);
+    } catch {}
+  }
+}
 export const miniatura = ref => `https://coverartarchive.org/${ref}/front-250`;
 
 // Sense baixar-la sencera: n'hi ha prou que el navegador la pugui obrir.

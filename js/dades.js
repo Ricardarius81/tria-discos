@@ -192,6 +192,8 @@ export const rebutjaPortada = id => db => db.run("UPDATE edicio SET portada = NU
 export const rebutjaRetrat = id => db => db.run("UPDATE artista SET retrat = NULL, retrat_origen = 'rebutjat' WHERE id = ?", [id]);
 // La portada que tria o puja Ricard: mana sobre tot, també sobre la de l'escolta (3.3). origen: 'triada' · 'pujada'.
 export const posaPortada = (id, ref, origen) => db => db.run('UPDATE edicio SET portada = ?, portada_origen = ? WHERE id = ?', [ref, origen, id]);
+// La foto triada per Ricard entre les candidates ('triat'): mana com la pujada.
+export const posaRetrat = (id, ref, origen) => db => db.run('UPDATE artista SET retrat = ?, retrat_origen = ? WHERE id = ?', [ref, origen, id]);
 // La foto pujada a mà: mana sobre tot.
 export const posaRetratMa = (id, ref) => db => db.run("UPDATE artista SET retrat = ?, retrat_origen = 'ma' WHERE id = ?", [ref, id]);
 

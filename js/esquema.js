@@ -118,7 +118,7 @@ export const MIGRACIONS = [
   //   edicio.portada_origen: 'sonda' (endevinada pel títol) · 'rebutjada' (Ricard ha dit «No és aquesta»)
   //                          · 'escolta' (arribarà amb el scrobble, bloc 3.3, i mana sobre la sonda)
   //                          · 'triada' o 'pujada' (la tria Ricard, 30-10: no la trepitja res). Buit = cap.
-  //   artista.retrat_origen: 'sonda' · 'rebutjat' · 'ma' (pujada per Ricard: no la trepitja res). Buit = cap.
+  //   artista.retrat_origen: 'sonda' · 'rebutjat' · 'ma' (pujada per Ricard) · 'triat' (triada per Ricard): aquestes dues no les trepitja res. Buit = cap.
   `
   ALTER TABLE edicio ADD COLUMN portada_origen TEXT;
   ALTER TABLE artista ADD COLUMN retrat_origen TEXT;
