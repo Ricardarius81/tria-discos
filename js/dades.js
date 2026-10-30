@@ -24,7 +24,7 @@ export const FISICS = ['CD', 'vinil'];
 export function rotacio(db) {
   const eds = files(db, `
     SELECT e.id, e.album_id, e.nom_edicio, e.durada_total, e.app_escolta, e.codi_bandcamp, e.formats, e.tags,
-           e.darrera_obertura, e.data_referencia_rotacio, e.portada,
+           e.darrera_obertura, e.data_referencia_rotacio, e.portada, e.portada_origen,
            a.titol, a.artista_id, ar.nom_canonic AS art,
            (SELECT MAX(s.data_hora) FROM escolta s WHERE s.edicio_id = e.id) AS darrera_escolta
     FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id
@@ -49,7 +49,7 @@ export function edicio(db, id) {
 // ───────── Artistes Preferents ─────────
 export function preferents(db) {
   const ps = files(db, `
-    SELECT p.id, p.ordre, p.proper_titol, ar.id AS artista_id, ar.nom_canonic AS nom, ar.retrat, ar.variants
+    SELECT p.id, p.ordre, p.proper_titol, ar.id AS artista_id, ar.nom_canonic AS nom, ar.retrat, ar.retrat_origen, ar.variants
     FROM preferent p JOIN artista ar ON ar.id = p.artista_id ORDER BY p.ordre, p.id`);
   const rot = rotacio(db);
   for (const p of ps) p.rot = rot.find(e => e.artista_id === p.artista_id) || null;
@@ -164,3 +164,67 @@ export const afegeixPreferentId = artistaId => db => {
 export const treuPreferent = id => db => db.run('DELETE FROM preferent WHERE id = ?', [id]);
 export const ordenaPreferents = ids => db => ids.forEach((id, i) => db.run('UPDATE preferent SET ordre = ? WHERE id = ?', [i + 1, id]));
 export const posaProper = (id, titol) => db => db.run('UPDATE preferent SET proper_titol = ? WHERE id = ?', [titol || null, id]);
+
+// ───────── portades i retrats (bloc 3.2) ─────────
+// edicio.portada: la referència a Cover Art Archive, «release-group/<mbid>» o «release/<mbid>».
+// artista.retrat: l'adreça de la miniatura de Wikimedia Commons, o «drive:<id>» si l'ha pujada Ricard.
+
+// Els discos en rotació sense portada que la sonda pot provar. Els rebutjats esperen l'escolta (3.3).
+function senseportada(db) {
+  return files(db, `SELECT e.id, a.titol, ar.nom_canonic AS art FROM edicio e JOIN album a ON a.id = e.album_id
+                    JOIN artista ar ON ar.id = a.artista_id
+                    WHERE e.rotacio_actual = 1 AND e.portada IS NULL AND e.portada_origen IS NULL ORDER BY e.id`);
+}
+export const discosSensePortada = senseportada;
+// Els preferents sense foto que la sonda pot provar.
+export function artistesSenseRetrat(db) {
+  return files(db, `SELECT ar.id, ar.nom_canonic AS nom FROM preferent p JOIN artista ar ON ar.id = p.artista_id
+                    WHERE ar.retrat IS NULL AND ar.retrat_origen IS NULL ORDER BY p.ordre, p.id`);
+}
+// La sonda només escriu on encara no hi ha res: mai trepitja una imatge que ja hi és, ni un rebuig.
+export const posaPortadaSonda = llistaRes => db => llistaRes.forEach(([id, ref]) =>
+  db.run("UPDATE edicio SET portada = ?, portada_origen = 'sonda' WHERE id = ? AND portada IS NULL AND portada_origen IS NULL", [ref, id]));
+export const posaRetratSonda = llistaRes => db => llistaRes.forEach(([id, url]) =>
+  db.run("UPDATE artista SET retrat = ?, retrat_origen = 'sonda' WHERE id = ? AND retrat IS NULL AND retrat_origen IS NULL", [url, id]));
+// «No és aquesta»: la imatge marxa i es recorda que no era, perquè la sonda no la torni a posar.
+export const rebutjaPortada = id => db => db.run("UPDATE edicio SET portada = NULL, portada_origen = 'rebutjada' WHERE id = ?", [id]);
+export const rebutjaRetrat = id => db => db.run("UPDATE artista SET retrat = NULL, retrat_origen = 'rebutjat' WHERE id = ?", [id]);
+// La foto pujada a mà: mana sobre tot.
+export const posaRetratMa = (id, ref) => db => db.run("UPDATE artista SET retrat = ?, retrat_origen = 'ma' WHERE id = ?", [ref, id]);
+
+// ───────── ajust únic: el «car pendent» del 30-10-2026 (decisió de Ricard, opció B) ─────────
+// No es recarrega l'arxiu: s'aplica només la diferència amb la llavor del 26-10, i es conserva tot el que s'ha fet a l'app.
+// Es marca a meta perquè no es repeteixi mai, ni en aquest mòbil ni en cap altre.
+export const AJUST_CP = 'ajust-car-pendent-30-10';
+export const ajustFet = db => !!un(db, 'SELECT valor FROM meta WHERE clau = ?', [AJUST_CP]);
+export const ajustaCarPendent3010 = db => {
+  const fets = [];
+  const edicioDe = (art, tit) => { const a = trobaArtista(db, art); if (!a) return null;
+    const al = files(db, 'SELECT id, titol FROM album WHERE artista_id = ?', [a.id]).find(x => norm(x.titol) === norm(tit));
+    return al ? un(db, 'SELECT id, rotacio_actual FROM edicio WHERE album_id = ? ORDER BY id DESC LIMIT 1', [al.id]) : null; };
+  // 1. Les dues notes de prova (Animation i Weasels Ripped My Flesh) eren inventades: fora, i sense data de pregunta.
+  //    Al «car pendent» tots dos discos segueixen marcats *R*: si van sortir de la rotació per la prova, hi tornen.
+  for (const [art, tit] of [['Jon Anderson', 'Animation'], ['The Mothers of Invention', 'Weasels Ripped My Flesh']]) {
+    const e = edicioDe(art, tit); if (!e) { fets.push('no trobat: ' + tit); continue; }
+    const n = un(db, 'SELECT COUNT(*) AS n FROM puntuacio WHERE edicio_id = ?', [e.id]).n;
+    db.run('DELETE FROM puntuacio WHERE edicio_id = ?', [e.id]);
+    db.run('UPDATE edicio SET data_darrera_pregunta_puntuacio = NULL, rotacio_actual = 1 WHERE id = ?', [e.id]);
+    fets.push(`${tit}: ${n} nota${n === 1 ? '' : 's'} de prova esborrada${n === 1 ? '' : 's'}${e.rotacio_actual ? '' : ', torna a la rotació'}`);
+  }
+  // 2. Patience surt de la rotació (al «car pendent» ja no porta *R*). Sense nota: es podrà posar des de la fitxa.
+  const pat = edicioDe('Peter Hammill', 'Patience');
+  if (pat) { db.run('UPDATE edicio SET rotacio_actual = 0 WHERE id = ?', [pat.id]); fets.push('Patience surt de la rotació'); }
+  // 3. Entren cinc discos, en l'ordre del «car pendent»: l'últim anotat queda primer. Canal: Amazon Music per a tots
+  //    (la regla de la llavor; The Love Songs l'hereta de Patience). Steve Roach & Serena Gabriel, artista apart i sense Persona.
+  const nous = [['Steve Roach & Serena Gabriel', 'Temple of the Melting Dawn', 71], ['William Basinski', 'Passing the Cup of Sorrows', 37],
+                ['The Avalanches', 'No Bad Memories', 52], ['Tom Petty', 'Full Moon Fever', 40], ['Peter Hammill', 'The Love Songs', 43]];
+  const t0 = Date.now() - nous.length * 1000;
+  nous.forEach(([art, tit, min], i) => {
+    if (edicioDe(art, tit)?.rotacio_actual) { fets.push(tit + ' ja hi era'); return; }
+    const r = posaEnRotacio({ art, tit, min, canal: 'amazon' })(db);
+    db.run('UPDATE edicio SET data_referencia_rotacio = ?, lot_carrega = ? WHERE id = ?', [new Date(t0 + i * 1000).toISOString(), 'CP-30-10', r.id]);
+    fets.push(tit + ' entra');
+  });
+  db.run('INSERT INTO meta (clau, valor) VALUES (?, ?)', [AJUST_CP, ara() + ' · ' + fets.join(' · ')]);
+  return fets;
+};

@@ -33,7 +33,9 @@ export function permis({ silenci = false } = {}) {
       recordaCompte();
     };
     client.error_callback = e => rebutja(new Error('Permís de Google: ' + (e?.type || 'cancel·lat')));
-    client.requestAccessToken({ prompt: silenci ? '' : undefined });
+    // Sense «prompt», Google enseña sempre el selector de comptes encara que tingui la pista (prova del 29-10: dos tocs).
+    // Amb prompt buit i la pista, entra directament amb el compte de l'última vegada. Sense pista, com abans.
+    client.requestAccessToken({ prompt: (silenci || pista) ? '' : undefined });
   });
 }
 export const tePermis = () => !!testimoni && Date.now() < caducitat;
@@ -317,3 +319,28 @@ export function recomptes() {
 export const versioEsquema = () => estat.db.exec('PRAGMA user_version')[0].values[0][0];
 export const llegeixMeta = clau => estat.db.exec('SELECT valor FROM meta WHERE clau = ?', [clau])[0]?.values[0][0] ?? null;
 export const comprovaIntegritat = () => integritat(estat.db);
+
+// ───────── fitxers al costat de l'arxiu (bloc 3.2) ─────────
+// Una foto d'artista desada al Drive, en bytes, per guardar-la al mòbil.
+export async function baixaImatge(id) {
+  return (await g(`${DRIVE}/${id}?alt=media`)).blob();
+}
+// La carpeta «Retrats», dins de «La Meva Discoteca». Es crea la primera vegada que es puja una foto.
+async function carpetaRetrats() {
+  const pare = estat.carpetaId;
+  const ja = (await buscar('Retrats', { pare, mime: 'application/vnd.google-apps.folder' }))[0];
+  if (ja) return ja.id;
+  return (await creaFitxer('Retrats', 'application/vnd.google-apps.folder', pare ? [pare] : null, null)).id;
+}
+// Puja una foto d'artista i torna l'id del fitxer al Drive.
+export async function pujaRetrat(nom, blob) {
+  if (!tePermis()) throw new Error('cal connectar amb el Drive');
+  const net = nom.replace(/[\\/:*?"<>|]+/g, ' ').trim();
+  return (await creaFitxer(`${net}.jpg`, 'image/jpeg', [await carpetaRetrats()], blob)).id;
+}
+// Una còpia de l'arxiu tal com és ara, al costat de l'original. Abans d'un canvi que toca moltes files.
+export async function copiaAlDrive(etiqueta) {
+  if (!tePermis()) throw new Error('cal connectar amb el Drive');
+  const nom = `${NOM_ARXIU} · ${etiqueta} ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+  return creaFitxer(nom, SQLITE_MIME, estat.carpetaId ? [estat.carpetaId] : null, estat.db.export());
+}

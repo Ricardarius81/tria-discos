@@ -1,14 +1,19 @@
 // El Faristol viu (tram 3, bloc 3.1): la maqueta v13 pintada sobre l'arxiu de debò.
 // Tot el que es toca s'escriu a l'arxiu (arxiu.canvia) i es desa al Drive. Cada canvi porta «Desfés».
-// Encara no hi ha ListenBrainz (3.3), portades (3.2), safata viva (3.4) ni Bandcamp automàtic (3.5).
+// Bloc 3.2: portades i fotos que arriben soles i es recorden sense connexió, foto d'artista pujada a mà,
+// connexió amb el Drive en un toc, i l'ajust del «car pendent» del 30-10.
+// Encara no hi ha ListenBrainz (3.3), safata viva (3.4) ni Bandcamp automàtic (3.5).
 
-import * as A from './arxiu.js?v=6';
-import * as D from './dades.js?v=3';
+import * as A from './arxiu.js?v=7';
+import * as D from './dades.js?v=4';
+import * as I from './imatges.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const inicials = n => String(n || '').replace(/[^\p{L}\s.]/gu, '').split(/\s+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
-const IMG = u => `<img src="${esc(u)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="var c=this.closest('.coberta');if(c)c.classList.remove('amb-img');this.remove()">`;
+// Les imatges es pinten buides, amb la seva referència; imatges.js les omple des del mòbil o des de la xarxa.
+const IMG = ref => `<img data-ref="${esc(ref)}" alt="" referrerpolicy="no-referrer" onerror="var c=this.closest('.coberta');if(c)c.classList.remove('amb-img');this.remove()">`;
+I.usaDrive(id => A.baixaImatge(id));
 const db = () => A.estat.db;
 const hora = iso => iso ? new Date(iso).toLocaleString('ca-ES', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 
@@ -48,10 +53,17 @@ function avisa(txt, desfes) {
 function obreFull(h) {
   $('#full').innerHTML = '<button class="torna-full" data-tornafull="1">← Tornar</button>' + h;
   $('#full').classList.add('obert'); $('#fons').classList.add('obert'); $('#full').scrollTop = 0;
+  I.omple($('#full'));
 }
 function tancaFull() {
   const f = $('#full');
-  if (f.dataset.encaraNo) { const id = +f.dataset.encaraNo; delete f.dataset.encaraNo; fes(D.encaraNo(id), 'Sense nota, de moment. Tornarà.', { abans: estat.abansSortida }); }
+  // Tancar la fulla de puntuar sense tocar res desfà tota la sortida: el disc continua en rotació (decisió B de Ricard, 30-10).
+  // Per treure'l sense nota, «Encara no».
+  if (f.dataset.encaraNo) {
+    delete f.dataset.encaraNo;
+    const b = estat.abansSortida; estat.abansSortida = null;
+    if (b) { A.restaura(b).then(r => { pinta(); marcaDesat(r); }); avisa('Sense tocar res: el disc continua en rotació.'); }
+  }
   f.classList.remove('obert'); $('#fons').classList.remove('obert');
 }
 function marcaDesat(r) {
@@ -83,6 +95,7 @@ function pinta() {
   if (!A.estat.db) return;
   pintaReixa(); pintaFiles();
   if (estat.superficie === 'artista' && estat.artista) pintaArtista(estat.artista);
+  I.omple();
 }
 
 function pintaReixa() {
@@ -145,9 +158,27 @@ function pintaArtista(id) {
       : `<div class="marcador"><p class="cita">Encara no ha sonat res seu.</p><p>La màquina només sap el que passa des del dia que arrenca. Quan arribin les escoltes, sortirà aquí.</p></div>`}
     <div class="canals" style="margin-top:14px">
       ${(!r && !p.proper_titol) ? `<button data-triaproper="${p.id}">Tria el proper disc <small>el primer que vols escoltar</small></button>` : ''}
-      <button disabled style="opacity:.6">La foto <small>arribarà sola amb les portades (bloc 3.2)</small></button>
+      <button data-pujafoto="${p.artista_id}">${p.retrat_origen === 'ma' ? 'Canvia la foto' : 'Puja una foto'} <small>${
+        p.retrat_origen === 'ma' ? 'la teva: no la trepitja res' : p.retrat_origen === 'sonda' ? 'la d\'ara l\'ha trobat la sonda' :
+        p.retrat_origen === 'rebutjat' ? 'la de la sonda no era' : 'no n\'ha arribat cap de sola'}</small></button>
+      ${p.retrat_origen === 'sonda' ? `<button data-noretrat="${p.artista_id}">No és aquesta <small>torna a la portada o al text</small></button>` : ''}
     </div>
+    <input type="file" id="inFoto" accept="image/*" hidden>
     <div class="barra-accions" style="position:static;padding:14px 0 0"><button class="bt discret" data-desprefer="${p.id}">Treu-lo de preferents</button></div>`;
+  $('#inFoto').onchange = e => { const f = e.target.files?.[0]; if (f) pujaFoto(p, f); };
+  I.omple($('#s-artista'));
+}
+
+// La foto d'un artista pujada a mà: reduïda, al Drive (carpeta «Retrats») i guardada al mòbil.
+async function pujaFoto(p, fitxer) {
+  if (!A.tePermis()) { avisa('Per pujar una foto cal estar connectat amb el Drive.'); return; }
+  avisa('Pujant la foto…');
+  try {
+    const blob = await I.redueix(fitxer);
+    const ref = 'drive:' + await A.pujaRetrat(p.nom, blob);
+    await I.guardaJa(ref, blob);
+    fes(D.posaRetratMa(p.artista_id, ref), 'Foto de ' + p.nom + ' desada');
+  } catch (e) { avisa('No s\'ha pogut pujar la foto: ' + e.message); }
 }
 
 // ───────── fulls ─────────
@@ -170,14 +201,17 @@ function fullFitxa(d) {
   const canal = d.app_escolta ? CANALS[d.app_escolta]?.nom || d.app_escolta : (d.fisic ? 'disc físic' : '—');
   const codi = d.app_escolta === 'bandcamp' ? (d.bc ? ' · amb codi' : ' · sense codi') : '';
   const jaPref = D.preferents(db()).some(p => p.artista_id === d.artista_id);
-  obreFull(`<h3>${esc(d.titol)}</h3><p>${esc(d.art)}</p>
+  obreFull(`${d.portada ? `<div class="fitxa-portada">${IMG(d.portada)}</div>` : ''}<h3>${esc(d.titol)}</h3><p>${esc(d.art)}</p>
     <ul class="fitxa-dades">
       <li><b>Durada</b><span>${d.min ? d.min + '′' : 'pendent'} <button class="sf-link" style="padding:0 0 0 8px" data-durada="${d.id}">canvia-la</button></span></li>
       <li><b>Canal</b><span>${esc(canal)}${codi}</span></li>
       ${d.formats.length ? `<li><b>Format</b><span>${esc(d.formats.map(f => NOMS_FISICS[f] || f).join(', '))}</span></li>` : ''}
       ${d.nom_edicio ? `<li><b>Edició</b><span>${esc(d.nom_edicio)}</span></li>` : ''}
       ${d.parts.length ? `<li><b>Part viva</b><span>${d.esperant ? 'cap: la caixa espera' : esc(d.viva.nom || '') + ' · ' + d.viva.numero + ' de ' + d.parts.length}</span></li>` : ''}
-      <li><b>Portada</b><span>${d.portada ? 'ha arribat sola' : 'encara no (bloc 3.2)'}</span></li>
+      <li><b>Portada</b><span>${
+        d.portada && d.portada_origen === 'sonda' ? `endevinada pel títol <button class="sf-link" style="padding:0 0 0 8px" data-noportada="${d.id}">no és aquesta</button>`
+        : d.portada ? 'la de l\'edició que has escoltat'
+        : d.portada_origen === 'rebutjada' ? 'cap: arribarà amb les escoltes (bloc 3.3)' : 'no n\'ha arribat cap'}</span></li>
     </ul>
     <div class="barra-accions" style="position:static;padding:0">
       ${d.esperant ? `<button class="bt principal" data-repren="${d.id}">Reprèn</button>` : `<button class="bt principal" data-escoltar="${d.id}">Escoltar ara</button>`}
@@ -291,6 +325,7 @@ function fullCabina() {
       ${A.estat.pendent && conn ? `<li><button data-desaara="1">Desa ara <small>prova-ho una altra vegada</small></button></li>` : ''}
       <li><button disabled style="opacity:.6">ListenBrainz <small>bloc 3.3</small></button></li>
       <li><button disabled style="opacity:.6">Còpia de seguretat i Excel <small>tram 4</small></button></li>
+      <li><a href="privadesa.html" target="_blank" rel="noopener">Política de privadesa <small>què surt d'aquest mòbil, i cap a on</small></a></li>
     </ul></div>`);
 }
 
@@ -428,6 +463,11 @@ document.addEventListener('click', e => {
   if (d.reprenpart) { const [id, n] = d.reprenpart.split(':').map(Number); tancaFull(); fes(D.posaPart(id, n), 'La part ' + n + ' entra en rotació'); return; }
   if (d.fespref) { const aid = +d.fespref; tancaFull(); fes(D.afegeixPreferentId(aid), 'Afegit a Artistes Preferents'); sub('pref'); return; }
 
+  // Imatges (bloc 3.2)
+  if (d.noportada) { const id = +d.noportada; tancaFull(); fes(D.rebutjaPortada(id), 'Portada fora. Arribarà la bona amb les escoltes.'); return; }
+  if (d.noretrat) { fes(D.rebutjaRetrat(+d.noretrat), 'Foto fora.'); return; }
+  if (d.pujafoto) { $('#inFoto')?.click(); return; }
+
   // Artistes Preferents
   if (t.id === 'btAfegeixArtista') { fullAfegeixArtista(); return; }
   if (d.desaartista) { const n = $('#inNom').value.trim(); if (!n) { avisa('Cal un nom.'); return; }
@@ -496,6 +536,7 @@ async function connecta(ambGest) {
       else if (r.desat && !r.desat.desat) avisa('Hi ha canvis d\'aquest mòbil que encara no s\'han pogut desar: ' + r.desat.motiu + '.');
       else if (r.desat) avisa('Connectat. Els canvis d\'aquest mòbil ja són al Drive.');
       else avisa(r.avis || 'Connectat amb el Drive.');
+      if (!r.fora) despresDeConnectar();
       return;
     }
     if (r.cas === 'sense-res') { entrada(r.detall + ' Entra amb Google per obrir l\'arxiu.', BT('entra', 'Entra amb Google', true), 'mal'); $('#entra').onclick = () => connecta(true); return; }
@@ -517,6 +558,39 @@ async function connecta(ambGest) {
     if (A.estat.db) { avisa('No s\'ha pogut connectar: ' + e.message); return; }
     entrada('No s\'ha pogut obrir: ' + e.message, BT('entra', 'Entra amb Google', true), 'mal'); $('#entra').onclick = () => connecta(true);
   }
+}
+
+// Després de connectar: l'ajust únic del «car pendent» i, en segon pla, la sonda d'imatges.
+async function despresDeConnectar() {
+  if (!D.ajustFet(db())) {
+    try { await A.copiaAlDrive('abans del car pendent del 30-10'); }
+    catch (e) { avisa('No he pogut fer la còpia de seguretat (' + e.message + '): l\'ajust del car pendent espera a la propera connexió.'); return; }
+    const fets = await fes(D.ajustaCarPendent3010, 'Car pendent del 30-10 aplicat');
+    obreFull(`<h3>El «car pendent» del 30-10</h3><p>Abans de tocar res, s'ha desat una còpia de l'arxiu al Drive, al costat de l'original.</p>
+      <ul class="fitxa-dades">${fets.map(f => `<li><span>${esc(f)}</span></li>`).join('')}</ul>
+      <p>Si alguna cosa no quadra, «Desfés» a l'avís ho torna tot enrere.</p>`);
+  }
+  sondes();
+}
+
+// La sonda no torna a provar cada dia el que no ha trobat: espera una setmana (es recorda en aquest mòbil).
+const PROVATS = 'tria-sonda-provats', SETMANA = 7 * 864e5;
+function provats() { try { return JSON.parse(localStorage.getItem(PROVATS) || '{}'); } catch { return {}; } }
+function apunta(clau) { const p = provats(); p[clau] = Date.now(); try { localStorage.setItem(PROVATS, JSON.stringify(p)); } catch {} }
+let sondant = false;
+async function sondes() {
+  if (sondant || !navigator.onLine) return; sondant = true;
+  try {
+    const p = provats(), fresc = k => !p[k] || Date.now() - p[k] > SETMANA;
+    const discos = D.discosSensePortada(db()).filter(x => fresc('e' + x.id));
+    const arts = D.artistesSenseRetrat(db()).filter(x => fresc('a' + x.id));
+    if (!discos.length && !arts.length) return;
+    const n1 = await I.passa(discos, async x => { const r = await I.sondaPortada(x); if (!r) apunta('e' + x.id); return r; },
+      lot => fes(D.posaPortadaSonda(lot), null, { desfes: false }));
+    const n2 = await I.passa(arts, async x => { const r = await I.sondaRetrat(x); if (!r) apunta('a' + x.id); return r; },
+      lot => fes(D.posaRetratSonda(lot), null, { desfes: false }));
+    avisa(`La sonda: ${n1} portades de ${discos.length} i ${n2} fotos de ${arts.length}.`);
+  } finally { sondant = false; }
 }
 
 A.vigilaPendents(r => {
