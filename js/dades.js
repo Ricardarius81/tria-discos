@@ -11,6 +11,8 @@ const un = (db, sql, p = []) => files(db, sql, p)[0] || null;
 const llista = s => { try { return s ? JSON.parse(s) : []; } catch { return []; } };
 const json = v => (v && v.length ? JSON.stringify(v) : null);
 const ara = () => new Date().toISOString();
+import * as T from './tags.js?v=1';
+
 const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
 
 // La puntuació (§5.1): de 5 a 0. «Sense puntuar» no és un valor: és no tenir-ne.
@@ -22,24 +24,33 @@ export const FISICS = ['CD', 'vinil'];
 // L'ordre (§7.7, v1.37, opció C): el més recent entre l'últim «Escoltar ara», l'última escolta real
 // i el dia que va entrar a la rotació. Si empaten —la llavor va entrar tota alhora—, l'ordre de càrrega (ACT-356).
 export function rotacio(db) {
+  return carrega(db, 'e.rotacio_actual = 1').sort((x, y) => (y.clau.localeCompare(x.clau)) || (x.id - y.id));
+}
+// La fitxa d'una edició, sigui o no a la rotació: és la que es pinta després de treure-la (pregunta 11).
+export const fitxa = (db, id) => carrega(db, 'e.id = ?', [id])[0] || null;
+function carrega(db, on, params = []) {
   const eds = files(db, `
     SELECT e.id, e.album_id, e.nom_edicio, e.durada_total, e.app_escolta, e.codi_bandcamp, e.formats, e.tags,
-           e.darrera_obertura, e.data_referencia_rotacio, e.portada, e.portada_origen,
-           a.titol, a.artista_id, ar.nom_canonic AS art,
+           e.darrera_obertura, e.data_referencia_rotacio, e.portada, e.portada_origen, e.data_darrera_pregunta_puntuacio,
+           a.titol, a.artista_id, a.tags AS album_tags, ar.nom_canonic AS art,
+           (SELECT COUNT(*) FROM edicio x WHERE x.album_id = e.album_id) AS n_edicions,
            (SELECT MAX(s.data_hora) FROM escolta s WHERE s.edicio_id = e.id) AS darrera_escolta
     FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id
-    WHERE e.rotacio_actual = 1`);
+    WHERE ${on}`, params);
   for (const e of eds) {
     e.parts = files(db, 'SELECT id, numero, nom, durada, rotacio_actual, codi_bandcamp FROM part WHERE edicio_id = ? ORDER BY numero', [e.id]);
     e.viva = e.parts.find(p => p.rotacio_actual) || null;
     e.esperant = e.parts.length > 0 && !e.viva;
-    e.formats = llista(e.formats); e.tags = llista(e.tags);
+    e.formats = llista(e.formats); e.tags = llista(e.tags); e.album_tags = llista(e.album_tags);
+    // L'historial sencer de notes (§5.2): la vigent és l'última.
+    e.notes = files(db, 'SELECT id, valor, data FROM puntuacio WHERE edicio_id = ? ORDER BY data, id', [e.id]);
+    e.nota = e.notes[e.notes.length - 1] || null;
     e.fisic = e.formats.some(f => FISICS.includes(f));
     e.min = e.viva ? (e.viva.durada || null) : e.durada_total;
     e.bc = e.viva ? e.viva.codi_bandcamp : e.codi_bandcamp;
     e.clau = [e.darrera_obertura, e.darrera_escolta, e.data_referencia_rotacio].filter(Boolean).sort().pop() || '';
   }
-  return eds.sort((x, y) => (y.clau.localeCompare(x.clau)) || (x.id - y.id));
+  return eds;
 }
 
 export function edicio(db, id) {
@@ -113,6 +124,29 @@ export const puntua = (id, valor) => db => {
   db.run('INSERT INTO puntuacio (edicio_id, valor, data) VALUES (?, ?, ?)', [id, valor, ara()]);
   db.run('UPDATE edicio SET data_darrera_pregunta_puntuacio = ? WHERE id = ?', [ara(), id]);
 };
+// Canviar la nota des de la fitxa (bloc 3.2 bis, ACT-392 i decisió de Ricard del 31-10, opció A).
+// «Substitueix la nota actual» (m'havia equivocat): canvia el valor de l'última fila i en CONSERVA la data,
+// perquè l'error es corregeix al moment en què es va cometre i la pregunta 13 segueix comptant des d'aquell judici.
+// «Afegeix una nota nova» és puntua(): una fila nova amb la data d'avui. «Posa-li nota», quan no n'hi ha cap, també.
+export const substitueixNota = (id, valor) => db => {
+  const u = un(db, 'SELECT id FROM puntuacio WHERE edicio_id = ? ORDER BY data DESC, id DESC LIMIT 1', [id]);
+  if (u) db.run('UPDATE puntuacio SET valor = ? WHERE id = ?', [valor, u.id]);
+  else puntua(id, valor)(db);
+};
+
+// Els tags (bloc 3.2 bis): s'escriuen les dues llistes, la de l'àlbum i la de l'edició (§6.3).
+export const desaTags = (edicioId, albumId, { album, edicio }) => db => {
+  db.run('UPDATE album SET tags = ? WHERE id = ?', [json(album), albumId]);
+  db.run('UPDATE edicio SET tags = ? WHERE id = ?', [json(edicio), edicioId]);
+};
+// Els idiomes que ja fa servir l'arxiu, perquè es puguin tocar sense escriure'ls.
+export function idiomesUsats(db) {
+  const s = new Set(T.IDIOMES_BASE);
+  for (const r of files(db, 'SELECT tags FROM album WHERE tags IS NOT NULL'))
+    for (const t of llista(r.tags)) if (t.startsWith(T.IDIOMA.nom + ':')) s.add(t.slice(T.IDIOMA.nom.length + 1).trim());
+  return [...s];
+}
+
 // «Encara no»: no hi ha nota; queda la data de la pregunta perquè torni més endavant (§5.1, v1.7).
 export const encaraNo = id => db => db.run('UPDATE edicio SET data_darrera_pregunta_puntuacio = ? WHERE id = ?', [ara(), id]);
 
@@ -231,5 +265,47 @@ export const ajustaCarPendent3010 = db => {
     fets.push(tit + ' entra');
   });
   db.run('INSERT INTO meta (clau, valor) VALUES (?, ?)', [AJUST_CP, ara() + ' · ' + fets.join(' · ')]);
+  return fets;
+};
+
+// ───────── ajust únic del bloc 3.2 bis (31-10-2026) ─────────
+// 1. Els tags de la llavor, al seu lloc: amb el nom complet, i els d'àlbum a l'àlbum (§6.3). Fallada de Claude a la llavor.
+// 2. Els set codis de Bandcamp que faltaven, llegits el 31-10 de la pàgina de cada disc (item_id). Només on no n'hi ha cap.
+export const AJUST_3_2_BIS = 'ajust-3-2-bis-31-10';
+export const ajust32bisFet = db => !!un(db, 'SELECT valor FROM meta WHERE clau = ?', [AJUST_3_2_BIS]);
+export const ajusta32bis = db => {
+  const fets = [];
+  let moguts = 0;
+  for (const e of files(db, 'SELECT e.id, e.tags, a.id AS album_id, a.tags AS album_tags FROM edicio e JOIN album a ON a.id = e.album_id')) {
+    const abans = { a: llista(e.album_tags), e: llista(e.tags) };
+    const r = T.normalitza(abans.a, abans.e);
+    if (JSON.stringify(r.album) !== JSON.stringify(abans.a) || JSON.stringify(r.edicio) !== JSON.stringify(abans.e)) {
+      db.run('UPDATE album SET tags = ? WHERE id = ?', [json(r.album), e.album_id]);
+      db.run('UPDATE edicio SET tags = ? WHERE id = ?', [json(r.edicio), e.id]);
+      moguts++;
+    }
+  }
+  fets.push(`Tags de la llavor posats al seu lloc: ${moguts} disc${moguts === 1 ? '' : 's'}`);
+  const edicioDe = (art, tit) => { const a = trobaArtista(db, art); if (!a) return null;
+    const al = files(db, 'SELECT id, titol FROM album WHERE artista_id = ?', [a.id]).find(x => norm(x.titol) === norm(tit));
+    return al ? un(db, 'SELECT id, codi_bandcamp FROM edicio WHERE album_id = ? ORDER BY id DESC LIMIT 1', [al.id]) : null; };
+  for (const [art, tit, codi, alt] of [['Øystein Skar', 'Hem', '3495443710'], ['James Murray', 'Careful Now', '3810550386'],
+                                       ['James Murray', 'Careful Now Unmasked', '1431708919', 'Careful Now (Unmasked)']]) {
+    const e = edicioDe(art, tit) || (alt && edicioDe(art, alt));
+    if (!e) { fets.push('No trobat: ' + tit); continue; }
+    if (e.codi_bandcamp) { fets.push(tit + ': ja tenia codi'); continue; }
+    db.run('UPDATE edicio SET codi_bandcamp = ? WHERE id = ?', [codi, e.id]); fets.push(tit + ': codi de Bandcamp posat');
+  }
+  const ic = edicioDe('D York', 'The Italian Chronicles');
+  if (!ic) fets.push('No trobat: The Italian Chronicles');
+  else {
+    let n = 0;
+    for (const [num, codi] of [[2, '2526469990'], [3, '2113399248'], [4, '1029541982'], [5, '1492360063']]) {
+      const p = un(db, 'SELECT id, codi_bandcamp FROM part WHERE edicio_id = ? AND numero = ?', [ic.id, num]);
+      if (p && !p.codi_bandcamp) { db.run('UPDATE part SET codi_bandcamp = ? WHERE id = ?', [codi, p.id]); n++; }
+    }
+    fets.push(`The Italian Chronicles: ${n} codi${n === 1 ? '' : 's'} de volum posat${n === 1 ? '' : 's'} (del 2 al 5)`);
+  }
+  db.run('INSERT INTO meta (clau, valor) VALUES (?, ?)', [AJUST_3_2_BIS, ara() + ' · ' + fets.join(' · ')]);
   return fets;
 };

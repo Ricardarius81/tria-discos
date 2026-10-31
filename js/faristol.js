@@ -2,11 +2,14 @@
 // Tot el que es toca s'escriu a l'arxiu (arxiu.canvia) i es desa al Drive. Cada canvi porta «Desfés».
 // Bloc 3.2: portades i fotos que arriben soles i es recorden sense connexió, foto d'artista pujada a mà,
 // connexió amb el Drive en un toc, i l'ajust del «car pendent» del 30-10.
+// Bloc 3.2 bis (31-10): una sola fitxa del disc, que creix (ACT-391): el canal, la nota amb els seus dos gestos
+// i els tags en dos grups; la revisió de tags en treure un disc de rotació (pregunta 11).
 // Encara no hi ha ListenBrainz (3.3), safata viva (3.4) ni Bandcamp automàtic (3.5).
 
 import * as A from './arxiu.js?v=8';
-import * as D from './dades.js?v=6';
+import * as D from './dades.js?v=7';
 import * as I from './imatges.js?v=3';
+import * as T from './tags.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -62,7 +65,11 @@ function tancaFull() {
   if (f.dataset.encaraNo) {
     delete f.dataset.encaraNo;
     const b = estat.abansSortida; estat.abansSortida = null;
-    if (b) { A.restaura(b).then(r => { pinta(); marcaDesat(r); }); avisa('Sense tocar res: el disc continua en rotació.'); }
+    // Si has tocat els tags però no la nota, el disc continua en rotació i els tags es queden: són judici sobre el disc,
+    // no sobre la sortida (invenció de Claude del 31-10, per validar).
+    const tg = estat.tagsSortida; estat.tagsSortida = null; estat.sortint = null;
+    if (b) { A.restaura(b).then(async r => { if (tg) await fes(D.desaTags(tg.id, tg.album_id, tg), null, { desfes: false }); pinta(); marcaDesat(r); });
+             avisa(tg ? 'Sense nota: el disc continua en rotació, i els tags que has tocat es queden.' : 'Sense tocar res: el disc continua en rotació.'); }
   }
   f.classList.remove('obert'); $('#fons').classList.remove('obert');
 }
@@ -104,7 +111,7 @@ function pintaReixa() {
     const part = d.esperant
       ? `<span class="part">esperant</span><button class="repren" data-repren="${d.id}">Reprèn</button>`
       : (d.viva ? `<span class="part">${d.viva.nom ? esc(d.viva.nom) + ' · ' : ''}part ${d.viva.numero}/${d.parts.length}</span>` : '');
-    const tags = d.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('');
+    const tags = T.curts(d.album_tags, d.tags).map(t => `<span class="tag">${esc(t)}</span>`).join('');
     const dur = d.esperant ? '' : (d.min ? `<span class="durada">${d.min}′</span>` : `<span class="durada falta">falta la durada</span>`);
     const tit = d.viva?.nom && d.parts.length ? d.titol : d.titol;
     const canal = d.app_escolta;
@@ -275,18 +282,85 @@ function fullFitxa(d) {
   obreFull(`${d.portada ? `<div class="fitxa-portada">${IMG(d.portada)}</div>` : ''}<h3>${esc(d.titol)}</h3><p>${esc(d.art)}</p>
     <ul class="fitxa-dades">
       <li><b>Durada</b><span>${d.min ? d.min + '′' : 'pendent'} <button class="sf-link" style="padding:0 0 0 8px" data-durada="${d.id}">canvia-la</button></span></li>
-      <li><b>Canal</b><span>${esc(canal)}${codi}</span></li>
+      <li><b>Canal</b><span>${esc(canal)}${codi} <button class="sf-link" style="padding:0 0 0 8px" data-canalfitxa="${d.id}">canvia'l</button></span></li>
+      <li><b>Nota</b><span>${textNota(d)} <button class="sf-link" style="padding:0 0 0 8px" data-notafitxa="${d.id}">${d.nota ? 'canvia-la' : 'posa-li nota'}</button></span></li>
       ${d.formats.length ? `<li><b>Format</b><span>${esc(d.formats.map(f => NOMS_FISICS[f] || f).join(', '))}</span></li>` : ''}
       ${d.nom_edicio ? `<li><b>Edició</b><span>${esc(d.nom_edicio)}</span></li>` : ''}
       ${d.parts.length ? `<li><b>Part viva</b><span>${d.esperant ? 'cap: la caixa espera' : esc(d.viva.nom || '') + ' · ' + d.viva.numero + ' de ' + d.parts.length}</span></li>` : ''}
       <li><b>Portada</b><span>${ORIGEN_PORTADA[d.portada ? d.portada_origen || 'escolta' : d.portada_origen === 'rebutjada' ? 'rebutjada' : 'cap']}
         <button class="sf-link" style="padding:0 0 0 8px" data-canviaportada="${d.id}">canvia-la</button></span></li>
     </ul>
+    ${blocTags(d)}
     <div class="barra-accions" style="position:static;padding:0">
       ${d.esperant ? `<button class="bt principal" data-repren="${d.id}">Reprèn</button>` : `<button class="bt principal" data-escoltar="${d.id}">Escoltar ara</button>`}
       ${jaPref ? '' : `<button class="bt" data-fespref="${d.artista_id}">Afegir a Artistes Preferents</button>`}
       <button class="bt" data-treure="${d.id}">Treu de rotació</button>
     </div>`);
+}
+
+// ───────── la nota a la fitxa (bloc 3.2 bis) ─────────
+const nomNota = v => (D.ESCALA.find(([, x]) => x === v) || ['?'])[0];
+const dia = iso => iso ? new Date(iso).toLocaleDateString('ca-ES', { dateStyle: 'short' }) : '';
+function textNota(d) {
+  if (d.nota) return esc(nomNota(d.nota.valor)) + ` <small class="gris">des del ${dia(d.nota.data)}</small>`;
+  return d.data_darrera_pregunta_puntuacio ? 'encara no' : 'sense nota';
+}
+// Dos gestos quan ja hi ha nota (ACT-392, noms de Ricard del 31-10). Quan no n'hi ha, un de sol: «Posa-li nota».
+function fullNota(d, mode) {
+  estat.notaDe = d.id;
+  if (!d.nota) mode = 'nova';
+  const hist = d.notes.length > 1 ? `<p class="gris" style="font-size:12px;margin:0 0 12px">Abans: ${d.notes.slice(0, -1).map(n => esc(nomNota(n.valor)) + ' (' + dia(n.data) + ')').join(' → ')}</p>` : '';
+  if (!mode) {
+    obreFull(`<h3>La nota de ${esc(d.titol)}</h3><p>${esc(d.art)} · ara és <b>${esc(nomNota(d.nota.valor))}</b>, des del ${dia(d.nota.data)}.</p>${hist}
+      <div class="canals">
+        <button data-modenota="subst">Substitueix la nota actual <small>m'havia equivocat</small></button>
+        <button data-modenota="nova">Afegeix una nota nova</button>
+      </div>`);
+    return;
+  }
+  const titol = !d.nota ? 'Posa-li nota' : mode === 'subst' ? 'Substitueix la nota actual' : 'Afegeix una nota nova';
+  const peu = !d.nota ? '' : mode === 'subst' ? `<p class="gris" style="font-size:12px">La nota de ${dia(d.nota.data)} canvia de valor i es queda amb la seva data.</p>`
+                                              : `<p class="gris" style="font-size:12px">La de ${dia(d.nota.data)} es queda a l'historial; la nova porta la data d'avui.</p>`;
+  obreFull(`<h3>${titol}</h3><p>${esc(d.titol)} · ${esc(d.art)}</p>${hist}
+    <div class="escala">${D.ESCALA.map(([n, v]) => `<button data-desanota="${mode}:${v}" class="${mode === 'subst' && d.nota?.valor === v ? 'triat' : ''}">${n}</button>`).join('')}</div>${peu}`);
+}
+
+// El canal, des de la fitxa: el mateix camp que «Un altre canal» (Edició.App d'escolta, ACT-232). Queda recordat.
+function fullCanal(d) {
+  obreFull(`<h3>El canal de ${esc(d.titol)}</h3><p>Per on l'escoltes. El ▶ el farà servir a partir d'ara.</p>
+    <div class="canals">${Object.keys(CANALS).map(k => `<button data-desacanal="${d.id}:${k}" class="${d.app_escolta === k ? 'triat' : ''}">${CANALS[k].nom}${d.app_escolta === k ? ' <small>ara</small>' : ''}</button>`).join('')}</div>`);
+}
+
+// ───────── els tags (bloc 3.2 bis, §6.3 i pregunta 11 del §8.10) ─────────
+// Dos grups: el que és de l'àlbum (si el treus, marxa de totes les seves edicions) i el que és d'aquesta edició.
+// Es veu el que ja hi ha marcat, i es pot treure: és un moment de revisió, no de captura (§8.10, pregunta 11).
+function blocTags(d) {
+  const st = T.llegeix(d.album_tags, d.tags);
+  const xip = (attr, val, on, txt) => `<button data-${attr}="${esc(val)}" class="${on ? 'triat' : ''}" aria-pressed="${on}">${esc(txt)}</button>`;
+  const altres = d.n_edicions > 1 ? `<p class="gris" style="font-size:11.5px;margin:2px 0 6px">Aquest àlbum té ${d.n_edicions} edicions: el que toquis aquí canvia a totes.</p>` : '';
+  const idiomes = [...new Set([...D.idiomesUsats(db()), ...st.idiomes])];
+  return `<div class="bloc-tags" id="blocTags" data-edicio="${d.id}">
+    <div class="grup-tags"><h4>De l'àlbum</h4>${altres}
+      <div class="chips">${T.SI_NO.filter(x => x.nivell === 'album').map(x => xip('tag', x.nom, st.si.has(x.nom), x.curt)).join('')}</div>
+      <div class="fila-valor"><span>Veu</span><div class="chips">${T.VEU.valors.map(v => xip('veu', v, st.veu === v, v[0].toUpperCase() + v.slice(1))).join('')}</div></div>
+      <div class="fila-valor"><span>Estació</span><div class="chips">${T.ESTACIO.valors.map(v => xip('estacio', v, st.estacio === v, v[0].toUpperCase() + v.slice(1))).join('')}</div></div>
+      <div class="fila-valor"><span>Idioma</span><div class="chips">${idiomes.map(v => xip('idioma', v, st.idiomes.includes(v), v)).join('')}
+        <button data-altreidioma="1" class="mes">＋ Altre idioma</button></div></div>
+    </div>
+    <div class="grup-tags"><h4>D'aquesta edició</h4>
+      <div class="chips">${T.SI_NO.filter(x => x.nivell === 'edicio').map(x => xip('tag', x.nom, st.si.has(x.nom), x.curt)).join('')}</div>
+    </div>
+  </div>`;
+}
+// Cada toc s'escriu de seguida. Tornar a tocar-lo és el «Desfés».
+function tocaTags(fn) {
+  const caixa = $('#blocTags'); if (!caixa) return;
+  const d = D.fitxa(db(), +caixa.dataset.edicio); if (!d) return;
+  const r = fn(d); if (!r) return;
+  fes(D.desaTags(d.id, d.album_id, r), null, { desfes: false });   // s'escriu ja; el Drive es desa en segon pla
+  if (estat.sortint === d.id) estat.tagsSortida = { id: d.id, album_id: d.album_id, ...r };
+  const nou = D.fitxa(db(), d.id);
+  if (nou && $('#blocTags')) { $('#blocTags').outerHTML = blocTags(nou); }
 }
 
 function fullDurada(d) {
@@ -301,8 +375,10 @@ function fullPuntuar(d, encara = true) {
     <div class="escala">${D.ESCALA.map(([n, v]) => `<button data-punt="${v}" data-id="${d.id}">${n}</button>`).join('')}</div>
     <div class="barra-accions" style="position:static;padding:0">
       <button class="bt" data-puntencara="${d.id}">Encara no</button>
-      <button class="bt discret" data-torna="${d.id}">Torna'l a la rotació</button></div>`);
+      <button class="bt discret" data-torna="${d.id}">Torna'l a la rotació</button></div>
+    <h3 style="margin-top:22px">Els tags</h3>${blocTags(D.fitxa(db(), d.id) || d)}`);
   if (encara) $('#full').dataset.encaraNo = d.id;
+  estat.sortint = d.id; estat.tagsSortida = null;
 }
 
 function fullPart(d) {
@@ -312,8 +388,9 @@ function fullPart(d) {
     fes(D.treu(d.id), `${d.titol} fora de rotació`, { abans: estat.abansSortida });
     obreFull(`<h3>${esc(nom)} surt de rotació</h3><p>Era l'última part de ${esc(d.titol)}. L'edició es tanca, i la nota d'una caixa arriba en tancar la caixa.</p><p>Com la puntues?</p>
       <div class="escala">${D.ESCALA.map(([k, v]) => `<button data-punt="${v}" data-id="${d.id}">${k}</button>`).join('')}</div>
-      <div class="barra-accions" style="position:static;padding:0"><button class="bt" data-puntencara="${d.id}">Encara no</button></div>`);
-    $('#full').dataset.encaraNo = d.id; return;
+      <div class="barra-accions" style="position:static;padding:0"><button class="bt" data-puntencara="${d.id}">Encara no</button></div>
+      <h3 style="margin-top:22px">Els tags</h3>${blocTags(D.fitxa(db(), d.id) || d)}`);
+    $('#full').dataset.encaraNo = d.id; estat.sortint = d.id; estat.tagsSortida = null; return;
   }
   const seg = d.parts.find(p => p.numero === n + 1);
   if (!seg) {
@@ -472,7 +549,7 @@ document.addEventListener('click', e => {
     return;
   }
   if (t.disabled) return;
-  const rot = id => D.edicio(db(), +id);
+  const rot = id => D.edicio(db(), +id) || D.fitxa(db(), +id);
 
   if (d.tornafull) { tancaFull(); return; }
   if (t.id === 'avisBt') { const f = estat.ultima; estat.ultima = null; $('#avis').classList.remove('obert'); if (f) f(); return; }
@@ -520,17 +597,38 @@ document.addEventListener('click', e => {
     if (x.viva) { fullPart(x); return; }
     fes(D.treu(x.id), `${x.titol} fora de rotació`, { abans: estat.abansSortida }); fullPuntuar(x); return;
   }
-  if (d.punt !== undefined) { const id = +d.id; delete $('#full').dataset.encaraNo; tancaFull();
+  if (d.punt !== undefined) { const id = +d.id; delete $('#full').dataset.encaraNo; estat.sortint = null; estat.tagsSortida = null; tancaFull();
     const nom = D.ESCALA.find(([, v]) => v === +d.punt)[0];
     fes(D.puntua(id, +d.punt), 'Puntuat: ' + nom, { abans: estat.abansSortida }); return; }
-  if (d.puntencara) { delete $('#full').dataset.encaraNo; tancaFull(); fes(D.encaraNo(+d.puntencara), 'Sense nota, de moment. Tornarà.', { abans: estat.abansSortida }); return; }
-  if (d.torna) { delete $('#full').dataset.encaraNo; tancaFull(); fes(D.tornaARotacio(+d.torna), 'Torna a la rotació', { abans: estat.abansSortida }); return; }
+  if (d.puntencara) { delete $('#full').dataset.encaraNo; estat.sortint = null; estat.tagsSortida = null; tancaFull(); fes(D.encaraNo(+d.puntencara), 'Sense nota, de moment. Tornarà.', { abans: estat.abansSortida }); return; }
+  if (d.torna) { delete $('#full').dataset.encaraNo; estat.sortint = null; estat.tagsSortida = null; tancaFull(); fes(D.tornaARotacio(+d.torna), 'Torna a la rotació', { abans: estat.abansSortida }); return; }
   if (d.espera) { tancaFull(); fes(D.deixaEsperant(+d.espera), 'La caixa queda esperant', { abans: estat.abansSortida }); return; }
   if (d.treuedicio) { const id = +d.treuedicio; const x = rot(id); tancaFull(); fes(D.treu(id), 'Fora de rotació', { abans: estat.abansSortida }); if (x) fullPuntuar(x); return; }
   if (d.seguent) { const [id, n] = d.seguent.split(':').map(Number); tancaFull(); fes(D.posaPart(id, n), 'La part ' + n + ' entra en rotació', { abans: estat.abansSortida }); return; }
   if (d.repren) { const x = rot(d.repren); tancaFull(); if (x) fullRepren(x); return; }
   if (d.reprenpart) { const [id, n] = d.reprenpart.split(':').map(Number); tancaFull(); fes(D.posaPart(id, n), 'La part ' + n + ' entra en rotació'); return; }
   if (d.fespref) { const aid = +d.fespref; tancaFull(); fes(D.afegeixPreferentId(aid), 'Afegit a Artistes Preferents'); sub('pref'); return; }
+
+  // La fitxa que creix (bloc 3.2 bis)
+  if (d.canalfitxa) { const x = rot(d.canalfitxa); if (x) fullCanal(x); return; }
+  if (d.desacanal) { const [id, k] = d.desacanal.split(':'); const x = rot(id); if (!x) return;
+    fes(D.canviaCanal(+id, k), `Canal: ${CANALS[k].nom}. Queda recordat.`); fullFitxa(rot(id)); return; }
+  if (d.notafitxa) { const x = rot(d.notafitxa); if (x) fullNota(x); return; }
+  if (d.modenota) { const x = rot(estat.notaDe); if (x) fullNota(x, d.modenota); return; }
+  if (d.desanota) { const [mode, v] = d.desanota.split(':'); const id = estat.notaDe, x = rot(id); if (!x) return;
+    const nom = nomNota(+v);
+    fes(mode === 'subst' ? D.substitueixNota(id, +v) : D.puntua(id, +v), mode === 'subst' ? 'Nota substituïda: ' + nom : 'Nota: ' + nom);
+    fullFitxa(rot(id)); return; }
+  if (d.tag) { const nom = d.tag; tocaTags(x => { const r = T.commuta(x.album_tags, x.tags, nom);
+      if (x.n_edicions > 1 && T.SI_NO.find(y => y.nom === nom)?.nivell === 'album') avisa('També canvia a l\'altra edició.'); return r; }); return; }
+  if (d.veu) { const v = d.veu; tocaTags(x => ({ album: T.posaValor(x.album_tags, T.VEU, v), edicio: x.tags })); return; }
+  if (d.estacio) { const v = d.estacio; tocaTags(x => ({ album: T.posaValor(x.album_tags, T.ESTACIO, v), edicio: x.tags })); return; }
+  if (d.idioma) { const v = d.idioma; tocaTags(x => ({ album: T.commutaIdioma(x.album_tags, v), edicio: x.tags })); return; }
+  if (d.altreidioma) { t.outerHTML = `<span class="nou-idioma"><input id="inIdioma" type="text" autocomplete="off" placeholder="p. ex. francès"><button data-desaidioma="1">Afegeix</button></span>`;
+    setTimeout(() => $('#inIdioma')?.focus(), 30); return; }
+  if (d.desaidioma) { const v = T.idiomaCanonic($('#inIdioma')?.value); if (!v) { avisa('Escriu un idioma.'); return; }
+    tocaTags(x => { const ja = T.llegeix(x.album_tags, x.tags).idiomes.includes(v);
+      return { album: ja ? x.album_tags : T.commutaIdioma(x.album_tags, v), edicio: x.tags }; }); return; }
 
   // Imatges (bloc 3.2)
   if (d.canviaportada) { const x = rot(d.canviaportada); if (x) fullPortada(x); return; }
@@ -645,6 +743,14 @@ async function despresDeConnectar() {
     catch (e) { avisa('No he pogut fer la còpia de seguretat (' + e.message + '): l\'ajust del car pendent espera a la propera connexió.'); return; }
     const fets = await fes(D.ajustaCarPendent3010, 'Car pendent del 30-10 aplicat');
     obreFull(`<h3>El «car pendent» del 30-10</h3><p>Abans de tocar res, s'ha desat una còpia de l'arxiu al Drive, al costat de l'original.</p>
+      <ul class="fitxa-dades">${fets.map(f => `<li><span>${esc(f)}</span></li>`).join('')}</ul>
+      <p>Si alguna cosa no quadra, «Desfés» a l'avís ho torna tot enrere.</p>`);
+  }
+  if (!D.ajust32bisFet(db())) {
+    try { await A.copiaAlDrive('abans de l\'ajust del bloc 3.2 bis'); }
+    catch (e) { avisa('No he pogut fer la còpia de seguretat (' + e.message + '): l\'ajust dels tags i dels codis espera a la propera connexió.'); sondes(); return; }
+    const fets = await fes(D.ajusta32bis, 'Tags i codis de Bandcamp posats al seu lloc');
+    obreFull(`<h3>Ajust del bloc 3.2 bis</h3><p>Abans de tocar res, s'ha desat una còpia de l'arxiu al Drive.</p>
       <ul class="fitxa-dades">${fets.map(f => `<li><span>${esc(f)}</span></li>`).join('')}</ul>
       <p>Si alguna cosa no quadra, «Desfés» a l'avís ho torna tot enrere.</p>`);
   }
