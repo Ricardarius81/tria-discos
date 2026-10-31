@@ -12,7 +12,7 @@ const llista = s => { try { return s ? JSON.parse(s) : []; } catch { return []; 
 const json = v => (v && v.length ? JSON.stringify(v) : null);
 const ara = () => new Date().toISOString();
 import * as T from './tags.js?v=1';
-import { SQL_COMPTA } from './escoltes.js?v=1';
+import { SQL_COMPTA } from './escoltes.js?v=2';
 
 const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
 
@@ -120,6 +120,18 @@ export const canviaDurada = (id, min, partId) => db => partId
   ? db.run('UPDATE part SET durada = ? WHERE id = ?', [min, partId])
   : db.run('UPDATE edicio SET durada_total = ? WHERE id = ?', [min, id]);
 export const canviaCanal = (id, canal) => db => db.run('UPDATE edicio SET app_escolta = ? WHERE id = ?', [canal, id]);
+
+// Els canals escrits a mà (v1.35, «Altre»): entren a la llista i la propera vegada surten com a opció.
+// Viuen a meta, clau 'canals-propis' (camp de la construcció, per ratificar), i viatgen amb l'arxiu.
+// A Edició.App d'escolta s'hi escriu 'propi:<nom>'. No tenen adreça: el ▶ no pot obrir res.
+const CANALS_PROPIS = 'canals-propis';
+export const canalsPropis = db => llista(un(db, 'SELECT valor FROM meta WHERE clau = ?', [CANALS_PROPIS])?.valor);
+export const afegeixCanalPropi = nom => db => {
+  const l = canalsPropis(db);
+  if (!l.some(x => norm(x) === norm(nom))) l.push(nom);
+  db.run('INSERT OR REPLACE INTO meta (clau, valor) VALUES (?, ?)', [CANALS_PROPIS, JSON.stringify(l)]);
+  return 'propi:' + l.find(x => norm(x) === norm(nom));
+};
 
 // Treure una edició sencera de la rotació (amb totes les seves parts).
 export const treu = id => db => {

@@ -8,8 +8,8 @@
 // Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 
 import * as A from './arxiu.js?v=10';
-import * as D from './dades.js?v=10';
-import * as E from './escoltes.js?v=1';
+import * as D from './dades.js?v=11';
+import * as E from './escoltes.js?v=2';
 import * as LB from './listenbrainz.js?v=1';
 import * as I from './imatges.js?v=3';
 import * as T from './tags.js?v=1';
@@ -43,10 +43,22 @@ function enllac(canal, d) {
                 : { href: CANALS.bandcamp.url(q), nota: 'cerca: falta el codi', ext: true };
   }
   if (canal === 'aimp') return { href: AIMP_APP(), nota: "obre l'app; el disc el tries tu", ext: false };
+  if (CANALS[canal]?.propi) return { href: '#', nota: "obre-ho tu: no en té l'adreça", ext: false, propi: CANALS[canal].nom };
   const c = CANALS[canal] || CANALS.amazon;
   return { href: c.url(q), nota: 'obre la cerca', ext: true };
 }
-const aAttrs = e => `href="${esc(e.href)}" ${e.ext ? 'target="_blank" rel="noopener"' : ''}`;
+const aAttrs = e => `href="${esc(e.href)}" ${e.ext ? 'target="_blank" rel="noopener"' : ''}${e.propi ? ` data-propi="${esc(e.propi)}"` : ''}`;
+// Els canals escrits a mà (v1.35) s'afegeixen als quatre de sempre cada vegada que es pinta.
+function sincroCanals() {
+  if (!A.estat.db) return;
+  for (const k of Object.keys(CANALS)) if (CANALS[k].propi) delete CANALS[k];
+  for (const nom of D.canalsPropis(A.estat.db)) CANALS['propi:' + nom] = { nom, url: null, propi: true };
+}
+const nomCanal = k => CANALS[k]?.nom || (k?.startsWith('propi:') ? k.slice(6) : k) || '—';
+// «Un altre…»: el botó i el camp per escriure'l. El mateix a la targeta de disc nou i a la fulla del canal.
+const altreCanal = (obert, on, val) => obert
+  ? `<span class="sf-altre"><input id="inCanalNou" type="text" placeholder="Nom del canal" autocomplete="off"><button class="principal" data-afegeixcanal="${on}|${esc(val)}">Afegeix</button></span>`
+  : `<button class="mes" data-obrealtrecanal="${on}|${esc(val)}">Un altre…</button>`;
 
 // ───────── estat de la pantalla ─────────
 const estat = { superficie: 'entrada', sub: 'rot', ordena: false, ordreTmp: null, artista: null, escoltant: null, ultima: null, lloc: 'Fora', gps: 'Encara no s\'ha mirat la ubicació.' };
@@ -104,6 +116,7 @@ async function fes(fn, text, { desfes = true, abans = null } = {}) {
 // ───────── pintar ─────────
 function pinta() {
   if (!A.estat.db) return;
+  sincroCanals();
   pintaReixa(); pintaFiles(); pintaHistorial(); pintaSafata();
   if (estat.superficie === 'artista' && estat.artista) pintaArtista(estat.artista);
   I.omple();
@@ -344,6 +357,7 @@ function idsDe(clau, tg) {
   return (d ? c.discos.find(x => x.clau === d)?.scr || [] : c.scr).map(s => s.id);
 }
 function pintaSafata() {
+  sincroCanals();
   const cua = cuaSafata(), n = cua.q2.length + cua.nous.length + cua.rot.length + cua.tg.length;
   const p = $('#safataNum'); if (p) { p.textContent = n; p.classList.toggle('zero', !n); }
   const caixa = $('#safataCos'); if (!caixa) return;
@@ -371,7 +385,8 @@ function pintaSafata() {
         <input data-sfdur="${esc(x.clau)}" type="number" inputmode="numeric" min="1" value="${x.proposta.minuts}"></label>
       ${x.proposta.font === 'el que ha sonat' ? `<p class="sf-pre">Només és la del disc si l'has sentit sencer.</p>` : ''}
       <p class="sf-q">Per on l'escoltes?</p>
-      <div class="sf-chips">${Object.keys(CANALS).map(k => `<button class="${canal === k ? 'triat' : ''}" data-sfcanal="${esc(x.clau)}|${k}">${esc(CANALS[k].nom)}</button>`).join('')}</div>
+      <div class="sf-chips">${Object.keys(CANALS).map(k => `<button class="${canal === k ? 'triat' : ''}" data-sfcanal="${esc(x.clau)}|${esc(k)}">${esc(CANALS[k].nom)}</button>`).join('')}
+        ${altreCanal(estat.altreCanalDe === 'nou:' + x.clau, 'nou', x.clau)}</div>
       ${canal === 'bandcamp' ? `<p class="sf-pre">El codi de Bandcamp el busca Claude cada nit. No has de fer res.</p>` : ''}
       <div class="sf-chips" style="margin-top:12px">
         <button class="principal" data-sfnou="${esc(x.clau)}|arxiu">Desa'l</button>
@@ -399,7 +414,8 @@ function pintaSafata() {
     const fila = d => {
       const k = d.clau.slice(1), esSolta = !d.edicio_id && solta.has(d.clau[0] === 'm' ? 'msid:' + k : k);
       const extra = d.edicio_id ? '' : esSolta ? ` · <i>cançó solta</i>` : ` · <i>pendent: a dalt</i>`;
-      return minDisc(d, extra) + (esSolta ? `<button class="sf-link" style="padding:0 0 6px 54px" data-sfdisc="${esc(d.clau[0] === 'm' ? 'msid:' + k : k)}">És un disc</button>` : '');
+      return minDisc(d, extra) + (esSolta ? `<button class="sf-link" style="padding:0 0 6px 54px" data-sfdisc="${esc(d.clau[0] === 'm' ? 'msid:' + k : k)}">És un disc</button>` : '')
+        + (d.edicio_id ? `<button class="sf-link sf-canal" data-sfcanaldisc="${d.edicio_id}">Canal: ${esc(nomCanal(d.app_escolta))} · canvia'l</button>` : '');
     };
     const cos = sep
       ? c.discos.map(d => `<div class="sf-separat">${fila(d)}${xipsContext('d' + c.clau + ':' + d.clau, c, 'On escoltaves aquest?')}</div>`).join('')
@@ -615,8 +631,10 @@ function fullNota(d, mode) {
 
 // El canal, des de la fitxa: el mateix camp que «Un altre canal» (Edició.App d'escolta, ACT-232). Queda recordat.
 function fullCanal(d) {
+  sincroCanals();
   obreFull(`<h3>El canal de ${esc(d.titol)}</h3><p>Per on l'escoltes. El ▶ el farà servir a partir d'ara.</p>
-    <div class="canals">${Object.keys(CANALS).map(k => `<button data-desacanal="${d.id}:${k}" class="${d.app_escolta === k ? 'triat' : ''}">${CANALS[k].nom}${d.app_escolta === k ? ' <small>ara</small>' : ''}</button>`).join('')}</div>`);
+    <div class="canals">${Object.keys(CANALS).map(k => `<button data-desacanal="${d.id}|${esc(k)}" class="${d.app_escolta === k ? 'triat' : ''}">${esc(CANALS[k].nom)}${d.app_escolta === k ? ' <small>ara</small>' : ''}${CANALS[k].propi ? ' <small>sense adreça</small>' : ''}</button>`).join('')}</div>
+    <div class="sf-chips" style="margin-top:12px">${altreCanal(estat.altreCanalDe === 'disc:' + d.id, 'disc', d.id)}</div>`);
 }
 
 // ───────── els tags (bloc 3.2 bis, §6.3 i pregunta 11 del §8.10) ─────────
@@ -855,6 +873,7 @@ document.addEventListener('click', e => {
 
   // Els enllaços d'escoltar naveguen sols; aquí només s'apunta l'obertura (opció C de l'ordre).
   if (t.tagName === 'A') {
+    if (d.propi) { e.preventDefault(); avisa(`Obre-ho tu a ${d.propi}: la màquina no en té l'adreça.`); }
     if (d.obre) { const id = +d.obre; setTimeout(() => fes(D.obre(id), null), 0); if ($('#full').classList.contains('obert')) tancaFull(); }
     return;
   }
@@ -945,6 +964,7 @@ document.addEventListener('click', e => {
     obreFull(`<h3>${esc(franja(c))}</h3><p>${esc(c.context || '')}</p><div class="canals">
       <button data-sfreobre="${c.scr.map(x => x.id).join(',')}">On ho escoltaves <small>torna la targeta a la safata</small></button>
       ${c.discos.filter(x => x.edicio_id).map(x => `<button data-canviaedicio="${x.edicio_id}">L'edició de ${esc(x.titol)} <small>la mateixa operació que a la fitxa</small></button>`).join('')}
+      ${c.discos.filter(x => x.edicio_id).map(x => `<button data-sfcanaldisc="${x.edicio_id}">El canal de ${esc(x.titol)} <small>ara: ${esc(nomCanal(x.app_escolta))}</small></button>`).join('')}
     </div>`); return; }
   if (d.sfreobre) { tancaFull(); fes(E.reobre(d.sfreobre.split(',').map(Number)), 'Torna a la safata'); return; }
   if (d.canviaedicio) { const x = D.fitxa(db(), +d.canviaedicio); if (x) fullEdicio(x); return; }
@@ -956,7 +976,25 @@ document.addEventListener('click', e => {
     fes(E.canviaEdicio({ de, a, correccio: !!si }), si ? 'Corregit: les escoltes i la nota són de l\'altra edició' : 'Canviada l\'edició en rotació'); return; }
   if (d.sfdisc) { fes(E.declaraDisc(d.sfdisc), 'És un disc: et pregunto la durada a dalt'); return; }
   // el disc nou
-  if (d.sfcanal) { const [k, c] = d.sfcanal.split('|'); (estat.nouCanalDe ||= {})[k] = c; pintaSafata(); return; }
+  if (d.sfcanal) { const i = d.sfcanal.lastIndexOf('|'), k = d.sfcanal.slice(0, i), c = d.sfcanal.slice(i + 1);
+    (estat.nouCanalDe ||= {})[k] = c; delete estat.altreCanalDe; pintaSafata(); return; }
+  // El canal d'un disc que ja és a l'arxiu, des de la safata (targeta oberta o «Canvia» d'una resolta): el mateix camp
+  // que a la fitxa (Edició.App d'escolta). Queda recordat i és el que proposarà als discos nous del mateix artista.
+  if (d.sfcanaldisc) { const x = rot(d.sfcanaldisc); if (!x) return; estat.canalDes = 'safata'; delete estat.altreCanalDe; fullCanal(x); return; }
+  if (d.obrealtrecanal) { const [on, v] = d.obrealtrecanal.split(/\|(.*)/s);
+    estat.altreCanalDe = on + ':' + v;
+    if (on === 'nou') { pintaSafata(); } else { const x = rot(v); if (x) fullCanal(x); }
+    setTimeout(() => $('#inCanalNou')?.focus(), 0); return; }
+  if (d.afegeixcanal) { const [on, v] = d.afegeixcanal.split(/\|(.*)/s), nom = $('#inCanalNou')?.value.trim();
+    if (!nom) { avisa('Cal un nom.'); return; }
+    const base = Object.keys(CANALS).find(k => !CANALS[k].propi && CANALS[k].nom.toLowerCase() === nom.toLowerCase());
+    delete estat.altreCanalDe;
+    if (on === 'nou') {
+      if (base) { (estat.nouCanalDe ||= {})[v] = base; pintaSafata(); return; }
+      fes(y => { (estat.nouCanalDe ||= {})[v] = D.afegeixCanalPropi(nom)(y); }, `${nom} queda a la llista de canals`, { desfes: false }); return; }
+    if (base) { fes(D.canviaCanal(+v, base), `Canal: ${CANALS[base].nom}. Queda recordat.`); }
+    else fes(y => { D.canviaCanal(+v, D.afegeixCanalPropi(nom)(y))(y); }, `Canal: ${nom}. Queda a la llista i recordat.`);
+    if (estat.canalDes === 'safata') tancaFull(); else { const x = rot(v); if (x) fullFitxa(x); } return; }
   if (d.sfnoupref) { (estat.nouPrefDe ||= {})[d.sfnoupref] = !estat.nouPrefDe?.[d.sfnoupref]; pintaSafata(); return; }
   if (d.sfnouignora) { const x = E.discosNous(db(), mbCache).nous.find(y => y.clau === d.sfnouignora); if (!x) return;
     fes(E.ignora(x.scr), (x.album || x.pista) + ': ignorat'); return; }
@@ -989,9 +1027,10 @@ document.addEventListener('click', e => {
   if (d.hgrup) { fullGrupHistorial(d.hgrup); return; }
 
   // La fitxa que creix (bloc 3.2 bis)
-  if (d.canalfitxa) { const x = rot(d.canalfitxa); if (x) fullCanal(x); return; }
-  if (d.desacanal) { const [id, k] = d.desacanal.split(':'); const x = rot(id); if (!x) return;
-    fes(D.canviaCanal(+id, k), `Canal: ${CANALS[k].nom}. Queda recordat.`); fullFitxa(rot(id)); return; }
+  if (d.canalfitxa) { const x = rot(d.canalfitxa); if (x) { estat.canalDes = 'fitxa'; delete estat.altreCanalDe; fullCanal(x); } return; }
+  if (d.desacanal) { const i = d.desacanal.indexOf('|'), id = d.desacanal.slice(0, i), k = d.desacanal.slice(i + 1); const x = rot(id); if (!x) return;
+    fes(D.canviaCanal(+id, k), `Canal: ${nomCanal(k)}. Queda recordat.`);
+    if (estat.canalDes === 'safata') tancaFull(); else fullFitxa(rot(id)); return; }
   if (d.notafitxa) { const x = rot(d.notafitxa); if (x) fullNota(x); return; }
   if (d.modenota) { const x = rot(estat.notaDe); if (x) fullNota(x, d.modenota); return; }
   if (d.desanota) { const [mode, v] = d.desanota.split(':'); const id = estat.notaDe, x = rot(id); if (!x) return;

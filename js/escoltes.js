@@ -353,7 +353,7 @@ export function targetes(db, { estat = 'pendent', limit = null } = {}) {
     if (!cur || s.t - fi > SILENCI_TARGETA) { cur = { scr: [] }; out.push(cur); fi = 0; }
     cur.scr.push(s); fi = Math.max(fi, s.t + (s.duration_ms || 0));
   }
-  const eds = new Map(files(db, `SELECT e.id, a.titol, ar.nom_canonic AS art, e.durada_total, e.portada
+  const eds = new Map(files(db, `SELECT e.id, a.titol, ar.nom_canonic AS art, e.durada_total, e.portada, e.app_escolta
                                  FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id`).map(e => [e.id, e]));
   for (const c of out) {
     c.clau = c.scr[0].id;                         // la targeta es reconeix per la seva primera pista
