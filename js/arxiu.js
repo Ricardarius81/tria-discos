@@ -125,6 +125,16 @@ function migra(db) {
   }
   return MIGRACIONS.length - v; // quantes s'han aplicat
 }
+// Abans que una estructura nova toqui l'arxiu del Drive, se'n desa una còpia tal com era, al costat de l'original.
+// Es mira la versió dels bytes del Drive: si ja és l'última, no cal. Si la còpia falla, no es puja res (es torna a provar).
+async function copiaAbansDeMigrar(bytes, carpetaId) {
+  const t = new SQL.Database(bytes);
+  const v = t.exec('PRAGMA user_version')[0].values[0][0]; t.close();
+  if (v >= MIGRACIONS.length) return false;
+  const nom = `${NOM_ARXIU} · abans de l'estructura ${MIGRACIONS.length} ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+  await creaFitxer(nom, SQLITE_MIME, carpetaId ? [carpetaId] : null, bytes);
+  return true;
+}
 function integritat(db) {
   try { return db.exec('PRAGMA integrity_check')[0].values[0][0]; } catch (e) { return String(e.message || e); }
 }
@@ -162,6 +172,7 @@ export async function obre() {
     const avis = trobats.length > 1 ? `Hi ha ${trobats.length} fitxers amb el nom de l'arxiu; s'obre el més recent (H-04).` : null;
     if (copia?.pendent && copia.fitxerId === f.id) {
       if (copia.base === f.modifiedTime) {           // els canvis locals parteixen de la versió que hi ha al Drive
+        await copiaAbansDeMigrar(await baixa(f.id), copia.carpetaId || f.parents?.[0]);
         obreBytes(copia.bytes); Object.assign(estat, { fitxerId: f.id, carpetaId: copia.carpetaId, base: f.modifiedTime, pendent: true, origen: 'local' });
         const r = await desa();                      // i es pugen ara mateix: no s'esperen a un altre canvi
         return { cas: 'obert', avis, desat: r };
@@ -169,6 +180,7 @@ export async function obre() {
       return { cas: 'conflicte', drive: f, copia };  // el Drive ha canviat des d'un altre lloc i aquí hi ha canvis sense pujar
     }
     const bytes = await baixa(f.id);
+    await copiaAbansDeMigrar(bytes, f.parents?.[0]);
     obreBytes(bytes);
     const ok = integritat(estat.db);
     if (ok !== 'ok') return { cas: 'malmes', detall: ok, fitxer: f };
@@ -345,4 +357,34 @@ export async function copiaAlDrive(etiqueta) {
   if (!tePermis()) throw new Error('cal connectar amb el Drive');
   const nom = `${NOM_ARXIU} · ${etiqueta} ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
   return creaFitxer(nom, SQLITE_MIME, estat.carpetaId ? [estat.carpetaId] : null, estat.db.export());
+}
+
+// ───────── la bústia de Bandcamp (bloc 3.5, §3.1, v1.38) ─────────
+// Dos fitxers fixos dins de «La Meva Discoteca», un per sentit, cadascun amb un sol escriptor (ACT-294):
+// el de pendents l'escriu la màquina i el llegeix la tasca; el full de codis l'escriu la tasca (només afegint files)
+// i el llegeix la màquina. La màquina només veu els fitxers que ha creat ella (drive.file): per això els crea ella.
+// El de pendents és text pla, una línia per disc i sense claudàtors: el connector el torna convertit a text i a la prova
+// del 14-10 va alterar els claudàtors del .json (ACT-297). Decisió de construcció, per ratificar.
+export const BUSTIA_PENDENTS = 'tria-discos-bustia-pendents.txt';
+export const BUSTIA_CODIS = 'tria-discos-bustia-codis';
+const FULL_MIME = 'application/vnd.google-apps.spreadsheet';
+async function fitxerBustia(nom, mimeDesti, mimeCos, inicial) {
+  const ja = (await buscar(nom, { pare: estat.carpetaId, mime: mimeDesti }))[0];
+  if (ja) return ja.id;
+  return (await creaFitxer(nom, mimeDesti, estat.carpetaId ? [estat.carpetaId] : null, new Blob([inicial], { type: mimeCos }))).id;
+}
+// Torna les files del full de codis: [{ clau, codi, data, url }].
+export async function llegeixCodisBustia() {
+  if (!tePermis()) throw new Error('cal connectar amb el Drive');
+  const id = await fitxerBustia(BUSTIA_CODIS, FULL_MIME, 'text/csv', 'clau,codi,data,url\n');
+  const csv = await (await g(`${DRIVE}/${id}/export?mimeType=text/csv`)).text();
+  return csv.trim().split(/\r?\n/).slice(1).map(l => l.split(',').map(x => x.replace(/^"|"$/g, '').trim()))
+    .filter(c => c[0] && c[1]).map(([clau, codi, data, url]) => ({ clau, codi, data: data || '', url: url || '' }));
+}
+// Sobreescriu el fitxer de pendents (el mateix fitxer sempre: sobreescriure el conserva, sonda d'agost).
+export async function escriuPendentsBustia(text) {
+  if (!tePermis()) throw new Error('cal connectar amb el Drive');
+  const id = await fitxerBustia(BUSTIA_PENDENTS, 'text/plain', 'text/plain', '');
+  const r = await g(`${PUJADA}/${id}?uploadType=media&fields=id,modifiedTime`, { method: 'PATCH', headers: { 'Content-Type': 'text/plain; charset=UTF-8' }, body: text });
+  return r.json();
 }

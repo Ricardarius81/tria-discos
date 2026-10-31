@@ -7,7 +7,7 @@
 // Blocs 3.3 + 3.4 + 3.5 (v1.44), una sola publicació: les escoltes de ListenBrainz, la safata viva i la bústia.
 // Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 
-import * as A from './arxiu.js?v=9';
+import * as A from './arxiu.js?v=10';
 import * as D from './dades.js?v=10';
 import * as E from './escoltes.js?v=1';
 import * as LB from './listenbrainz.js?v=1';
@@ -410,7 +410,7 @@ function pintaSafata() {
   // les resoltes, amb «Canvia» (tot el que es contesta aquí és editable sempre, §8.7)
   const res = E.targetes(db(), { estat: 'resolt', limit: 8 });
   if (res.length) h += `<h2 style="margin-top:22px">Resoltes</h2>` + res.map(c => `<div class="sf-resolta"><span><b>${esc(franja(c))}</b> · ${esc(c.discos.map(d => d.titol).join(', '))} · ${esc(c.context || '')}</span>
-      <button data-sfreobre="${c.scr.map(x => x.id).join(',')}">Canvia</button></div>`).join('');
+      <button data-sfresolta="${c.clau}">Canvia</button></div>`).join('');
   caixa.innerHTML = h;
   I.omple(caixa);
   if (cua.nous.some(x => x.mbid && !mbCache.has(x.mbid))) consultaMB(cua.nous);
@@ -572,7 +572,7 @@ function fullFitxa(d) {
       <li><b>Canal</b><span>${esc(canal)}${codi} <button class="sf-link" style="padding:0 0 0 8px" data-canalfitxa="${d.id}">canvia'l</button></span></li>
       <li><b>Nota</b><span>${textNota(d)} <button class="sf-link" style="padding:0 0 0 8px" data-notafitxa="${d.id}">${d.nota ? 'canvia-la' : 'posa-li nota'}</button></span></li>
       ${d.formats.length ? `<li><b>Format</b><span>${esc(d.formats.map(f => NOMS_FISICS[f] || f).join(', '))}</span></li>` : ''}
-      ${d.nom_edicio ? `<li><b>Edició</b><span>${esc(d.nom_edicio)}</span></li>` : ''}
+      <li><b>Edició</b><span>${d.nom_edicio ? esc(d.nom_edicio) : (d.n_edicions > 1 ? 'sense nom' : 'l\'única que hi ha')} <button class="sf-link" style="padding:0 0 0 8px" data-canviaedicio="${d.id}">canvia-la</button></span></li>
       ${d.discosGrup.length > 1 ? `<li><b>Grup</b><span>${d.discosGrup.map(x => x.id === d.album_id ? `<u>${esc(x.titol)}</u>` : esc(x.titol)).join(' · ')}</span></li>` : ''}
       ${d.parts.length ? `<li><b>Part viva</b><span>${d.esperant ? 'cap: la caixa espera' : esc(d.viva.nom || '') + ' · ' + d.viva.numero + ' de ' + d.parts.length}</span></li>` : ''}
       <li><b>Portada</b><span>${ORIGEN_PORTADA[d.portada ? d.portada_origen || 'escolta' : d.portada_origen === 'rebutjada' ? 'rebutjada' : 'cap']}
@@ -649,6 +649,27 @@ function tocaTags(fn) {
   if (estat.sortint === d.id) estat.tagsSortida = { id: d.id, album_id: d.album_id, ...r };
   const nou = D.fitxa(db(), d.id);
   if (nou && $('#blocTags')) { $('#blocTags').outerHTML = blocTags(nou); }
+}
+
+// «Canvia l'edició» (ACT-308, ACT-466, ACT-467): triar una altra edició de l'àlbum, o crear-ne una. Si la que hi ha té
+// escoltes, emparellaments o nota, es pregunta si eren de l'altra: sí = es corregeix l'error; no = només canvia la de rotació.
+function fullEdicio(d) {
+  const altres = E.altresEdicions(db(), d.id);
+  obreFull(`<h3>Canvia l'edició</h3><p>${esc(d.titol)} · ${esc(d.art)} · ara: ${d.nom_edicio ? esc(d.nom_edicio) : 'sense nom'}, ${d.durada_total}′</p>
+    ${altres.length ? `<div class="canals">${altres.map(x => `<button data-triaedicio="${d.id}:${x.id}">${x.nom_edicio ? esc(x.nom_edicio) : 'Sense nom'} <small>${x.durada_total}′${x.rotacio_actual ? ' · en rotació' : ''}</small></button>`).join('')}</div>` : ''}
+    <p style="margin:14px 0 6px"><b>Una altra edició</b> · no és a l'arxiu. Com tot disc, demana la durada.</p>
+    <label class="camp"><span>Nom de l'edició</span><input id="inEdNom" type="text" autocomplete="off" placeholder="p. ex. 25th Anniversary Edition"></label>
+    <label class="camp"><span>Durada en minuts</span><input id="inEdMin" type="number" inputmode="numeric" min="1"></label>
+    <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-novaedicio="${d.id}">Crea-la i canvia</button></div>`);
+}
+function preguntaCorreccio(de, a) {
+  const d = D.fitxa(db(), de), n = D.fitxa(db(), a);
+  if (!E.teRastre(db(), de)) { fes(E.canviaEdicio({ de, a, correccio: false }), `Ara és ${n.nom_edicio || 'l\'altra edició'}`); tancaFull(); return; }
+  obreFull(`<h3>Les escoltes d'abans</h3><p>${esc(d.titol)}: les escoltes i la nota que té ${d.nom_edicio ? esc(d.nom_edicio) : 'aquesta edició'}, eren de ${n.nom_edicio ? esc(n.nom_edicio) : 'l\'altra'}?</p>
+    <div class="canals">
+      <button data-correccio="${de}:${a}:1">Sí, eren d'aquesta <small>es corregeix l'error: es mouen les escoltes, el que la safata recorda i la nota</small></button>
+      <button data-correccio="${de}:${a}:0">No <small>només canvia la que tinc en rotació</small></button>
+    </div>`);
 }
 
 function fullDurada(d) {
@@ -920,7 +941,19 @@ document.addEventListener('click', e => {
   if (d.sfsepara) { (estat.separades ||= new Set()).add(+d.sfsepara); pintaSafata(); return; }
   if (d.sfignora) { const ids = idsDe(d.sfignora, E.targetes(db())); if (!ids.length) return;
     fes(E.ignora(ids), 'Ignorat. No compta i no tornarà.'); return; }
-  if (d.sfreobre) { fes(E.reobre(d.sfreobre.split(',').map(Number)), 'Torna a la safata'); return; }
+  if (d.sfresolta) { const c = E.targetes(db(), { estat: 'resolt' }).find(x => x.clau === +d.sfresolta); if (!c) return;
+    obreFull(`<h3>${esc(franja(c))}</h3><p>${esc(c.context || '')}</p><div class="canals">
+      <button data-sfreobre="${c.scr.map(x => x.id).join(',')}">On ho escoltaves <small>torna la targeta a la safata</small></button>
+      ${c.discos.filter(x => x.edicio_id).map(x => `<button data-canviaedicio="${x.edicio_id}">L'edició de ${esc(x.titol)} <small>la mateixa operació que a la fitxa</small></button>`).join('')}
+    </div>`); return; }
+  if (d.sfreobre) { tancaFull(); fes(E.reobre(d.sfreobre.split(',').map(Number)), 'Torna a la safata'); return; }
+  if (d.canviaedicio) { const x = D.fitxa(db(), +d.canviaedicio); if (x) fullEdicio(x); return; }
+  if (d.triaedicio) { const [de, a] = d.triaedicio.split(':').map(Number); preguntaCorreccio(de, a); return; }
+  if (d.novaedicio) { const de = +d.novaedicio, min = parseInt($('#inEdMin').value, 10), nom = $('#inEdNom').value.trim();
+    if (!min || min < 1) { avisa('Cap disc entra sense durada.'); return; }
+    let a; fes(y => { a = E.creaEdicio(de, { nom, minuts: min })(y); }, null, { desfes: false }).then(() => preguntaCorreccio(de, a)); return; }
+  if (d.correccio) { const [de, a, si] = d.correccio.split(':').map(Number); tancaFull();
+    fes(E.canviaEdicio({ de, a, correccio: !!si }), si ? 'Corregit: les escoltes i la nota són de l\'altra edició' : 'Canviada l\'edició en rotació'); return; }
   if (d.sfdisc) { fes(E.declaraDisc(d.sfdisc), 'És un disc: et pregunto la durada a dalt'); return; }
   // el disc nou
   if (d.sfcanal) { const [k, c] = d.sfcanal.split('|'); (estat.nouCanalDe ||= {})[k] = c; pintaSafata(); return; }
@@ -1103,6 +1136,23 @@ async function despresDeConnectar() {
       <p>Si alguna cosa no quadra, «Desfés» a l'avís ho torna tot enrere.</p>`);
   }
   sondes();
+  bustia();
+}
+
+// La bústia de Bandcamp (bloc 3.5): primer es recullen els codis que ha deixat la tasca de nit, després s'escriu el que
+// falta. El fitxer de pendents només s'escriu si ha canviat, i buit si no falta res: la tasca acaba sense buscar (ACT-468).
+let bustiant = false;
+async function bustia() {
+  if (bustiant || !navigator.onLine || !A.tePermis()) return; bustiant = true;
+  try {
+    const codis = await A.llegeixCodisBustia();
+    const fets = codis.length ? await fes(E.aplicaCodis(codis), null, { desfes: false }) : [];
+    if (fets.length) avisa(`Bandcamp: ${fets.length === 1 ? 'un codi nou' : fets.length + ' codis nous'}. El ▶ ja obre el disc a l'app.`);
+    const text = E.textPendents(E.pendentsBandcamp(db()));
+    let abans = null; try { abans = localStorage.getItem('tria-bustia'); } catch {}
+    if (text !== abans) { await A.escriuPendentsBustia(text); try { localStorage.setItem('tria-bustia', text); } catch {} }
+  } catch (e) { estat.bustiaError = e.message; }
+  finally { bustiant = false; }
 }
 
 // La sonda no torna a provar cada dia el que no ha trobat: espera una setmana (es recorda en aquest mòbil).

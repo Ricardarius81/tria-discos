@@ -491,3 +491,78 @@ export function preguntesRotacio(db, ara = Date.now()) {
 export const respon7 = (id, si) => db => si ? db.run('UPDATE edicio SET rotacio_actual = 1 WHERE id = ?', [id])
                                           : db.run('UPDATE edicio SET data_referencia_rotacio = ? WHERE id = ?', [new Date().toISOString(), id]);
 export const tocaReferencia = id => db => db.run('UPDATE edicio SET data_referencia_rotacio = ? WHERE id = ?', [new Date().toISOString(), id]);
+
+// ═════════ Pas tres: la bústia de Bandcamp (bloc 3.5, §3.1) ═════════
+// Els discos de Bandcamp sense codi: «E<edició>» o «P<part>» per a cada part d'una caixa. Una línia per disc, sense
+// claudàtors (ACT-297), i res més: la tasca de nit llegeix només això (ACT-468, condició de Ricard).
+export function pendentsBandcamp(db) {
+  const eds = files(db, `SELECT e.id, a.titol, ar.nom_canonic AS art, e.nom_edicio, e.codi_bandcamp,
+                                (SELECT COUNT(*) FROM part p WHERE p.edicio_id = e.id) AS n_parts
+                         FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id
+                         WHERE e.app_escolta = 'bandcamp' ORDER BY e.id`);
+  const out = [];
+  for (const e of eds) {
+    if (!e.n_parts) { if (!e.codi_bandcamp) out.push({ clau: 'E' + e.id, art: e.art, titol: e.titol + (e.nom_edicio ? ' (' + e.nom_edicio + ')' : '') }); continue; }
+    for (const p of files(db, 'SELECT id, numero, nom FROM part WHERE edicio_id = ? AND codi_bandcamp IS NULL ORDER BY numero', [e.id]))
+      out.push({ clau: 'P' + p.id, art: e.art, titol: e.titol + ' — ' + (p.nom || 'part ' + p.numero) });
+  }
+  return out;
+}
+const net = s => String(s || '').replace(/[|\r\n]+/g, ' ').trim();
+export const textPendents = l => l.map(x => `${x.clau} | ${net(x.art)} | ${net(x.titol)}`).join('\n') + (l.length ? '\n' : '');
+// Les files del full: si n'hi ha dues per al mateix disc, mana la més recent (ACT-294). Mai trepitja un codi que ja hi és.
+export const aplicaCodis = files_ => db => {
+  const darrera = new Map();
+  for (const f of files_) { if (!/^\d{4,}$/.test(f.codi) || !/^[EP]\d+$/.test(f.clau)) continue;
+    const ja = darrera.get(f.clau); if (!ja || f.data >= ja.data) darrera.set(f.clau, f); }
+  const fets = [];
+  for (const [clau, f] of darrera) {
+    const [t, id] = [clau[0], +clau.slice(1)];
+    if (t === 'E') db.run('UPDATE edicio SET codi_bandcamp = ? WHERE id = ? AND codi_bandcamp IS NULL', [f.codi, id]);
+    else db.run('UPDATE part SET codi_bandcamp = ? WHERE id = ? AND codi_bandcamp IS NULL', [f.codi, id]);
+    if (db.getRowsModified()) fets.push(clau);
+  }
+  return fets;
+};
+
+// ═════════ «Canvia l'edició» (ACT-308, ACT-466 i ACT-467) ═════════
+// Les edicions del mateix àlbum, per triar-ne una altra.
+export const altresEdicions = (db, id) => files(db, `SELECT x.id, x.nom_edicio, x.durada_total, x.rotacio_actual FROM edicio x
+  WHERE x.album_id = (SELECT album_id FROM edicio WHERE id = ?) AND x.id != ? ORDER BY x.id`, [id, id]);
+// Si l'edició ja té alguna cosa que es podria moure: escoltes, emparellaments o nota.
+export function teRastre(db, id) {
+  const e = un(db, 'SELECT emparellaments FROM edicio WHERE id = ?', [id]);
+  return !!(llista(e?.emparellaments).length || un(db, 'SELECT 1 AS x FROM escolta WHERE edicio_id = ? LIMIT 1', [id]) || un(db, 'SELECT 1 AS x FROM puntuacio WHERE edicio_id = ? LIMIT 1', [id]));
+}
+// «Una altra edició»: una edició nova del mateix àlbum, que com tot disc demana durada (§2).
+export const creaEdicio = (deId, { nom, minuts, canal }) => db => {
+  if (!(minuts > 0)) throw new Error('Cap disc entra sense durada.');
+  const e = un(db, 'SELECT album_id, app_escolta FROM edicio WHERE id = ?', [deId]);
+  db.run(`INSERT INTO edicio (album_id, nom_edicio, durada_total, app_escolta, lot_carrega) VALUES (?, ?, ?, ?, 'CANVIA-EDICIO')`,
+    [e.album_id, nom || null, minuts, canal || e.app_escolta]);
+  return un(db, 'SELECT last_insert_rowid() AS id').id;
+};
+// La mateixa operació per les dues portes (ACT-466). correccio = «sí, les escoltes d'abans eren d'aquesta»: es mouen els
+// emparellaments recordats —i amb ells les escoltes, que se'n calculen— i la nota. Sense correcció, només canvia quina
+// edició és en rotació. En tots dos casos la rotació passa a la nova si la vella hi era.
+export const canviaEdicio = ({ de, a, correccio }) => db => {
+  if (correccio) {
+    const v = un(db, 'SELECT emparellaments FROM edicio WHERE id = ?', [de]), n = un(db, 'SELECT emparellaments FROM edicio WHERE id = ?', [a]);
+    const junts = [...llista(n?.emparellaments)];
+    for (const x of llista(v?.emparellaments)) if (!junts.some(y => norm(y) === norm(x))) junts.push(x);
+    db.run('UPDATE edicio SET emparellaments = ? WHERE id = ?', [junts.length ? JSON.stringify(junts) : null, a]);
+    db.run('UPDATE edicio SET emparellaments = NULL WHERE id = ?', [de]);
+    db.run('UPDATE puntuacio SET edicio_id = ? WHERE edicio_id = ?', [a, de]);
+    db.run(`UPDATE edicio SET data_darrera_pregunta_puntuacio = COALESCE(data_darrera_pregunta_puntuacio,
+              (SELECT data_darrera_pregunta_puntuacio FROM edicio WHERE id = ?)) WHERE id = ?`, [de, a]);
+    // les escoltes físiques, sense scrobble, es mouen a mà; les altres es tornen a calcular
+    db.run('UPDATE escolta SET edicio_id = ? WHERE edicio_id = ? AND id NOT IN (SELECT DISTINCT escolta_id FROM scrobble WHERE escolta_id IS NOT NULL)', [a, de]);
+  }
+  const v = un(db, 'SELECT rotacio_actual, data_referencia_rotacio, darrera_obertura FROM edicio WHERE id = ?', [de]);
+  if (v?.rotacio_actual) {
+    db.run('UPDATE edicio SET rotacio_actual = 0 WHERE id = ?', [de]);
+    db.run('UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ?, darrera_obertura = COALESCE(darrera_obertura, ?) WHERE id = ?',
+      [v.data_referencia_rotacio || new Date().toISOString(), v.darrera_obertura, a]);
+  }
+  return recalcula(db);
+};
