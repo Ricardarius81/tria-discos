@@ -131,6 +131,9 @@ export const MIGRACIONS = [
   //   a calcular les escoltes sense perdre el context que Ricard hi ha contestat. Camp de la construcció, per ratificar.
   // escolta.recording_msid es queda sense ús (es muda a scrobble), com els camps congelats de la v1.33:
   //   una migració publicada no esborra columnes.
+  // context i atencio: la resposta de la targeta, a cada pista. Escolta.Context i Escolta.Atenció es calculen d'aquí,
+  //   com tota l'escolta: si la resposta visqués només a l'escolta, una escolta de 15 hores que junta dues targetes
+  //   rebria la resposta de la primera, i una pista que encara no sap de quin disc és la perdria. Per ratificar.
   // L'Arrencada de les escoltes (ACT-453) viu a meta, clau 'arrencada-escoltes': viatja amb l'arxiu i amb la seva còpia.
   `
   CREATE TABLE scrobble (
@@ -146,6 +149,8 @@ export const MIGRACIONS = [
     caa_release_mbid TEXT,
     estat            TEXT NOT NULL DEFAULT 'pendent' CHECK (estat IN ('pendent', 'resolt', 'ignorat')),
     escolta_id       INTEGER REFERENCES escolta(id),
+    context          TEXT,                   -- la resposta de la targeta de la safata (pregunta 1)
+    atencio          TEXT,                   -- Efectes plens · Dormir · Estudi cant (pregunta 4)
     UNIQUE (compte, listened_at, recording_msid)
   );
   CREATE INDEX scrobble_temps ON scrobble(listened_at);

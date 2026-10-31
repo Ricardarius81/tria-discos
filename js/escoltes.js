@@ -150,8 +150,8 @@ function cronologia(scr) {
   return scr;
 }
 
-const compta = e => e.completitud != null && e.completitud >= (e.context === 'dormir' ? LLINDAR_DORMIR : LLINDAR);
-export const SQL_COMPTA = `(s.completitud >= ${LLINDAR} OR (s.context = 'dormir' AND s.completitud >= ${LLINDAR_DORMIR}))`;
+// Dormir compta amb el 50 % (§8.5, §4.6). Mentre la targeta és pendent no se sap si dormia: es calcula amb el 75 % (ACT-447).
+export const SQL_COMPTA = `(s.completitud >= ${LLINDAR} OR (s.atencio = 'Dormir' AND s.completitud >= ${LLINDAR_DORMIR}))`;
 
 // ───────── tornar a calcular les escoltes ─────────
 // Les escoltes que vénen de scrobbles es tornen a calcular senceres des dels scrobbles cada vegada que n'arriben
@@ -161,7 +161,7 @@ export const SQL_COMPTA = `(s.completitud >= ${LLINDAR} OR (s.context = 'dormir'
 export const recalcula = db => {
   const mapa = mapaEmparellaments(db);
   const scr = files(db, `SELECT s.id, s.compte, s.listened_at, s.duration_ms, s.recording_msid, s.album, s.caa_release_mbid,
-                                s.estat, s.escolta_id, e.context, e.atencio, e.part_id
+                                s.estat, s.escolta_id, s.context, s.atencio, e.part_id
                          FROM scrobble s LEFT JOIN escolta e ON e.id = s.escolta_id
                          WHERE s.estat != 'ignorat'`)
     .map(s => ({ ...s, t: ms(s.listened_at) }));
@@ -318,3 +318,176 @@ export function preguntes2(db) {
   }
   return out;
 }
+
+// ═════════ Pas dos: la safata viva (bloc 3.4) ═════════
+
+// Els contextos del §4.5, i els que refreden fort (columna Refredament), per a la pregunta 8.
+export const CONTEXTOS = ['A casa', 'Escolta activa', 'Conduint (sol)', 'Conduint (acompanyat)', 'Llegir', 'Llegir acompanyat',
+  'Dinar / sopar familiar', 'Treballant', 'Al gimnàs', 'Caminant / pel carrer', 'Netejar / Cuinar', 'Dutxa', 'Amor', 'Platja',
+  'Avió / Tren / Bus', 'Malalt al llit', 'Dormir'];
+const FORT = new Set(['Escolta activa', 'Conduint (sol)', 'Al gimnàs', 'Caminant / pel carrer', 'Netejar / Cuinar', 'Avió / Tren / Bus']);
+const HABITUALS_INICI = ['Treballant', 'A casa', 'Caminant / pel carrer', 'Avió / Tren / Bus', 'Dormir', 'Escolta activa'];  // maqueta v13
+// Els sis que més fa servir (v1.34): el recompte d'Escolta.Context. Mentre no n'hi ha prou, els de la maqueta.
+export function habituals(db) {
+  const r = files(db, `SELECT context, COUNT(*) AS n FROM escolta WHERE context IS NOT NULL AND context != 'No ho sé'
+                       GROUP BY context ORDER BY n DESC`).map(x => x.context);
+  return [...new Set([...r, ...HABITUALS_INICI])].slice(0, 6);
+}
+// Els botons d'atenció i els seus valors no es diuen igual, i és expressament (pregunta 4).
+export const ATENCIONS = [['Despert', 'Efectes plens'], ['Dormint', 'Dormir'], ['Estudi cant', 'Estudi cant']];
+// L'atenció es deriva del context (pregunta 1). «A casa» i «No ho sé» la pregunten.
+export const preguntaAtencio = ctx => ctx === 'A casa' || ctx === 'No ho sé';
+const atencioDe = ctx => ctx === 'Dormir' ? 'Dormir' : 'Efectes plens';
+
+// ───────── les targetes (§8.7, ACT-455 i ACT-456) ─────────
+// Una targeta acaba quan passen més de 30 minuts de silenci entre el final d'una pista (listened_at + duration_ms) i
+// l'inici de la següent, sigui de la compte que sigui: canviar de mòbil no obre targeta. Sense duration_ms, d'inici a inici.
+// Dins de cada targeta, els discos: els emparellats, per edició; els altres, pel nom de l'àlbum (o per la pista).
+export function targetes(db, { estat = 'pendent', limit = null } = {}) {
+  const mapa = mapaEmparellaments(db);
+  const scr = files(db, `SELECT s.id, s.compte, s.listened_at, s.duration_ms, s.artista, s.pista, s.album, s.recording_msid,
+                                s.release_mbid, s.escolta_id, s.context, s.atencio
+                         FROM scrobble s WHERE s.estat = ? ORDER BY s.listened_at, s.id`, [estat]).map(s => ({ ...s, t: ms(s.listened_at) }));
+  const out = []; let cur = null, fi = 0;
+  for (const s of scr) {
+    if (!cur || s.t - fi > SILENCI_TARGETA) { cur = { scr: [] }; out.push(cur); fi = 0; }
+    cur.scr.push(s); fi = Math.max(fi, s.t + (s.duration_ms || 0));
+  }
+  const eds = new Map(files(db, `SELECT e.id, a.titol, ar.nom_canonic AS art, e.durada_total, e.portada
+                                 FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id`).map(e => [e.id, e]));
+  for (const c of out) {
+    c.clau = c.scr[0].id;                         // la targeta es reconeix per la seva primera pista
+    c.inici = c.scr[0].listened_at;
+    const u = c.scr[c.scr.length - 1]; c.fi = new Date(u.t + (u.duration_ms || 0)).toISOString();
+    c.comptes = [...new Set(c.scr.map(s => s.compte))];
+    c.feina = c.scr.some(s => COMPTES.find(k => k.nom === s.compte)?.feina);
+    c.context = c.scr[0].context; c.atencio = c.scr[0].atencio;
+    const discos = new Map();
+    for (const s of c.scr) {
+      const ed = edicioDe(mapa, s);
+      const k = ed ? 'e' + ed : (s.album ? 'n' + norm(s.album) : 'm' + s.recording_msid);
+      const d = discos.get(k) || { clau: k, edicio_id: ed, ...(ed ? eds.get(ed) : { titol: s.album || s.pista, art: s.artista }), scr: [] };
+      d.scr.push(s); discos.set(k, d);
+    }
+    c.discos = [...discos.values()];
+  }
+  out.reverse();                                  // la més recent primer
+  return limit ? out.slice(0, limit) : out;
+}
+
+// Contestar una targeta (o un disc d'una targeta separada): la resposta va a cada pista, i l'escolta es torna a calcular.
+// «A casa» + «Dormint» es reescriu a Dormir (pregunta 4, v1.10).
+export const contesta = (ids, context, atencioBoto = null) => db => {
+  let ctx = context, at = atencioBoto ? (ATENCIONS.find(([b]) => b === atencioBoto)?.[1] || atencioBoto) : atencioDe(context);
+  if (ctx === 'A casa' && at === 'Dormir') ctx = 'Dormir';
+  const st = db.prepare("UPDATE scrobble SET context = ?, atencio = ?, estat = 'resolt' WHERE id = ? AND estat != 'ignorat'");
+  for (const id of ids) st.run([ctx, at, id]);
+  st.free();
+  return { ctx, at, ...recalcula(db) };
+};
+// «Canvia»: la targeta torna a la safata, sense resposta.
+export const reobre = ids => db => {
+  const st = db.prepare("UPDATE scrobble SET context = NULL, atencio = NULL, estat = 'pendent' WHERE id = ?");
+  for (const id of ids) st.run([id]); st.free();
+  return recalcula(db);
+};
+// «Ignora» (ACT-462): un estat del Scrobble, no un esborrat. Rellegir ListenBrainz el reconeix i no torna.
+export const ignora = ids => db => {
+  const st = db.prepare("UPDATE scrobble SET estat = 'ignorat', context = NULL, atencio = NULL WHERE id = ?");
+  for (const id of ids) st.run([id]); st.free();
+  return recalcula(db);
+};
+
+// ───────── el disc nou (§8.7 bis, ACT-457, ACT-458 i ACT-461) ─────────
+// Els noms d'àlbum que han sonat i no casen amb res: sense cap edició candidata, o amb «No és cap d'aquestes».
+// infoMB: Map de release_mbid → { titol, pistes, minuts } que porta qui crida (es consulta, no es desa).
+export function discosNous(db, infoMB = new Map()) {
+  const mapa = mapaEmparellaments(db), rebs = new Set(rebutjats(db)), forcats = new Set(esUnDisc(db));
+  const scr = files(db, `SELECT id, listened_at, artista, pista, album, duration_ms, recording_msid, release_mbid FROM scrobble
+                         WHERE estat != 'ignorat' ORDER BY listened_at`);
+  const per = new Map();
+  for (const s of scr) {
+    if (edicioDe(mapa, s)) continue;
+    const k = s.album ? norm(s.album) : clauMsid(s.recording_msid);
+    const x = per.get(k) || { clau: k, album: s.album, artista: s.artista, pista: s.pista, recording_msid: s.recording_msid,
+                              pistes: new Map(), mbids: new Map(), scr: [], darrera: s.listened_at };
+    if (!x.pistes.has(s.recording_msid) || !x.pistes.get(s.recording_msid)) x.pistes.set(s.recording_msid, s.duration_ms || 0);
+    if (s.release_mbid) x.mbids.set(s.release_mbid, (x.mbids.get(s.release_mbid) || 0) + 1);
+    x.scr.push(s.id); x.darrera = s.listened_at; per.set(k, x);
+  }
+  const nous = [], soltes = [];
+  for (const x of per.values()) {
+    if (!rebs.has(x.clau) && candidates(db, { album: x.album, artista: x.artista }).length) continue;   // espera la pregunta 2
+    const mbid = [...x.mbids.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+    const mb = mbid ? infoMB.get(mbid) : null;
+    // El nombre de pistes de MusicBrainz només es creu si el seu títol és el release_name (ACT-461): si no, el mapeig
+    // ha lligat una cançó solta al seu single.
+    const mbBo = mb && x.album && norm(mb.titol) === norm(x.album);
+    const durs = [...x.pistes.values()];
+    const totes = mbBo && mb.pistes && x.pistes.size >= mb.pistes;
+    const sonat = durs.reduce((a, b) => a + b, 0);
+    const neix = forcats.has(x.clau) || totes || x.pistes.size >= 2 || sonat >= 15 * MIN;
+    // La durada proposada (ACT-457): la de MusicBrainz si l'escolta ve identificada; si no, la suma del que ha sonat,
+    // sense la pista que dura com totes les altres juntes (l'alarma de resolucio-durades).
+    let suma = sonat;
+    const gran = Math.max(0, ...durs);
+    if (durs.length > 2 && Math.abs(gran - (sonat - gran)) <= Math.max(60e3, 0.05 * gran)) suma = sonat - gran;
+    const prop = mbBo && mb.minuts ? { minuts: mb.minuts, font: 'segons MusicBrainz' } : { minuts: Math.max(1, Math.round(suma / MIN)), font: 'el que ha sonat' };
+    (neix ? nous : soltes).push({ ...x, n: x.pistes.size, mbid, proposta: prop });
+  }
+  return { nous, soltes };
+}
+// «És un disc» (ACT-461): una cançó solta que Ricard declara disc. Es recorda a meta, amb la seva clau.
+const FORCATS = 'es-un-disc';
+const esUnDisc = db => { try { return JSON.parse(un(db, 'SELECT valor FROM meta WHERE clau = ?', [FORCATS])?.valor || '[]'); } catch { return []; } };
+export const declaraDisc = clau => db => {
+  const l = esUnDisc(db); if (!l.includes(clau)) l.push(clau);
+  db.run('INSERT OR REPLACE INTO meta (clau, valor) VALUES (?, ?)', [FORCATS, JSON.stringify(l)]);
+};
+// Crear la fitxa del disc nou. Per defecte només entra a l'arxiu i a l'Historial (ACT-458); la rotació i els preferents
+// són dues opcions a part. Cap disc entra sense durada (§2). El nom de l'àlbum queda com a emparellament confirmat.
+export const creaDiscNou = ({ album, artista, recording_msid, minuts, canal, rotacio = false }) => db => {
+  if (!(minuts > 0)) throw new Error('Cap disc entra sense durada.');
+  const n = norm(artista);
+  let a = files(db, 'SELECT id, nom_canonic, variants FROM artista').find(x => norm(x.nom_canonic) === n || llista(x.variants).some(v => norm(v) === n));
+  if (!a) { db.run('INSERT INTO artista (nom_canonic) VALUES (?)', [String(artista || 'Desconegut').trim()]); a = { id: un(db, 'SELECT last_insert_rowid() AS id').id }; }
+  db.run('INSERT INTO album (titol, artista_id) VALUES (?, ?)', [String(album || 'Sense títol').trim(), a.id]);
+  const albumId = un(db, 'SELECT last_insert_rowid() AS id').id;
+  const ara = new Date().toISOString();
+  db.run(`INSERT INTO edicio (album_id, durada_total, rotacio_actual, app_escolta, emparellaments, data_referencia_rotacio, lot_carrega)
+          VALUES (?, ?, ?, ?, ?, ?, 'SAFATA')`, [albumId, minuts, rotacio ? 1 : 0, canal, JSON.stringify([album ? album : clauMsid(recording_msid)]), rotacio ? ara : null]);
+  const id = un(db, 'SELECT last_insert_rowid() AS id').id;
+  if (rotacio) db.run('UPDATE preferent SET proper_titol = NULL WHERE artista_id = ?', [a.id]);
+  recalcula(db);
+  return { id, artista_id: a.id };
+};
+
+// ───────── les preguntes 7, 8 i 9 (§8.10, ACT-464 i ACT-465) ─────────
+// La moneda (v1.18): escoltes d'Efectes plens que arriben al llindar, dins d'una finestra de sis mesos i des de la Data de
+// referència de rotació. Només les de targetes contestades: una de pendent pot ser de dormir. Les de part no són de l'edició.
+const SIS_MESOS = 182 * 864e5, UN_MES = 30 * 864e5;
+export function preguntesRotacio(db, ara = Date.now()) {
+  const arr = arrencada(db); if (!arr) return [];
+  const desDe = new Date(ara - SIS_MESOS).toISOString();
+  const eds = files(db, `SELECT e.id, e.rotacio_actual, e.data_referencia_rotacio AS ref, a.titol, ar.nom_canonic AS art, e.durada_total, e.portada,
+                                (SELECT COUNT(*) FROM part p WHERE p.edicio_id = e.id) AS n_parts
+                         FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id`);
+  const esc = files(db, `SELECT s.edicio_id, s.data_hora, s.context, s.atencio FROM escolta s
+                         WHERE s.part_id IS NULL AND s.atencio = 'Efectes plens' AND s.data_hora >= ? AND ${SQL_COMPTA}`, [desDe]);
+  const darrera = new Map(files(db, `SELECT s.edicio_id, MAX(s.data_hora) AS d FROM escolta s WHERE ${SQL_COMPTA} GROUP BY s.edicio_id`).map(r => [r.edicio_id, r.d]));
+  const out = [];
+  for (const e of eds) {
+    const meves = esc.filter(x => x.edicio_id === e.id && (!e.ref || x.data_hora > e.ref));
+    if (!e.rotacio_actual && meves.length >= 3) out.push({ q: 7, ...e });
+    else if (e.rotacio_actual && !e.n_parts && meves.length >= 5 && meves.some(x => FORT.has(x.context))) out.push({ q: 8, ...e });
+    else if (e.rotacio_actual) {
+      const base = [darrera.get(e.id), arr].filter(Boolean).sort().pop();
+      if (ara - ms(base) >= UN_MES && (!e.ref || ara - ms(e.ref) >= UN_MES)) out.push({ q: 9, ...e });
+    }
+  }
+  return out;
+}
+// Les respostes. Només el «no» de la 7 reescriu la data; a la 8 i a la 9, qualsevol resposta (§8.10).
+export const respon7 = (id, si) => db => si ? db.run('UPDATE edicio SET rotacio_actual = 1 WHERE id = ?', [id])
+                                          : db.run('UPDATE edicio SET data_referencia_rotacio = ? WHERE id = ?', [new Date().toISOString(), id]);
+export const tocaReferencia = id => db => db.run('UPDATE edicio SET data_referencia_rotacio = ? WHERE id = ?', [new Date().toISOString(), id]);

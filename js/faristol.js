@@ -307,26 +307,133 @@ function fullGrupHistorial(nom) {
 }
 
 // ───────── la safata (§8.7) ─────────
-// Pas u: la pregunta 2. Les sessions, el disc nou, «Ignora» i les preguntes 7, 8 i 9 són el pas dos.
+// Una sola cua: la pregunta 2, els discos nous, les preguntes 7, 8 i 9, i les targetes de sessió. A sota, les resoltes,
+// cadascuna amb «Canvia». La màquina no interromp: el número del icona fa la feina (v1.34).
+const nomCompte = c => c.length > 1 ? 'els dos mòbils' : (E.COMPTES.find(k => k.nom === c[0])?.feina ? 'compte de feina' : 'compte personal');
+const hm = iso => new Date(iso).toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit' });
+const franja = c => quan(c.inici).replace(/ · .*/, '') + ' · ' + hm(c.inici) + ' – ' + hm(c.fi);
+const mbCache = (() => { try { return new Map(Object.entries(JSON.parse(localStorage.getItem('tria-mb') || '{}'))); } catch { return new Map(); } })();
+function minDisc(d, extra = '') {
+  return `<span class="sf-disc"><span class="hcob">${esc(inicials(d.art))}${d.portada ? IMG(d.portada) : ''}</span>
+    <span><span class="t">${esc(d.titol || '')}</span><span class="a">${esc(d.art || '')}${extra}</span></span><span class="m">${d.min || d.durada_total ? (d.min || d.durada_total) + '′' : ''}</span></span>`;
+}
+function cuaSafata() {
+  if (!A.estat.db) return { q2: [], nous: [], soltes: [], rot: [], tg: [] };
+  const { nous, soltes } = E.discosNous(db(), mbCache);
+  return { q2: E.preguntes2(db()), nous, soltes, rot: E.preguntesRotacio(db()), tg: E.targetes(db()) };
+}
+function xipsContext(clau, c, cap) {
+  const tmp = estat.ctxTmp?.[clau];
+  if (tmp) return `<p class="sf-q">${tmp === 'No ho sé' ? 'I com ho escoltaves?' : 'A casa: com ho escoltaves?'}</p>
+    <div class="sf-chips">${E.ATENCIONS.map(([b]) => `<button data-sfatencio="${clau}|${b}">${b}</button>`).join('')}</div>
+    <button class="sf-link" data-sfctxdesfes="${clau}">Canvia el lloc</button>`;
+  const tots = estat.ctxTots?.[clau], llista = tots ? E.CONTEXTOS : E.habituals(db());
+  const pre = c.feina ? 'Treballant' : null;
+  const ll = pre && !llista.includes(pre) ? [pre, ...llista] : llista;
+  return `${pre ? `<p class="sf-pre">${c.comptes.length > 1 ? 'Hi ha pistes' : 'Ve'} del compte de feina: la màquina proposa <b>Treballant</b>.</p>` : ''}
+    <p class="sf-q">${cap || 'On ho escoltaves?'}</p>
+    <div class="sf-chips">${ll.map(x => `<button class="${x === pre ? 'principal' : ''}" data-sfctx="${clau}|${esc(x)}">${esc(x)}</button>`).join('')}
+      <button class="nose" data-sfctx="${clau}|No ho sé">No ho sé</button>
+      ${tots ? '' : `<button class="mes" data-sftots="${clau}">Tots (${E.CONTEXTOS.length})</button>`}
+      <button class="mes" data-sfignora="${clau}">Ignora</button></div>`;
+}
+// Les claus de resposta: «t<primera pista>» per a la targeta sencera, «d<primera pista>:<disc>» per a un disc separat.
+function idsDe(clau, tg) {
+  const [t, d] = clau.slice(1).split(':');
+  const c = tg.find(x => String(x.clau) === t); if (!c) return [];
+  return (d ? c.discos.find(x => x.clau === d)?.scr || [] : c.scr).map(s => s.id);
+}
 function pintaSafata() {
-  const q2 = A.estat.db ? E.preguntes2(db()) : [];
-  const num = q2.length;
-  const p = $('#safataNum'); if (p) { p.textContent = num; p.classList.toggle('zero', !num); }
+  const cua = cuaSafata(), n = cua.q2.length + cua.nous.length + cua.rot.length + cua.tg.length;
+  const p = $('#safataNum'); if (p) { p.textContent = n; p.classList.toggle('zero', !n); }
   const caixa = $('#safataCos'); if (!caixa) return;
-  caixa.innerHTML = q2.map(q => {
+  let h = '';
+  // la pregunta 2
+  h += cua.q2.map(q => {
     const [prop, ...altres] = q.candidates;
     const nomEd = c => esc(c.titol) + (c.nom_edicio ? ` <small>${esc(c.nom_edicio)}</small>` : '') + ` <small>${c.durada_total}′ · ${esc(c.art)}</small>`;
-    const obert = estat.q2obert === q.clau;
-    return `<div class="sf-card">
+    return `<div class="sf-card"><span class="sf-tipus">És aquesta edició?</span>
       <div class="sf-cap"><b>${esc(q.album || '(sense nom d\'àlbum)')}</b><span>${esc(quan(q.darrera))}</span></div>
       <p class="sf-pre">${esc(q.artista || '')} · ${q.n === 1 ? 'una pista' : q.n + ' pistes'}${q.minuts ? ' · ' + q.minuts + '′ del que ha sonat' : ''}${q.album ? '' : ' · ' + esc(q.pista || '')}</p>
-      <p class="sf-q">És aquesta edició?</p>
-      <div class="sf-chips sf-eds">
+      <div class="sf-chips sf-eds" style="margin-top:10px">
         <button class="principal" data-q2si="${esc(q.clau)}|${prop.id}">Sí: ${nomEd(prop)}</button>
-        ${obert ? altres.map(c => `<button data-q2si="${esc(q.clau)}|${c.id}">${nomEd(c)}</button>`).join('') : (altres.length ? `<button data-q2altres="${esc(q.clau)}">Una altra…</button>` : '')}
+        ${estat.q2obert === q.clau ? altres.map(c => `<button data-q2si="${esc(q.clau)}|${c.id}">${nomEd(c)}</button>`).join('') : (altres.length ? `<button data-q2altres="${esc(q.clau)}">Una altra…</button>` : '')}
         <button class="nose" data-q2no="${esc(q.clau)}">No és cap d'aquestes</button>
-      </div>
-    </div>`; }).join('') || `<div class="sf-buit"><b>Res per resoldre</b>${E.arrencada(db()) ? 'La màquina llegeix les dues comptes de ListenBrainz des del ' + dia(E.arrencada(db())) + ' cada vegada que obres l\'app i quan toques la safata.' : 'Quan hi hagi connexió, la màquina començarà a llegir ListenBrainz.'}</div>`;
+      </div></div>`; }).join('');
+  // el disc nou
+  h += cua.nous.map(x => {
+    const a = D.trobaArtista(db(), x.artista);
+    const canal = estat.nouCanalDe?.[x.clau] || D.canalPerDefecte(db(), a?.id);
+    const pref = estat.nouPrefDe?.[x.clau];
+    return `<div class="sf-card" data-nou="${esc(x.clau)}"><span class="sf-tipus">Disc nou: la durada i el canal</span>
+      ${minDisc({ titol: x.album || x.pista, art: x.artista }, ' · ' + (x.n === 1 ? 'una pista' : x.n + ' pistes'))}
+      <label class="camp" style="margin-top:10px"><span>Durada en minuts <small class="gris">· ${x.proposta.font}</small></span>
+        <input data-sfdur="${esc(x.clau)}" type="number" inputmode="numeric" min="1" value="${x.proposta.minuts}"></label>
+      ${x.proposta.font === 'el que ha sonat' ? `<p class="sf-pre">Només és la del disc si l'has sentit sencer.</p>` : ''}
+      <p class="sf-q">Per on l'escoltes?</p>
+      <div class="sf-chips">${Object.keys(CANALS).map(k => `<button class="${canal === k ? 'triat' : ''}" data-sfcanal="${esc(x.clau)}|${k}">${esc(CANALS[k].nom)}</button>`).join('')}</div>
+      ${canal === 'bandcamp' ? `<p class="sf-pre">El codi de Bandcamp el busca Claude cada nit. No has de fer res.</p>` : ''}
+      <div class="sf-chips" style="margin-top:12px">
+        <button class="principal" data-sfnou="${esc(x.clau)}|arxiu">Desa'l</button>
+        <button data-sfnou="${esc(x.clau)}|rotacio">Desa'l i posa'l en rotació</button>
+        ${a && D.preferents(db()).some(p => p.artista_id === a.id) ? '' : `<button class="${pref ? 'triat' : ''}" data-sfnoupref="${esc(x.clau)}">${pref ? '✓ ' : ''}Afegeix l'artista a preferents</button>`}
+        <button class="mes" data-sfnouignora="${esc(x.clau)}">Ignora</button>
+      </div></div>`; }).join('');
+  // les preguntes 7, 8 i 9
+  h += cua.rot.map(x => {
+    const d = { titol: x.titol, art: x.art, durada_total: x.durada_total, portada: x.portada };
+    if (x.q === 7) return `<div class="sf-card"><span class="sf-tipus">Tres escoltes en sis mesos</span>${minDisc(d)}
+      <p class="sf-q">Sembla que l'estàs estudiant. El poso en rotació?</p>
+      <div class="sf-chips"><button class="principal" data-sfq7="${x.id}|si">Sí, posa'l</button><button data-sfq7="${x.id}|no">No</button></div></div>`;
+    if (x.q === 8) return `<div class="sf-card"><span class="sf-tipus">Cinc escoltes</span>${minDisc(d)}
+      <p class="sf-q">Ja el dones per estudiat?</p>
+      <div class="sf-chips"><button class="principal" data-sfq8="${x.id}|si">Sí</button><button data-sfq8="${x.id}|encara">Encara no</button><button data-sfq8="${x.id}|ara">No, i posa'l ara</button></div></div>`;
+    return `<div class="sf-card"><span class="sf-tipus">Un mes sense sonar</span>${minDisc(d)}
+      <p class="sf-q">Encara l'estàs estudiant?</p>
+      <div class="sf-chips"><button class="principal" data-sfq9="${x.id}|si">Sí</button><button data-sfq9="${x.id}|no">No</button><button data-sfq9="${x.id}|ara">Sí, i posa'l ara</button></div></div>`;
+  }).join('');
+  // les targetes de sessió
+  const solta = new Set(cua.soltes.map(x => x.clau));
+  h += cua.tg.map(c => {
+    const sep = estat.separades?.has(c.clau);
+    const fila = d => {
+      const k = d.clau.slice(1), esSolta = !d.edicio_id && solta.has(d.clau[0] === 'm' ? 'msid:' + k : k);
+      const extra = d.edicio_id ? '' : esSolta ? ` · <i>cançó solta</i>` : ` · <i>pendent: a dalt</i>`;
+      return minDisc(d, extra) + (esSolta ? `<button class="sf-link" style="padding:0 0 6px 54px" data-sfdisc="${esc(d.clau[0] === 'm' ? 'msid:' + k : k)}">És un disc</button>` : '');
+    };
+    const cos = sep
+      ? c.discos.map(d => `<div class="sf-separat">${fila(d)}${xipsContext('d' + c.clau + ':' + d.clau, c, 'On escoltaves aquest?')}</div>`).join('')
+      : c.discos.map(fila).join('') + xipsContext('t' + c.clau, c) + (c.discos.length > 1 ? `<button class="sf-link" data-sfsepara="${c.clau}">Separa: cada disc per la seva banda</button>` : '');
+    return `<div class="sf-card"><div class="sf-cap"><b>${esc(franja(c))}</b><span>${nomCompte(c.comptes)} · ${c.discos.length} ${c.discos.length === 1 ? 'disc' : 'discos'}</span></div>${cos}</div>`;
+  }).join('');
+  if (!h) h = `<div class="sf-buit"><b>Res per resoldre</b>${E.arrencada(db()) ? 'La màquina llegeix les dues comptes de ListenBrainz des del ' + dia(E.arrencada(db())) + ' cada vegada que obres l\'app i quan toques la safata.' : 'Quan hi hagi connexió, la màquina començarà a llegir ListenBrainz.'}${estat.lbError ? '<br><small>' + esc(estat.lbError) + '</small>' : ''}</div>`;
+  // les resoltes, amb «Canvia» (tot el que es contesta aquí és editable sempre, §8.7)
+  const res = E.targetes(db(), { estat: 'resolt', limit: 8 });
+  if (res.length) h += `<h2 style="margin-top:22px">Resoltes</h2>` + res.map(c => `<div class="sf-resolta"><span><b>${esc(franja(c))}</b> · ${esc(c.discos.map(d => d.titol).join(', '))} · ${esc(c.context || '')}</span>
+      <button data-sfreobre="${c.scr.map(x => x.id).join(',')}">Canvia</button></div>`).join('');
+  caixa.innerHTML = h;
+  I.omple(caixa);
+  if (cua.nous.some(x => x.mbid && !mbCache.has(x.mbid))) consultaMB(cua.nous);
+}
+// MusicBrainz, per al disc nou: el títol, el nombre de pistes i la durada. Es consulta i no es desa a l'arxiu (ACT-461);
+// es recorda en aquest mòbil perquè no es torni a demanar.
+let consultant = false;
+async function consultaMB(nous) {
+  if (consultant || !navigator.onLine) return; consultant = true;
+  try {
+    for (const x of nous) {
+      if (!x.mbid || mbCache.has(x.mbid)) continue;
+      try {
+        const r = await fetch(`https://musicbrainz.org/ws/2/release/${x.mbid}?inc=recordings&fmt=json`);
+        if (!r.ok) { mbCache.set(x.mbid, null); continue; }
+        const j = await r.json(), pistes = (j.media || []).flatMap(m => m.tracks || []);
+        const ms_ = pistes.reduce((a, t) => a + (t.length || 0), 0);
+        mbCache.set(x.mbid, { titol: j.title, pistes: pistes.length, minuts: pistes.every(t => t.length) ? Math.round(ms_ / 60000) : null });
+      } catch { mbCache.set(x.mbid, null); }
+      await new Promise(r => setTimeout(r, 1100));          // MusicBrainz demana una consulta per segon
+    }
+    try { localStorage.setItem('tria-mb', JSON.stringify(Object.fromEntries(mbCache))); } catch {}
+  } finally { consultant = false; pintaSafata(); }
 }
 
 // ───────── la lectura de ListenBrainz (§3.3, ACT-453 i ACT-454) ─────────
@@ -800,6 +907,44 @@ document.addEventListener('click', e => {
     fes(x => { E.confirmaEdicio(id, q)(x); return E.recalcula(x); }, `${q.album || q.pista}: és ${ed ? ed.titol + (ed.nom_edicio ? ' (' + ed.nom_edicio + ')' : '') : 'aquesta edició'}. Queda recordat.`);
     return; }
   if (d.q2altres) { estat.q2obert = d.q2altres; pintaSafata(); return; }
+  // les targetes de sessió
+  if (d.sfctx) { const [clau, ctx] = d.sfctx.split('|');
+    if (E.preguntaAtencio(ctx)) { (estat.ctxTmp ||= {})[clau] = ctx; pintaSafata(); return; }
+    const ids = idsDe(clau, E.targetes(db())); if (!ids.length) return;
+    fes(E.contesta(ids, ctx), ctx === 'No ho sé' ? 'No ho sé' : ctx); return; }
+  if (d.sfatencio) { const [clau, b] = d.sfatencio.split('|'), ctx = estat.ctxTmp?.[clau]; if (!ctx) return; delete estat.ctxTmp[clau];
+    const ids = idsDe(clau, E.targetes(db())); if (!ids.length) return;
+    fes(E.contesta(ids, ctx, b), r => r.ctx === 'Dormir' && ctx === 'A casa' ? 'A casa, dormint: queda com a Dormir' : ctx + ' · ' + b); return; }
+  if (d.sfctxdesfes) { delete estat.ctxTmp[d.sfctxdesfes]; pintaSafata(); return; }
+  if (d.sftots) { (estat.ctxTots ||= {})[d.sftots] = true; pintaSafata(); return; }
+  if (d.sfsepara) { (estat.separades ||= new Set()).add(+d.sfsepara); pintaSafata(); return; }
+  if (d.sfignora) { const ids = idsDe(d.sfignora, E.targetes(db())); if (!ids.length) return;
+    fes(E.ignora(ids), 'Ignorat. No compta i no tornarà.'); return; }
+  if (d.sfreobre) { fes(E.reobre(d.sfreobre.split(',').map(Number)), 'Torna a la safata'); return; }
+  if (d.sfdisc) { fes(E.declaraDisc(d.sfdisc), 'És un disc: et pregunto la durada a dalt'); return; }
+  // el disc nou
+  if (d.sfcanal) { const [k, c] = d.sfcanal.split('|'); (estat.nouCanalDe ||= {})[k] = c; pintaSafata(); return; }
+  if (d.sfnoupref) { (estat.nouPrefDe ||= {})[d.sfnoupref] = !estat.nouPrefDe?.[d.sfnoupref]; pintaSafata(); return; }
+  if (d.sfnouignora) { const x = E.discosNous(db(), mbCache).nous.find(y => y.clau === d.sfnouignora); if (!x) return;
+    fes(E.ignora(x.scr), (x.album || x.pista) + ': ignorat'); return; }
+  if (d.sfnou) { const [k, on] = d.sfnou.split('|');
+    const x = E.discosNous(db(), mbCache).nous.find(y => y.clau === k); if (!x) return;
+    const min = parseInt(document.querySelector(`[data-sfdur="${CSS.escape(k)}"]`)?.value, 10);
+    if (!min || min < 1) { avisa('Cap disc entra sense durada.'); return; }
+    const a = D.trobaArtista(db(), x.artista), canal = estat.nouCanalDe?.[k] || D.canalPerDefecte(db(), a?.id), pref = estat.nouPrefDe?.[k];
+    fes(y => { const r = E.creaDiscNou({ album: x.album || x.pista, artista: x.artista, recording_msid: x.recording_msid, minuts: min, canal, rotacio: on === 'rotacio' })(y);
+               if (pref) D.afegeixPreferentId(r.artista_id)(y); return r; },
+      `${x.album || x.pista} entra a l'arxiu${on === 'rotacio' ? ' i a la rotació' : ''}${pref ? ', i l\'artista a preferents' : ''}`); return; }
+  // les preguntes 7, 8 i 9
+  if (d.sfq7) { const [id, r] = d.sfq7.split('|'); fes(E.respon7(+id, r === 'si'), r === 'si' ? 'Entra a la rotació' : 'D\'acord: no tornaré a preguntar fins d\'aquí a tres escoltes'); return; }
+  if (d.sfq8) { const [id, r] = d.sfq8.split('|'), x = D.fitxa(db(), +id); if (!x) return;
+    if (r === 'si') { estat.abansSortida = A.estat.db.export(); fes(y => { E.tocaReferencia(+id)(y); D.treu(+id)(y); }, `${x.titol} fora de rotació`, { abans: estat.abansSortida }); fullPuntuar(x); return; }
+    fes(E.tocaReferencia(+id), r === 'ara' ? null : 'Encara no: segueix en rotació');
+    if (r === 'ara') fullEscoltar({ id: x.id, art: x.art, tit: x.titol, min: x.min, canal: x.app_escolta, bc: x.bc, fisic: x.fisic }); return; }
+  if (d.sfq9) { const [id, r] = d.sfq9.split('|'), x = D.fitxa(db(), +id); if (!x) return;
+    if (r === 'no') { estat.abansSortida = A.estat.db.export(); fes(y => { E.tocaReferencia(+id)(y); D.treu(+id)(y); }, `${x.titol} fora de rotació`, { abans: estat.abansSortida }); fullPuntuar(x); return; }
+    fes(E.tocaReferencia(+id), r === 'ara' ? null : 'Segueix en rotació');
+    if (r === 'ara') fullEscoltar({ id: x.id, art: x.art, tit: x.titol, min: x.min, canal: x.app_escolta, bc: x.bc, fisic: x.fisic }); return; }
   if (d.q2no) { const q = E.preguntes2(db()).find(x => x.clau === d.q2no); if (!q) return;
     fes(E.rebutjaEmparellament(q), `${q.album || q.pista}: no és cap d'aquestes. Serà un disc nou.`); return; }
 
