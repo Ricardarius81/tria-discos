@@ -557,3 +557,8 @@ body[data-estil="ricard"].desconnectat .conn-tira .tanca{color:#fff}
 .membre .txt small{color:var(--os-3); font-size:12px}
 .membre .play{flex:none; width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center;
   background:var(--accent); color:var(--tinta,#111); border:0; text-decoration:none; font-size:15px; cursor:pointer}
+
+/* Els discos en rotació d'un artista preferent (o de la seva Persona), amb marc daurat (petició de Ricard, 31-10) */
+.disc.pref .coberta,
+body[data-estil="ricard"] .reixa .disc.pref .coberta{outline:2.5px solid #E2B44A; outline-offset:0; box-shadow:0 8px 18px rgba(0,0,0,.5), 0 0 16px rgba(226,180,74,.35)}
+.disc.pref .nom-sota b::before{content:'★ '; color:#E2B44A}

@@ -67,6 +67,13 @@ export function preferents(db) {
   return ps;
 }
 
+// Els artistes que compten com a preferents: els de la llista i les fitxes que comparteixen Persona amb algun d'ells
+// (l'abast del §7.7, F4-22). Així The Inward Circles compta com a Richard Skelton. Per al marc daurat de la rotació (31-10).
+export function artistesPreferents(db) {
+  const pers = new Set(files(db, `SELECT COALESCE(ar.persona, ar.nom_canonic) AS p FROM preferent pr JOIN artista ar ON ar.id = pr.artista_id`).map(r => norm(r.p)));
+  return new Set(files(db, 'SELECT id, COALESCE(persona, nom_canonic) AS p FROM artista').filter(r => pers.has(norm(r.p))).map(r => r.id));
+}
+
 // El canal que la màquina proposa per a un disc nou: el del darrer disc del mateix artista, o Amazon (ACT-349).
 export function canalPerDefecte(db, artistaId) {
   if (!artistaId) return 'amazon';

@@ -7,7 +7,7 @@
 // Encara no hi ha ListenBrainz (3.3), safata viva (3.4) ni Bandcamp automàtic (3.5).
 
 import * as A from './arxiu.js?v=8';
-import * as D from './dades.js?v=8';
+import * as D from './dades.js?v=9';
 import * as I from './imatges.js?v=3';
 import * as T from './tags.js?v=1';
 
@@ -121,15 +121,22 @@ function grups(rot) {
   return out;
 }
 const membresDe = nom => D.rotacio(db()).filter(x => x.conjunt === nom).sort((x, y) => (x.posicio || 99) - (y.posicio || 99) || x.id - y.id);
-function tileGrup(g) {
+// El títol d'un grup: el del primer disc, i dels altres només el que els distingeix (decisió de Ricard, 31-10).
+// «Careful Now + Unmasked», «Infinitati + Intrusion Dubs + Variant Immersions».
+function titolGrup(nom, m) {
+  const re = new RegExp('^' + nom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i');
+  return m.map((x, i) => i === 0 ? x.titol : (x.titol.replace(re, '').replace(/^\((.*)\)$/, '$1').trim() || x.titol)).join(' + ');
+}
+function tileGrup(g, prefs) {
   const m = g.membres, arts = [...new Set(m.map(x => x.art))].join(' · ');
   const total = m.every(x => x.min) ? m.reduce((s, x) => s + x.min, 0) : null;
   const trossos = m.slice(0, 4).map(x => `<span class="tros">${x.portada ? IMG(x.portada) : `<i>${esc(x.titol)}</i>`}</span>`).join('');
-  return `<div class="disc grup">
+  const pref = m.some(x => prefs.has(x.artista_id)) ? ' pref' : '';
+  return `<div class="disc grup${pref}">
       <button class="coberta collage amb-img n${Math.min(m.length, 4)}" data-grup="${esc(g.grup)}" aria-label="Grup ${esc(g.grup)}">
         <span class="trossos">${trossos}</span>${total ? `<span class="durada">${total}′</span>` : `<span class="durada falta">falta la durada</span>`}
       </button><button class="escoltar" data-grup="${esc(g.grup)}" aria-label="Escoltar ${esc(g.grup)}">▶</button>
-      <button class="nom-sota" data-grup="${esc(g.grup)}" tabindex="-1"><span><b>${esc(g.grup)}</b><i>${esc(arts)}</i></span></button>
+      <button class="nom-sota" data-grup="${esc(g.grup)}" tabindex="-1"><span><b>${esc(titolGrup(g.grup, m))}</b><i>${esc(arts)}</i></span></button>
       <div class="peu"><span class="part">${m.length} discos junts</span></div>
     </div>`;
 }
@@ -150,8 +157,8 @@ function fullGrup(nom) {
 }
 
 function pintaReixa() {
-  const rot = D.rotacio(db());
-  $('#reixa').innerHTML = grups(rot).map(d => { if (d.grup) return tileGrup(d);
+  const rot = D.rotacio(db()), prefs = D.artistesPreferents(db());
+  $('#reixa').innerHTML = grups(rot).map(d => { if (d.grup) return tileGrup(d, prefs);
     const part = d.esperant
       ? `<span class="part">esperant</span><button class="repren" data-repren="${d.id}">Reprèn</button>`
       : (d.viva ? `<span class="part">${d.viva.nom ? esc(d.viva.nom) + ' · ' : ''}part ${d.viva.numero}/${d.parts.length}</span>` : '');
@@ -162,7 +169,7 @@ function pintaReixa() {
     const play = d.esperant ? '' : (canal
       ? `<a class="escoltar" ${aAttrs(enllac(canal, { art: d.art, tit: d.titol, bc: d.bc }))} data-obre="${d.id}" aria-label="Escoltar ara ${esc(tit)}">▶</a>`
       : `<button class="escoltar" data-escoltar="${d.id}" aria-label="Escoltar ara ${esc(tit)}">▶</button>`);
-    return `<div class="disc">
+    return `<div class="disc${prefs.has(d.artista_id) ? ' pref' : ''}">
       <button class="coberta ${d.portada ? 'amb-img' : ''}" data-fitxa="${d.id}" aria-label="Fitxa de ${esc(tit)}">
         ${d.portada ? IMG(d.portada) : ''}<span class="a">${esc(d.art)}</span><span class="t">${esc(tit)}</span><span class="filet"></span>${dur}
       </button>${play}
