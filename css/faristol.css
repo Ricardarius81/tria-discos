@@ -538,3 +538,22 @@ body.desconnectat .conn-tira,
 body[data-estil="ricard"].desconnectat .conn-tira{background:#E6007E; color:#fff; font-weight:800; border-color:#B00062; letter-spacing:.01em}
 body.desconnectat .conn-tira .tanca,
 body[data-estil="ricard"].desconnectat .conn-tira .tanca{color:#fff}
+
+/* Les agrupacions al Faristol (31-10-2026): una portada combinada amb les dels discos del grup */
+.coberta.collage .trossos{position:absolute; inset:0; display:grid; gap:2px; background:var(--marc)}
+.coberta.collage.n2 .trossos{grid-template-columns:1fr 1fr}
+.coberta.collage.n3 .trossos{grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr}
+.coberta.collage.n3 .tros:first-child{grid-row:span 2}
+.coberta.collage.n4 .trossos{grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr}
+.coberta.collage .tros{position:relative; overflow:hidden; background:var(--fons-3); display:flex; align-items:flex-start; padding:7px}
+.coberta.collage .tros i{font-style:normal; font-family:var(--serif); font-size:11px; line-height:1.15; color:var(--os); text-align:left}
+.coberta.collage .durada{z-index:2}
+.llista-grup{display:flex; flex-direction:column; gap:8px; margin:6px 0 12px}
+.membre{display:flex; align-items:center; gap:10px; border:1px solid var(--vora); border-radius:var(--r); padding:8px}
+.membre .mini{position:relative; width:52px; height:52px; flex:none; border:0; padding:0; background:var(--fons-3); overflow:hidden; border-radius:2px; cursor:pointer}
+.membre .mini img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
+.membre .txt{flex:1; background:none; border:0; text-align:left; color:var(--os); cursor:pointer; padding:0; font:14px var(--sans)}
+.membre .txt b{display:block; font-weight:600}
+.membre .txt small{color:var(--os-3); font-size:12px}
+.membre .play{flex:none; width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  background:var(--accent); color:var(--tinta,#111); border:0; text-decoration:none; font-size:15px; cursor:pointer}

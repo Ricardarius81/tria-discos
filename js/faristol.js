@@ -7,7 +7,7 @@
 // Encara no hi ha ListenBrainz (3.3), safata viva (3.4) ni Bandcamp automàtic (3.5).
 
 import * as A from './arxiu.js?v=8';
-import * as D from './dades.js?v=7';
+import * as D from './dades.js?v=8';
 import * as I from './imatges.js?v=3';
 import * as T from './tags.js?v=1';
 
@@ -105,9 +105,53 @@ function pinta() {
   I.omple();
 }
 
+// Les agrupacions (§7.5, decisions de Ricard del 18-10 i del 31-10). Un àlbum és d'un sol grup (Àlbum.Conjunt).
+// Fins que arribin les escoltes (3.3), els discos d'un mateix grup que són en rotació surten SEMPRE junts, en una sola
+// portada combinada; amb les escoltes, manarà la regla del 18-10 (junts quan han sonat seguits). Un sol disc del grup
+// en rotació surt sol. El grup ocupa el lloc del seu disc més recent.
+function grups(rot) {
+  const n = {}; rot.forEach(d => { if (d.conjunt) n[d.conjunt] = (n[d.conjunt] || 0) + 1; });
+  const fets = new Set(), out = [];
+  for (const d of rot) {
+    if (d.conjunt && n[d.conjunt] > 1) {
+      if (fets.has(d.conjunt)) continue; fets.add(d.conjunt);
+      out.push({ grup: d.conjunt, membres: rot.filter(x => x.conjunt === d.conjunt).sort((x, y) => (x.posicio || 99) - (y.posicio || 99) || x.id - y.id) });
+    } else out.push(d);
+  }
+  return out;
+}
+const membresDe = nom => D.rotacio(db()).filter(x => x.conjunt === nom).sort((x, y) => (x.posicio || 99) - (y.posicio || 99) || x.id - y.id);
+function tileGrup(g) {
+  const m = g.membres, arts = [...new Set(m.map(x => x.art))].join(' · ');
+  const total = m.every(x => x.min) ? m.reduce((s, x) => s + x.min, 0) : null;
+  const trossos = m.slice(0, 4).map(x => `<span class="tros">${x.portada ? IMG(x.portada) : `<i>${esc(x.titol)}</i>`}</span>`).join('');
+  return `<div class="disc grup">
+      <button class="coberta collage amb-img n${Math.min(m.length, 4)}" data-grup="${esc(g.grup)}" aria-label="Grup ${esc(g.grup)}">
+        <span class="trossos">${trossos}</span>${total ? `<span class="durada">${total}′</span>` : `<span class="durada falta">falta la durada</span>`}
+      </button><button class="escoltar" data-grup="${esc(g.grup)}" aria-label="Escoltar ${esc(g.grup)}">▶</button>
+      <button class="nom-sota" data-grup="${esc(g.grup)}" tabindex="-1"><span><b>${esc(g.grup)}</b><i>${esc(arts)}</i></span></button>
+      <div class="peu"><span class="part">${m.length} discos junts</span></div>
+    </div>`;
+}
+// El ▶ d'un grup no pot llançar-los tots: les apps de fora obren un disc cada vegada.
+// Obre una fulla amb els discos en ordre, cadascun amb el seu ▶ i la seva fitxa (proposta de Claude acceptada el 31-10).
+function fullGrup(nom) {
+  const m = membresDe(nom);
+  if (!m.length) return;
+  obreFull(`<h3>${esc(nom)}</h3><p>${m.length} discos que van junts${m.every(x => x.min) ? ' · ' + m.reduce((s, x) => s + x.min, 0) + '′ en total' : ''}.</p>
+    <div class="llista-grup">${m.map((x, i) => {
+      const e = x.app_escolta ? enllac(x.app_escolta, { art: x.art, tit: x.titol, bc: x.bc }) : null;
+      return `<div class="membre">
+        <button class="mini" data-fitxa="${x.id}">${x.portada ? IMG(x.portada) : ''}</button>
+        <button class="txt" data-fitxa="${x.id}"><b>${i + 1}. ${esc(x.titol)}</b><small>${esc(x.art)}${x.min ? ' · ' + x.min + '′' : ''}</small></button>
+        ${e ? `<a class="play" ${aAttrs(e)} data-obre="${x.id}" aria-label="Escoltar ${esc(x.titol)}">▶</a>` : `<button class="play" data-escoltar="${x.id}">▶</button>`}
+      </div>`; }).join('')}</div>
+    <p class="gris" style="font-size:12px">Toca un títol per obrir-ne la fitxa. Crear i desfer grups arribarà amb la pestanya Agrupacions de La Prestatgeria.</p>`);
+}
+
 function pintaReixa() {
   const rot = D.rotacio(db());
-  $('#reixa').innerHTML = rot.map(d => {
+  $('#reixa').innerHTML = grups(rot).map(d => { if (d.grup) return tileGrup(d);
     const part = d.esperant
       ? `<span class="part">esperant</span><button class="repren" data-repren="${d.id}">Reprèn</button>`
       : (d.viva ? `<span class="part">${d.viva.nom ? esc(d.viva.nom) + ' · ' : ''}part ${d.viva.numero}/${d.parts.length}</span>` : '');
@@ -608,6 +652,8 @@ document.addEventListener('click', e => {
   if (d.repren) { const x = rot(d.repren); tancaFull(); if (x) fullRepren(x); return; }
   if (d.reprenpart) { const [id, n] = d.reprenpart.split(':').map(Number); tancaFull(); fes(D.posaPart(id, n), 'La part ' + n + ' entra en rotació'); return; }
   if (d.fespref) { const aid = +d.fespref; tancaFull(); fes(D.afegeixPreferentId(aid), 'Afegit a Artistes Preferents'); sub('pref'); return; }
+
+  if (d.grup) { fullGrup(d.grup); return; }
 
   // La fitxa que creix (bloc 3.2 bis)
   if (d.canalfitxa) { const x = rot(d.canalfitxa); if (x) fullCanal(x); return; }

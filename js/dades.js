@@ -32,7 +32,7 @@ function carrega(db, on, params = []) {
   const eds = files(db, `
     SELECT e.id, e.album_id, e.nom_edicio, e.durada_total, e.app_escolta, e.codi_bandcamp, e.formats, e.tags,
            e.darrera_obertura, e.data_referencia_rotacio, e.portada, e.portada_origen, e.data_darrera_pregunta_puntuacio,
-           a.titol, a.artista_id, a.tags AS album_tags, ar.nom_canonic AS art,
+           a.titol, a.artista_id, a.tags AS album_tags, a.conjunt, a.posicio, ar.nom_canonic AS art,
            (SELECT COUNT(*) FROM edicio x WHERE x.album_id = e.album_id) AS n_edicions,
            (SELECT MAX(s.data_hora) FROM escolta s WHERE s.edicio_id = e.id) AS darrera_escolta
     FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id
