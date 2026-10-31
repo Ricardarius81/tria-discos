@@ -122,8 +122,36 @@ export const MIGRACIONS = [
   `
   ALTER TABLE edicio ADD COLUMN portada_origen TEXT;
   ALTER TABLE artista ADD COLUMN retrat_origen TEXT;
+  `,
+  // v4 · la pista i l'escolta són dues coses (v1.44, ACT-451 i ACT-452).
+  // scrobble: una fila per pista tal com arriba de ListenBrainz, identificada per compte + listened_at + recording_msid,
+  //   de manera que rellegir no duplica res. estat: 'pendent' · 'resolt' · 'ignorat' (ACT-462).
+  //   escolta_id: l'escolta que se'n calcula (nul mentre la pista no sap de quin disc és). És el lligam que fa
+  //   comprovable el símptoma del §8.3 —una Escolta sense cap Scrobble que no sigui física— i el que permet tornar
+  //   a calcular les escoltes sense perdre el context que Ricard hi ha contestat. Camp de la construcció, per ratificar.
+  // escolta.recording_msid es queda sense ús (es muda a scrobble), com els camps congelats de la v1.33:
+  //   una migració publicada no esborra columnes.
+  // L'Arrencada de les escoltes (ACT-453) viu a meta, clau 'arrencada-escoltes': viatja amb l'arxiu i amb la seva còpia.
+  `
+  CREATE TABLE scrobble (
+    id               INTEGER PRIMARY KEY,
+    compte           TEXT NOT NULL,          -- crimsonnnn · crimsonnnnfeina
+    listened_at      TEXT NOT NULL,          -- l'inici de la pista, ISO 8601 en UTC
+    artista          TEXT,
+    pista            TEXT,
+    album            TEXT,                   -- release_name, tal com arriba
+    duration_ms      INTEGER,
+    recording_msid   TEXT NOT NULL,
+    release_mbid     TEXT,
+    caa_release_mbid TEXT,
+    estat            TEXT NOT NULL DEFAULT 'pendent' CHECK (estat IN ('pendent', 'resolt', 'ignorat')),
+    escolta_id       INTEGER REFERENCES escolta(id),
+    UNIQUE (compte, listened_at, recording_msid)
+  );
+  CREATE INDEX scrobble_temps ON scrobble(listened_at);
+  CREATE INDEX scrobble_escolta ON scrobble(escolta_id);
   `
 ];
 
-// Les taules on una baixada de files és sospitosa. Les escoltes només poden créixer (§3.5).
-export const TAULES = ['artista', 'album', 'edicio', 'puntuacio', 'part', 'escolta', 'preferent'];
+// Les taules on una baixada de files és sospitosa. Les escoltes i els scrobbles només poden créixer (§3.5).
+export const TAULES = ['artista', 'album', 'edicio', 'puntuacio', 'part', 'escolta', 'preferent', 'scrobble'];

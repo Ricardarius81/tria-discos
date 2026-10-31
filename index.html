@@ -8,7 +8,7 @@
 <link rel="icon" href="icones/icona-192.png">
 <link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
 <title>La Meva Discoteca</title>
-<link rel="stylesheet" href="css/faristol.css?v=7">
+<link rel="stylesheet" href="css/faristol.css?v=8">
 </head>
 <body data-lloc="Fora" data-estil="ricard">
 <div id="telefon">
@@ -38,7 +38,7 @@
     <section class="superficie" id="s-safata">
       <button class="enrere" data-tornasafata="1">← Tornar</button>
       <h1>La safata</h1>
-      <div class="sf-buit"><b>Res per resoldre</b>La safata s'omple amb les escoltes de ListenBrainz, que arriben en el bloc 3.3. Fins llavors, els discos nous entren a mà des de «Posa un disc en rotació».</div>
+      <div id="safataCos"></div>
     </section>
 
     <section class="superficie" id="s-faristol">
@@ -60,7 +60,8 @@
         <div class="files" id="files"></div>
       </div>
       <div class="panell" id="p-hist">
-        <div class="marcador"><p class="cita">L'Historial encara és buit.</p><p>S'omple amb les escoltes de ListenBrainz, que arriben en el bloc 3.3. La màquina només sap el que passa des del dia que arrenca.</p></div>
+        <input class="cerca" id="cerca" type="search" placeholder="Cerca a l'historial" autocomplete="off">
+        <div id="hist"></div>
       </div>
     </section>
 
@@ -91,6 +92,6 @@
   setTimeout(() => { const m = document.getElementById('entradaTxt'); if (m && m.textContent === 'Obrint…') { m.className = 'mal'; m.textContent = 'La màquina no ha arrencat. Tanca la pestanya, espera un minut i torna-la a obrir.'; } }, 10000);
 </script>
 <script src="vendor/sqljs/sql-wasm.js?v=1"></script>
-<script type="module" src="js/faristol.js?v=10"></script>
+<script type="module" src="js/faristol.js?v=11"></script>
 </body>
 </html>

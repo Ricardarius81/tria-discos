@@ -12,6 +12,7 @@ const llista = s => { try { return s ? JSON.parse(s) : []; } catch { return []; 
 const json = v => (v && v.length ? JSON.stringify(v) : null);
 const ara = () => new Date().toISOString();
 import * as T from './tags.js?v=1';
+import { SQL_COMPTA } from './escoltes.js?v=1';
 
 const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
 
@@ -30,11 +31,11 @@ export function rotacio(db) {
 export const fitxa = (db, id) => carrega(db, 'e.id = ?', [id])[0] || null;
 function carrega(db, on, params = []) {
   const eds = files(db, `
-    SELECT e.id, e.album_id, e.nom_edicio, e.durada_total, e.app_escolta, e.codi_bandcamp, e.formats, e.tags,
+    SELECT e.id, e.album_id, e.nom_edicio, e.durada_total, e.rotacio_actual, e.app_escolta, e.codi_bandcamp, e.formats, e.tags,
            e.darrera_obertura, e.data_referencia_rotacio, e.portada, e.portada_origen, e.data_darrera_pregunta_puntuacio,
            a.titol, a.artista_id, a.tags AS album_tags, a.conjunt, a.posicio, ar.nom_canonic AS art,
            (SELECT COUNT(*) FROM edicio x WHERE x.album_id = e.album_id) AS n_edicions,
-           (SELECT MAX(s.data_hora) FROM escolta s WHERE s.edicio_id = e.id) AS darrera_escolta
+           (SELECT MAX(s.data_hora) FROM escolta s WHERE s.edicio_id = e.id AND ${SQL_COMPTA}) AS darrera_escolta
     FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id
     WHERE ${on}`, params);
   for (const e of eds) {
@@ -49,9 +50,18 @@ function carrega(db, on, params = []) {
     e.min = e.viva ? (e.viva.durada || null) : e.durada_total;
     e.bc = e.viva ? e.viva.codi_bandcamp : e.codi_bandcamp;
     e.clau = [e.darrera_obertura, e.darrera_escolta, e.data_referencia_rotacio].filter(Boolean).sort().pop() || '';
+    // La línia «Grup» de la fitxa (ACT-449): tots els discos del grup que són a l'arxiu, en el seu ordre, en rotació o no.
+    e.discosGrup = e.conjunt ? files(db, 'SELECT id, titol, posicio FROM album WHERE conjunt = ? ORDER BY COALESCE(posicio, 99), id', [e.conjunt]) : [];
   }
   return eds;
 }
+
+// Posar en rotació una edició que ja és a l'arxiu (des de l'Historial): té durada per força (ACT-188).
+export const posaIdEnRotacio = id => db => {
+  db.run('UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ? WHERE id = ?', [ara(), id]);
+  const a = un(db, 'SELECT a.artista_id FROM edicio e JOIN album a ON a.id = e.album_id WHERE e.id = ?', [id]);
+  if (a) db.run('UPDATE preferent SET proper_titol = NULL WHERE artista_id = ?', [a.artista_id]);
+};
 
 export function edicio(db, id) {
   return rotacio(db).find(e => e.id === id) || null;

@@ -4,10 +4,13 @@
 // connexió amb el Drive en un toc, i l'ajust del «car pendent» del 30-10.
 // Bloc 3.2 bis (31-10): una sola fitxa del disc, que creix (ACT-391): el canal, la nota amb els seus dos gestos
 // i els tags en dos grups; la revisió de tags en treure un disc de rotació (pregunta 11).
-// Encara no hi ha ListenBrainz (3.3), safata viva (3.4) ni Bandcamp automàtic (3.5).
+// Blocs 3.3 + 3.4 + 3.5 (v1.44), una sola publicació: les escoltes de ListenBrainz, la safata viva i la bústia.
+// Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 
-import * as A from './arxiu.js?v=8';
-import * as D from './dades.js?v=9';
+import * as A from './arxiu.js?v=9';
+import * as D from './dades.js?v=10';
+import * as E from './escoltes.js?v=1';
+import * as LB from './listenbrainz.js?v=1';
 import * as I from './imatges.js?v=3';
 import * as T from './tags.js?v=1';
 
@@ -18,6 +21,7 @@ const inicials = n => String(n || '').replace(/[^\p{L}\s.]/gu, '').split(/\s+/).
 const IMG = ref => `<img data-ref="${esc(ref)}" alt="" referrerpolicy="no-referrer" onerror="var c=this.closest('.coberta');if(c)c.classList.remove('amb-img');this.remove()">`;
 I.usaDrive(id => A.baixaImatge(id));
 const db = () => A.estat.db;
+const norm = E.norm;
 const hora = iso => iso ? new Date(iso).toLocaleString('ca-ES', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 
 // ───────── els canals (§3.1) ─────────
@@ -100,27 +104,34 @@ async function fes(fn, text, { desfes = true, abans = null } = {}) {
 // ───────── pintar ─────────
 function pinta() {
   if (!A.estat.db) return;
-  pintaReixa(); pintaFiles();
+  pintaReixa(); pintaFiles(); pintaHistorial(); pintaSafata();
   if (estat.superficie === 'artista' && estat.artista) pintaArtista(estat.artista);
   I.omple();
 }
 
-// Les agrupacions (§7.5, decisions de Ricard del 18-10 i del 31-10). Un àlbum és d'un sol grup (Àlbum.Conjunt).
-// Fins que arribin les escoltes (3.3), els discos d'un mateix grup que són en rotació surten SEMPRE junts, en una sola
-// portada combinada; amb les escoltes, manarà la regla del 18-10 (junts quan han sonat seguits). Un sol disc del grup
-// en rotació surt sol. El grup ocupa el lloc del seu disc més recent.
+// Les agrupacions (§7.5). Un àlbum és d'un sol grup (Àlbum.Conjunt). La portada combinada ensenya com van sonar els
+// discos l'última vegada (ACT-443): els que van sonar «d'una tirada» —dins d'una finestra de 24 hores (ACT-446)— surten
+// junts, i la resta, solts. Un grup sense escoltes surt junt (ACT-444), i el ▶ ni junta ni separa: només ordena.
+// Només hi surten els discos del grup que són en rotació (ACT-430). El grup ocupa el lloc del seu disc més recent.
+const perOrdre = (x, y) => (x.posicio || 99) - (y.posicio || 99) || x.id - y.id;
+function junts(rot, nom, fg = E.grupsAmbEscoltes(db())) {
+  const j = E.juntsARotacio(fg.get(nom));                 // null: cap escolta, junts tots
+  const m = rot.filter(x => x.conjunt === nom && (j === null || j.has(x.album_id))).sort(perOrdre);
+  return m.length > 1 ? m : [];
+}
 function grups(rot) {
-  const n = {}; rot.forEach(d => { if (d.conjunt) n[d.conjunt] = (n[d.conjunt] || 0) + 1; });
-  const fets = new Set(), out = [];
+  const fg = E.grupsAmbEscoltes(db());
+  const fets = new Set(), out = [], dins = new Map();
+  for (const nom of new Set(rot.map(d => d.conjunt).filter(Boolean))) for (const x of junts(rot, nom, fg)) dins.set(x.id, nom);
   for (const d of rot) {
-    if (d.conjunt && n[d.conjunt] > 1) {
-      if (fets.has(d.conjunt)) continue; fets.add(d.conjunt);
-      out.push({ grup: d.conjunt, membres: rot.filter(x => x.conjunt === d.conjunt).sort((x, y) => (x.posicio || 99) - (y.posicio || 99) || x.id - y.id) });
-    } else out.push(d);
+    const nom = dins.get(d.id);
+    if (!nom) { out.push(d); continue; }
+    if (fets.has(nom)) continue; fets.add(nom);
+    out.push({ grup: nom, membres: rot.filter(x => dins.get(x.id) === nom).sort(perOrdre) });
   }
   return out;
 }
-const membresDe = nom => D.rotacio(db()).filter(x => x.conjunt === nom).sort((x, y) => (x.posicio || 99) - (y.posicio || 99) || x.id - y.id);
+const membresDe = nom => junts(D.rotacio(db()), nom);
 // El títol d'un grup: el del primer disc, i dels altres només el que els distingeix (decisió de Ricard, 31-10).
 // «Careful Now + Unmasked», «Infinitati + Intrusion Dubs + Variant Immersions».
 function titolGrup(nom, m) {
@@ -220,6 +231,124 @@ function pintaArtista(id) {
     </div>
     <div class="barra-accions" style="position:static;padding:14px 0 0"><button class="bt discret" data-desprefer="${p.id}">Treu-lo de preferents</button></div>`;
   I.omple($('#s-artista'));
+}
+
+// ───────── l'Historial (§7.7, v1.34 i ACT-448) ─────────
+// Una fila per grup amb tirades (compta les tirades i porta les portades de l'última) i una per disc amb escoltes
+// soltes (compta només les soltes). Ordenat per l'última vegada que va sonar, en tres trams, amb cercador.
+// La data relativa («ahir», «fa 3 dies») és només per a la pantalla: l'arxiu i l'Excel porten dates concretes.
+const DIA = 864e5;
+function quan(iso) {
+  const d0 = new Date().setHours(0, 0, 0, 0), d = new Date(iso);
+  const q = Math.round((d0 - new Date(iso).setHours(0, 0, 0, 0)) / DIA);
+  const h = d.toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit' });
+  return q <= 0 ? 'avui · ' + h : q === 1 ? 'ahir · ' + h : q < 7 ? 'fa ' + q + ' dies' : d.toLocaleDateString('ca-ES', { day: 'numeric', month: 'short', year: q > 300 ? 'numeric' : undefined });
+}
+const tram = iso => { const q = (Date.now() - Date.parse(iso)) / DIA; return q < 7 ? 'Aquesta setmana' : q < 31 ? 'Aquest mes' : 'Abans'; };
+function filesHistorial() {
+  return E.historial(db()).map(f => {
+    if (f.grup) {
+      const m = f.edicions.map(id => D.fitxa(db(), id)).filter(Boolean).sort(perOrdre);
+      return { ...f, membres: m, titol: titolGrup(f.grup, m), art: [...new Set(m.map(x => x.art))].join(' · '),
+               min: m.every(x => x.min) ? m.reduce((a, x) => a + x.min, 0) : null };
+    }
+    const d = D.fitxa(db(), f.edicio_id);
+    return d ? { ...f, d, titol: d.titol, art: d.art, min: d.min } : null;
+  }).filter(Boolean);
+}
+function pintaHistorial() {
+  const caixa = $('#hist'); if (!caixa) return;
+  const totes = filesHistorial();
+  const filtre = norm($('#cerca')?.value);
+  let tr = '', h = '';
+  for (const f of totes) {
+    if (filtre && !norm(f.art + ' ' + f.titol).includes(filtre)) continue;
+    const g = tram(f.darrera); if (g !== tr) { tr = g; h += `<div class="hgrup">${g}</div>`; }
+    const n = f.n + (f.grup ? (f.n === 1 ? ' tirada' : ' tirades') : (f.n === 1 ? ' escolta' : ' escoltes'));
+    if (f.grup) {
+      const cob = f.membres.find(x => x.portada)?.portada;
+      const fons = cob && I.adreca(cob) ? `--img:url('${esc(I.adreca(cob))}')` : '';
+      h += `<div class="hfila" style="${fons}">
+        <button class="hcap" data-hgrup="${esc(f.grup)}" aria-label="${esc(f.titol)}">
+          <span class="hcob collage n${Math.min(f.membres.length, 4)}"><span class="trossos">${f.membres.slice(0, 4).map(x => `<span class="tros">${x.portada ? IMG(x.portada) : ''}</span>`).join('')}</span></span>
+          <span class="htxt"><span class="htit">${esc(f.titol)}</span><span class="hart">${esc(f.art)}</span>
+            <span class="hmeta"><u>${quan(f.darrera)}</u> · ${n} · d'una tirada</span></span>
+        </button>
+        <span class="hdreta">${f.min ? `<span class="hdur">${f.min}′</span>` : ''}</span>
+      </div>`;
+      continue;
+    }
+    const d = f.d, fons = d.portada && I.adreca(d.portada) ? `--img:url('${esc(I.adreca(d.portada))}')` : '';
+    h += `<div class="hfila" style="${fons}">
+      <button class="hcap" data-hescoltar="${d.id}" aria-label="Escoltar ara ${esc(d.titol)}">
+        <span class="hcob">${esc(inicials(d.art))}${d.portada ? IMG(d.portada) : ''}</span>
+        <span class="htxt"><span class="htit">${esc(d.titol)}</span><span class="hart">${esc(d.art)}</span>
+          <span class="hmeta"><u>${quan(f.darrera)}</u> · ${n}</span></span>
+      </button>
+      <span class="hdreta">${d.min ? `<span class="hdur">${d.min}′</span>` : ''}
+        ${d.rotacio_actual ? `<span class="hja">en rotació</span>` : `<button class="hrot" data-hrot="${d.id}">＋ Rotació</button>`}</span>
+    </div>`;
+  }
+  caixa.innerHTML = h || (totes.length ? `<p class="subtitol" style="margin:18px 0 0">Res amb aquest nom.</p>`
+    : `<div class="marcador"><p class="cita">L'Historial encara és buit.</p><p>S'omple amb el que sona${E.arrencada(db()) ? ' des del ' + dia(E.arrencada(db())) : ''}: la màquina només sap el que passa des del dia que arrenca. Un disc hi surt quan ha sonat el 75 %.</p></div>`);
+  I.omple(caixa);
+}
+// La fila d'un grup a l'Historial s'obre com la del ▶ d'un grup: els discos de l'última tirada, cadascun amb el seu ▶.
+function fullGrupHistorial(nom) {
+  const f = filesHistorial().find(x => x.grup === nom); if (!f) return;
+  obreFull(`<h3>${esc(f.titol)}</h3><p>${f.n === 1 ? 'Una tirada' : f.n + ' tirades'} · l'última, ${esc(quan(f.darrera))}.</p>
+    <div class="llista-grup">${f.membres.map((x, i) => {
+      const e = x.app_escolta ? enllac(x.app_escolta, { art: x.art, tit: x.titol, bc: x.bc }) : null;
+      return `<div class="membre">
+        <button class="mini" data-fitxa="${x.id}">${x.portada ? IMG(x.portada) : ''}</button>
+        <button class="txt" data-fitxa="${x.id}"><b>${i + 1}. ${esc(x.titol)}</b><small>${esc(x.art)}${x.min ? ' · ' + x.min + '′' : ''}${x.rotacio_actual ? ' · en rotació' : ''}</small></button>
+        ${e ? `<a class="play" ${aAttrs(e)} data-obre="${x.id}" aria-label="Escoltar ${esc(x.titol)}">▶</a>` : `<button class="play" data-escoltar="${x.id}">▶</button>`}
+      </div>`; }).join('')}</div>`);
+}
+
+// ───────── la safata (§8.7) ─────────
+// Pas u: la pregunta 2. Les sessions, el disc nou, «Ignora» i les preguntes 7, 8 i 9 són el pas dos.
+function pintaSafata() {
+  const q2 = A.estat.db ? E.preguntes2(db()) : [];
+  const num = q2.length;
+  const p = $('#safataNum'); if (p) { p.textContent = num; p.classList.toggle('zero', !num); }
+  const caixa = $('#safataCos'); if (!caixa) return;
+  caixa.innerHTML = q2.map(q => {
+    const [prop, ...altres] = q.candidates;
+    const nomEd = c => esc(c.titol) + (c.nom_edicio ? ` <small>${esc(c.nom_edicio)}</small>` : '') + ` <small>${c.durada_total}′ · ${esc(c.art)}</small>`;
+    const obert = estat.q2obert === q.clau;
+    return `<div class="sf-card">
+      <div class="sf-cap"><b>${esc(q.album || '(sense nom d\'àlbum)')}</b><span>${esc(quan(q.darrera))}</span></div>
+      <p class="sf-pre">${esc(q.artista || '')} · ${q.n === 1 ? 'una pista' : q.n + ' pistes'}${q.minuts ? ' · ' + q.minuts + '′ del que ha sonat' : ''}${q.album ? '' : ' · ' + esc(q.pista || '')}</p>
+      <p class="sf-q">És aquesta edició?</p>
+      <div class="sf-chips sf-eds">
+        <button class="principal" data-q2si="${esc(q.clau)}|${prop.id}">Sí: ${nomEd(prop)}</button>
+        ${obert ? altres.map(c => `<button data-q2si="${esc(q.clau)}|${c.id}">${nomEd(c)}</button>`).join('') : (altres.length ? `<button data-q2altres="${esc(q.clau)}">Una altra…</button>` : '')}
+        <button class="nose" data-q2no="${esc(q.clau)}">No és cap d'aquestes</button>
+      </div>
+    </div>`; }).join('') || `<div class="sf-buit"><b>Res per resoldre</b>${E.arrencada(db()) ? 'La màquina llegeix les dues comptes de ListenBrainz des del ' + dia(E.arrencada(db())) + ' cada vegada que obres l\'app i quan toques la safata.' : 'Quan hi hagi connexió, la màquina començarà a llegir ListenBrainz.'}</div>`;
+}
+
+// ───────── la lectura de ListenBrainz (§3.3, ACT-453 i ACT-454) ─────────
+// En obrir l'app amb connexió i en tocar la safata. Les dues comptes, des de l'Arrencada o des de l'últim que ja té.
+// L'Arrencada s'escriu una sola vegada, la primera vegada que aquesta versió llegeix.
+let llegint = false;
+async function llegeixEscoltes() {
+  if (llegint || !navigator.onLine || !A.estat.db) return;
+  llegint = true; estat.lbError = null;
+  try {
+    const arr = E.arrencada(db()) || new Date().toISOString();
+    const noves = [];
+    for (const c of E.COMPTES) {
+      const des = [arr, E.darrerLlegit(db(), c.nom)].filter(Boolean).sort().pop();
+      noves.push(...await LB.llegeixCompte(c.nom, des));
+    }
+    if (!E.arrencada(db()) || noves.length) {
+      const r = await fes(x => { E.fixaArrencada(arr)(x); const n = E.desaScrobbles(noves)(x); return { n, ...(n ? E.recalcula(x) : {}) }; }, null, { desfes: false });
+      if (r?.n) avisa(`ListenBrainz: ${r.n === 1 ? 'una pista nova' : r.n + ' pistes noves'}.`);
+    }
+  } catch (e) { estat.lbError = e.message; }
+  finally { llegint = false; pintaSafata(); }
 }
 
 // La foto d'un artista pujada a mà: reduïda, al Drive (carpeta «Retrats») i guardada al mòbil.
@@ -337,6 +466,7 @@ function fullFitxa(d) {
       <li><b>Nota</b><span>${textNota(d)} <button class="sf-link" style="padding:0 0 0 8px" data-notafitxa="${d.id}">${d.nota ? 'canvia-la' : 'posa-li nota'}</button></span></li>
       ${d.formats.length ? `<li><b>Format</b><span>${esc(d.formats.map(f => NOMS_FISICS[f] || f).join(', '))}</span></li>` : ''}
       ${d.nom_edicio ? `<li><b>Edició</b><span>${esc(d.nom_edicio)}</span></li>` : ''}
+      ${d.discosGrup.length > 1 ? `<li><b>Grup</b><span>${d.discosGrup.map(x => x.id === d.album_id ? `<u>${esc(x.titol)}</u>` : esc(x.titol)).join(' · ')}</span></li>` : ''}
       ${d.parts.length ? `<li><b>Part viva</b><span>${d.esperant ? 'cap: la caixa espera' : esc(d.viva.nom || '') + ' · ' + d.viva.numero + ' de ' + d.parts.length}</span></li>` : ''}
       <li><b>Portada</b><span>${ORIGEN_PORTADA[d.portada ? d.portada_origen || 'escolta' : d.portada_origen === 'rebutjada' ? 'rebutjada' : 'cap']}
         <button class="sf-link" style="padding:0 0 0 8px" data-canviaportada="${d.id}">canvia-la</button></span></li>
@@ -471,7 +601,7 @@ function fullAfegeixDisc() {
   const botons = () => [...Object.keys(CANALS), ...Object.keys(NOMS_FISICS)]
     .map(k => `<button data-noucanal="${k}" class="${estat.nouCanal === k ? 'triat' : ''}">${CANALS[k]?.nom || NOMS_FISICS[k]}</button>`).join('');
   obreFull(`<h3>Posa un disc en rotació</h3>
-    <p>Fins que arribin les escoltes de ListenBrainz (bloc 3.3), els discos entren així, a mà. Cap disc entra sense durada: llegeix-la del disc o de l'app, no de memòria.</p>
+    <p>Els discos que sonen arriben sols a la safata. Aquí en poses un a mà: un de físic, o un que encara no ha sonat. Cap disc entra sense durada: llegeix-la del disc o de l'app, no de memòria.</p>
     <label class="camp"><span>Artista</span><input id="inArt" type="text" autocomplete="off"></label>
     <label class="camp"><span>Títol</span><input id="inTit" type="text" autocomplete="off"></label>
     <label class="camp"><span>Durada en minuts</span><input id="inMin" type="number" inputmode="numeric" min="1"><span class="ajuda">Si el disc ja té fitxa a l'arxiu, es queda la seva durada i aquí no cal res.</span></label>
@@ -516,11 +646,12 @@ function fullCabina() {
       <li><span>Estructura</span><span>versió ${A.versioEsquema()}</span></li>
       <li><span>Edicions · artistes · preferents</span><span>${r.edicio} · ${r.artista} · ${r.preferent}</span></li>
       <li><span>Escoltes · puntuacions</span><span>${r.escolta} · ${r.puntuacio}</span></li>
+      <li><span>Pistes de ListenBrainz</span><span>${r.scrobble}</span></li>
     </ul>
     <ul class="llista-ajust">
       <li><button data-connecta="1">${conn ? 'Torna a obrir des del Drive' : 'Connecta amb el Drive'} <small>${conn ? 'baixa la versió del Drive' : 'cal per desar'}</small></button></li>
       ${A.estat.pendent && conn ? `<li><button data-desaara="1">Desa ara <small>prova-ho una altra vegada</small></button></li>` : ''}
-      <li><button disabled style="opacity:.6">ListenBrainz <small>bloc 3.3</small></button></li>
+      <li><span class="ll-info">ListenBrainz <small>${E.arrencada(db()) ? 'les dues comptes, des del ' + dia(E.arrencada(db())) + ' · ' + r.scrobble + ' pistes' : 'encara no s\'ha llegit'}${estat.lbError ? ' · ' + esc(estat.lbError) : ''}</small></span></li>
       <li><button disabled style="opacity:.6">Còpia de seguretat i Excel <small>tram 4</small></button></li>
       <li><a href="privadesa.html" target="_blank" rel="noopener">Política de privadesa <small>què surt d'aquest mòbil, i cap a on</small></a></li>
     </ul></div>`);
@@ -610,7 +741,7 @@ document.addEventListener('click', e => {
   if (t.id === 'btLloc') { fullLloc(); return; }
   if (d.lloc) { estat.gps = 'Triat a mà.'; posaLloc(d.lloc); tancaFull(); return; }
   if (d.gps) { estat.gps = 'Mirant…'; detectaLloc(true); return; }
-  if (t.id === 'btSafata') { if (!A.estat.db) return; if (estat.superficie !== 'safata') estat.abansSafata = estat.superficie; tancaFull(); vesA('safata'); return; }
+  if (t.id === 'btSafata') { if (!A.estat.db) return; if (estat.superficie !== 'safata') estat.abansSafata = estat.superficie; tancaFull(); vesA('safata'); pintaSafata(); llegeixEscoltes(); return; }
   if (d.tornasafata) { vesA(estat.abansSafata || 'faristol'); return; }
   if (d.anar) { vesA(d.anar); return; }
   if (d.sub) { if ($('#full').classList.contains('obert')) tancaFull(); sub(d.sub); return; }
@@ -661,6 +792,23 @@ document.addEventListener('click', e => {
   if (d.fespref) { const aid = +d.fespref; tancaFull(); fes(D.afegeixPreferentId(aid), 'Afegit a Artistes Preferents'); sub('pref'); return; }
 
   if (d.grup) { fullGrup(d.grup); return; }
+
+  // La safata: la pregunta 2 (§8.10, ACT-469). Confirmar o triar una altra edició queda recordat a l'edició.
+  if (d.q2si) { const [clau, id] = [d.q2si.slice(0, d.q2si.lastIndexOf('|')), +d.q2si.slice(d.q2si.lastIndexOf('|') + 1)];
+    const q = E.preguntes2(db()).find(x => x.clau === clau); if (!q) return;
+    const ed = q.candidates.find(c => c.id === id);
+    fes(x => { E.confirmaEdicio(id, q)(x); return E.recalcula(x); }, `${q.album || q.pista}: és ${ed ? ed.titol + (ed.nom_edicio ? ' (' + ed.nom_edicio + ')' : '') : 'aquesta edició'}. Queda recordat.`);
+    return; }
+  if (d.q2altres) { estat.q2obert = d.q2altres; pintaSafata(); return; }
+  if (d.q2no) { const q = E.preguntes2(db()).find(x => x.clau === d.q2no); if (!q) return;
+    fes(E.rebutjaEmparellament(q), `${q.album || q.pista}: no és cap d'aquestes. Serà un disc nou.`); return; }
+
+  // L'Historial
+  if (d.hescoltar) { const x = D.fitxa(db(), +d.hescoltar); if (!x) return;
+    fullEscoltar({ id: x.id, art: x.art, tit: x.titol, min: x.min, canal: x.app_escolta, bc: x.bc, fisic: x.fisic }); return; }
+  if (d.hrot) { const id = +d.hrot, x = D.fitxa(db(), id); if (!x) return;
+    fes(D.posaIdEnRotacio(id), `${x.titol} entra a Discos en Rotació`); return; }
+  if (d.hgrup) { fullGrupHistorial(d.hgrup); return; }
 
   // La fitxa que creix (bloc 3.2 bis)
   if (d.canalfitxa) { const x = rot(d.canalfitxa); if (x) fullCanal(x); return; }
@@ -739,6 +887,7 @@ document.addEventListener('pointerup', () => {
   arros.fila.classList.remove('agafat'); document.body.classList.remove('arrossegant'); arros = null; pintaFiles();
 });
 $('#fons').addEventListener('click', tancaFull);
+$('#cerca').addEventListener('input', () => pintaHistorial());
 document.addEventListener('keydown', e => { if (e.key === 'Escape') tancaFull(); });
 
 // ───────── arrencar i connectar ─────────
@@ -766,6 +915,7 @@ async function connecta(ambGest) {
       else if (r.desat) avisa('Connectat. Els canvis d\'aquest mòbil ja són al Drive.');
       else avisa(r.avis || 'Connectat amb el Drive.');
       if (!r.fora) despresDeConnectar();
+      llegeixEscoltes();
       return;
     }
     if (r.cas === 'sense-res') { entrada(r.detall + ' Entra amb Google per obrir l\'arxiu.', BT('entra', 'Entra amb Google', true), 'mal'); $('#entra').onclick = () => connecta(true); return; }
@@ -843,7 +993,7 @@ try { navigator.permissions?.query({ name: 'geolocation' }).then(r => { if (r.st
 (async () => {
   try {
     // La sonda no espera el Drive: busca sempre que hi ha xarxa, i el que troba es desa quan es connecti.
-    if (await A.obreLocal()) { document.body.classList.add('desconnectat'); mostraMaquina(); sondes(); return; }
+    if (await A.obreLocal()) { document.body.classList.add('desconnectat'); mostraMaquina(); sondes(); llegeixEscoltes(); return; }
   } catch {}
   entrada('Entra amb Google per obrir l\'arxiu del teu Drive.', BT('entra', 'Entra amb Google', true));
   $('#entra').onclick = () => connecta(true);

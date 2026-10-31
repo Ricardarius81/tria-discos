@@ -562,3 +562,14 @@ body[data-estil="ricard"].desconnectat .conn-tira .tanca{color:#fff}
 .disc.pref .coberta,
 body[data-estil="ricard"] .reixa .disc.pref .coberta{outline:2.5px solid #E2B44A; outline-offset:0; box-shadow:0 8px 18px rgba(0,0,0,.5), 0 0 16px rgba(226,180,74,.35)}
 .disc.pref .nom-sota b::before{content:'★ '; color:#E2B44A}
+
+/* Historial (blocs 3.3–3.5): la fila d'un grup porta la portada combinada de l'última tirada, petita. */
+.hcob.collage::after{display:none}
+.hcob.collage .trossos{position:absolute; inset:0; display:grid; gap:1px; background:var(--marc)}
+.hcob.collage.n2 .trossos{grid-template-columns:1fr 1fr}
+.hcob.collage.n3 .trossos,.hcob.collage.n4 .trossos{grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr}
+.hcob.collage.n3 .tros:first-child{grid-row:span 2}
+.hcob.collage .tros{position:relative; overflow:hidden; background:var(--fons-3)}
+.hcob.collage .tros img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
+.ll-info{display:block; padding:12px 0; font-size:14px}
+.ll-info small{display:block; color:var(--os-3); font-size:12px; margin-top:2px}
