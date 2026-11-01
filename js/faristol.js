@@ -7,9 +7,9 @@
 // Blocs 3.3 + 3.4 + 3.5 (v1.44), una sola publicació: les escoltes de ListenBrainz, la safata viva i la bústia.
 // Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 
-import * as A from './arxiu.js?v=10';
-import * as D from './dades.js?v=11';
-import * as E from './escoltes.js?v=2';
+import * as A from './arxiu.js?v=11';
+import * as D from './dades.js?v=12';
+import * as E from './escoltes.js?v=3';
 import * as LB from './listenbrainz.js?v=1';
 import * as I from './imatges.js?v=3';
 import * as T from './tags.js?v=1';
@@ -93,17 +93,17 @@ function marcaDesat(r) {
   const pendent = A.estat.pendent;
   if (r && r.motiu === 'sense connectar amb el Drive') document.body.classList.add('desconnectat');
   $('#desat').classList.toggle('visible', !!pendent);
-  if (r && !r.desat && !document.body.classList.contains('desconnectat')) {
+  if (r && !r.desat && r.motiu !== 'obrint' && !document.body.classList.contains('desconnectat')) {
     if (r.motiu === 'conflicte') avisa('L\'arxiu ha canviat en un altre lloc: torna a connectar per triar quin mana.');
     else avisa('Encara no s\'ha pogut desar al Drive (' + r.motiu + '). Queda en aquest mòbil i es torna a provar sol.');
   }
 }
 
 // Fer un canvi: s'escriu a l'arxiu, es pinta de seguida i es desa. «Desfés» torna l'arxiu a com era abans.
-async function fes(fn, text, { desfes = true, abans = null } = {}) {
+async function fes(fn, text, { desfes = true, abans = null, auto = false } = {}) {
   abans = abans || A.estat.db.export();
   let res;
-  const p = A.canvia(d => { res = fn(d); });
+  const p = A.canvia(d => { res = fn(d); }, { auto });
   pinta();
   if (text) avisa(typeof text === 'function' ? text(res) : text,
     desfes ? async () => { delete $('#full').dataset.encaraNo; if ($('#full').classList.contains('obert')) tancaFull();
@@ -177,7 +177,7 @@ function fullGrup(nom) {
         <button class="txt" data-fitxa="${x.id}"><b>${i + 1}. ${esc(x.titol)}</b><small>${esc(x.art)}${x.min ? ' · ' + x.min + '′' : ''}</small></button>
         ${e ? `<a class="play" ${aAttrs(e)} data-obre="${x.id}" aria-label="Escoltar ${esc(x.titol)}">▶</a>` : `<button class="play" data-escoltar="${x.id}">▶</button>`}
       </div>`; }).join('')}</div>
-    <p class="gris" style="font-size:12px">Toca un títol per obrir-ne la fitxa. Crear i desfer grups arribarà amb la pestanya Agrupacions de La Prestatgeria.</p>`);
+    <p class="gris" style="font-size:12px">Toca un títol per obrir-ne la fitxa. Des de la fitxa pots afegir un disc al grup o treure'l.</p>`);
 }
 
 function pintaReixa() {
@@ -333,7 +333,7 @@ function minDisc(d, extra = '') {
 function cuaSafata() {
   if (!A.estat.db) return { q2: [], nous: [], soltes: [], rot: [], tg: [] };
   const { nous, soltes } = E.discosNous(db(), mbCache);
-  return { q2: E.preguntes2(db()), nous, soltes, rot: E.preguntesRotacio(db()), tg: E.targetes(db()) };
+  return { q2: E.preguntes2(db()), nous, soltes, rot: E.preguntesRotacio(db()), tg: E.targetes(db(), { estat: 'totes' }) };
 }
 function xipsContext(clau, c, cap) {
   const tmp = estat.ctxTmp?.[clau];
@@ -356,44 +356,69 @@ function idsDe(clau, tg) {
   const c = tg.find(x => String(x.clau) === t); if (!c) return [];
   return (d ? c.discos.find(x => x.clau === d)?.scr || [] : c.scr).map(s => s.id);
 }
+// La pregunta 2 i el disc nou, com a bloc: dins de la targeta de la seva escolta (1-11) o, si no en té, en una targeta pròpia.
+function blocQ2(q) {
+  const [prop, ...altres] = q.candidates;
+  const nomEd = c => esc(c.titol) + (c.nom_edicio ? ` <small>${esc(c.nom_edicio)}</small>` : '') + ` <small>${c.durada_total}′ · ${esc(c.art)}</small>`;
+  return `<p class="sf-q">És aquesta edició?</p>
+    <div class="sf-chips sf-eds">
+      <button class="principal" data-q2si="${esc(q.clau)}|${prop.id}">Sí: ${nomEd(prop)}</button>
+      ${estat.q2obert === q.clau ? altres.map(c => `<button data-q2si="${esc(q.clau)}|${c.id}">${nomEd(c)}</button>`).join('') : (altres.length ? `<button data-q2altres="${esc(q.clau)}">Una altra…</button>` : '')}
+      <button class="nose" data-q2no="${esc(q.clau)}">No és cap d'aquestes</button>
+    </div>`;
+}
+function blocNou(x) {
+  const a = D.trobaArtista(db(), x.artista);
+  const canal = estat.nouCanalDe?.[x.clau] || D.canalPerDefecte(db(), a?.id);
+  const pref = estat.nouPrefDe?.[x.clau];
+  return `<div data-nou="${esc(x.clau)}"><p class="sf-q">Disc nou: la durada i el canal</p>
+    <label class="camp"><span>Durada en minuts <small class="gris">· ${x.proposta.font}</small></span>
+      <input data-sfdur="${esc(x.clau)}" type="number" inputmode="numeric" min="1" value="${x.proposta.minuts}"></label>
+    ${x.proposta.font === 'el que ha sonat' ? `<p class="sf-pre">Només és la del disc si l'has sentit sencer.</p>` : ''}
+    <p class="sf-q">Per on l'escoltes?</p>
+    <div class="sf-chips">${Object.keys(CANALS).map(k => `<button class="${canal === k ? 'triat' : ''}" data-sfcanal="${esc(x.clau)}|${esc(k)}">${esc(CANALS[k].nom)}</button>`).join('')}
+      ${altreCanal(estat.altreCanalDe === 'nou:' + x.clau, 'nou', x.clau)}</div>
+    ${canal === 'bandcamp' ? `<p class="sf-pre">El codi de Bandcamp el busca Claude cada nit. No has de fer res.</p>` : ''}
+    <div class="sf-chips" style="margin-top:12px">
+      <button class="principal" data-sfnou="${esc(x.clau)}|arxiu">Desa'l</button>
+      <button data-sfnou="${esc(x.clau)}|rotacio">Desa'l i posa'l en rotació</button>
+      ${a && D.preferents(db()).some(p => p.artista_id === a.id) ? '' : `<button class="${pref ? 'triat' : ''}" data-sfnoupref="${esc(x.clau)}">${pref ? '✓ ' : ''}Afegeix l'artista a preferents</button>`}
+      <button class="mes" data-sfnouignora="${esc(x.clau)}">Ignora</button>
+    </div></div>`;
+}
+// La clau d'un disc d'una targeta, tal com la fan servir la pregunta 2 i el disc nou.
+const clauDisc = d => d.clau[0] === 'n' ? d.clau.slice(1) : d.clau[0] === 'm' ? 'msid:' + d.clau.slice(1) : null;
 function pintaSafata() {
   sincroCanals();
-  const cua = cuaSafata(), n = cua.q2.length + cua.nous.length + cua.rot.length + cua.tg.length;
+  const cua = cuaSafata();
+  const q2 = new Map(cua.q2.map(q => [q.clau, q])), nous = new Map(cua.nous.map(x => [x.clau, x]));
+  const solta = new Set(cua.soltes.map(x => x.clau));
+  const tg = cua.tg;
+  const perIdentificar = c => c.discos.some(d => { const k = clauDisc(d); return k && (q2.has(k) || nous.has(k)); });
+  // A la cua: les targetes tancades amb alguna pista per contestar, i les ja contestades que encara tenen un disc per
+  // identificar (la pregunta 2 o el disc nou viuen dins la targeta de la seva escolta, no en una de pròpia).
+  const cuaTg = tg.filter(c => c.estat === 'pendent' || (c.estat === 'resolta' && perIdentificar(c)));
+  const dins = new Set();       // cada pregunta, una sola vegada: a la targeta més recent on surt
+  for (const c of cuaTg) for (const d of c.discos) { const k = clauDisc(d); if (k && (q2.has(k) || nous.has(k))) dins.add(k); }
+  // el que només surt en una targeta que encara sona espera que s'acabi: no es pregunta a mitja escolta
+  for (const c of tg) if (c.estat === 'oberta') for (const d of c.discos) { const k = clauDisc(d); if (k) dins.add(k); }
+  const q2Sols = cua.q2.filter(q => !dins.has(q.clau)), nousSols = cua.nous.filter(x => !dins.has(x.clau));
+  const n = q2Sols.length + nousSols.length + cua.rot.length + cuaTg.length;
   const p = $('#safataNum'); if (p) { p.textContent = n; p.classList.toggle('zero', !n); }
   const caixa = $('#safataCos'); if (!caixa) return;
   let h = '';
-  // la pregunta 2
-  h += cua.q2.map(q => {
-    const [prop, ...altres] = q.candidates;
-    const nomEd = c => esc(c.titol) + (c.nom_edicio ? ` <small>${esc(c.nom_edicio)}</small>` : '') + ` <small>${c.durada_total}′ · ${esc(c.art)}</small>`;
-    return `<div class="sf-card"><span class="sf-tipus">És aquesta edició?</span>
+  // el que encara sona: es veu, però no es contesta fins que acaba
+  h += tg.filter(c => c.estat === 'oberta').map(c => `<div class="sf-card sf-oberta"><span class="sf-tipus">Sonant ara</span>
+      <div class="sf-cap"><b>${esc(quan(c.inici).replace(/ · .*/, ''))} · des de les ${hm(c.inici)}</b><span>${nomCompte(c.comptes)}</span></div>
+      ${c.discos.map(d => minDisc(d)).join('')}
+      <p class="sf-pre">Es podrà contestar quan faci 30 minuts que no sona res.</p></div>`).join('');
+  // la pregunta 2 i el disc nou que no tenen cap targeta a la cua (per exemple, d'escoltes d'abans de l'1-11)
+  h += q2Sols.map(q => `<div class="sf-card"><span class="sf-tipus">És aquesta edició?</span>
       <div class="sf-cap"><b>${esc(q.album || '(sense nom d\'àlbum)')}</b><span>${esc(quan(q.darrera))}</span></div>
       <p class="sf-pre">${esc(q.artista || '')} · ${q.n === 1 ? 'una pista' : q.n + ' pistes'}${q.minuts ? ' · ' + q.minuts + '′ del que ha sonat' : ''}${q.album ? '' : ' · ' + esc(q.pista || '')}</p>
-      <div class="sf-chips sf-eds" style="margin-top:10px">
-        <button class="principal" data-q2si="${esc(q.clau)}|${prop.id}">Sí: ${nomEd(prop)}</button>
-        ${estat.q2obert === q.clau ? altres.map(c => `<button data-q2si="${esc(q.clau)}|${c.id}">${nomEd(c)}</button>`).join('') : (altres.length ? `<button data-q2altres="${esc(q.clau)}">Una altra…</button>` : '')}
-        <button class="nose" data-q2no="${esc(q.clau)}">No és cap d'aquestes</button>
-      </div></div>`; }).join('');
-  // el disc nou
-  h += cua.nous.map(x => {
-    const a = D.trobaArtista(db(), x.artista);
-    const canal = estat.nouCanalDe?.[x.clau] || D.canalPerDefecte(db(), a?.id);
-    const pref = estat.nouPrefDe?.[x.clau];
-    return `<div class="sf-card" data-nou="${esc(x.clau)}"><span class="sf-tipus">Disc nou: la durada i el canal</span>
-      ${minDisc({ titol: x.album || x.pista, art: x.artista }, ' · ' + (x.n === 1 ? 'una pista' : x.n + ' pistes'))}
-      <label class="camp" style="margin-top:10px"><span>Durada en minuts <small class="gris">· ${x.proposta.font}</small></span>
-        <input data-sfdur="${esc(x.clau)}" type="number" inputmode="numeric" min="1" value="${x.proposta.minuts}"></label>
-      ${x.proposta.font === 'el que ha sonat' ? `<p class="sf-pre">Només és la del disc si l'has sentit sencer.</p>` : ''}
-      <p class="sf-q">Per on l'escoltes?</p>
-      <div class="sf-chips">${Object.keys(CANALS).map(k => `<button class="${canal === k ? 'triat' : ''}" data-sfcanal="${esc(x.clau)}|${esc(k)}">${esc(CANALS[k].nom)}</button>`).join('')}
-        ${altreCanal(estat.altreCanalDe === 'nou:' + x.clau, 'nou', x.clau)}</div>
-      ${canal === 'bandcamp' ? `<p class="sf-pre">El codi de Bandcamp el busca Claude cada nit. No has de fer res.</p>` : ''}
-      <div class="sf-chips" style="margin-top:12px">
-        <button class="principal" data-sfnou="${esc(x.clau)}|arxiu">Desa'l</button>
-        <button data-sfnou="${esc(x.clau)}|rotacio">Desa'l i posa'l en rotació</button>
-        ${a && D.preferents(db()).some(p => p.artista_id === a.id) ? '' : `<button class="${pref ? 'triat' : ''}" data-sfnoupref="${esc(x.clau)}">${pref ? '✓ ' : ''}Afegeix l'artista a preferents</button>`}
-        <button class="mes" data-sfnouignora="${esc(x.clau)}">Ignora</button>
-      </div></div>`; }).join('');
+      ${blocQ2(q).replace('<p class="sf-q">És aquesta edició?</p>', '')}</div>`).join('');
+  h += nousSols.map(x => `<div class="sf-card"><span class="sf-tipus">Disc nou</span>
+      ${minDisc({ titol: x.album || x.pista, art: x.artista }, ' · ' + (x.n === 1 ? 'una pista' : x.n + ' pistes'))}${blocNou(x)}</div>`).join('');
   // les preguntes 7, 8 i 9
   h += cua.rot.map(x => {
     const d = { titol: x.titol, art: x.art, durada_total: x.durada_total, portada: x.portada };
@@ -407,24 +432,31 @@ function pintaSafata() {
       <p class="sf-q">Encara l'estàs estudiant?</p>
       <div class="sf-chips"><button class="principal" data-sfq9="${x.id}|si">Sí</button><button data-sfq9="${x.id}|no">No</button><button data-sfq9="${x.id}|ara">Sí, i posa'l ara</button></div></div>`;
   }).join('');
-  // les targetes de sessió
-  const solta = new Set(cua.soltes.map(x => x.clau));
-  h += cua.tg.map(c => {
-    const sep = estat.separades?.has(c.clau);
+  // les targetes de sessió: una per escolta, amb tot el que s'hi ha de resoldre a dins
+  const posats = new Set();
+  h += cuaTg.map(c => {
+    const sep = estat.separades?.has(c.clau) && c.estat === 'pendent';
     const fila = d => {
-      const k = d.clau.slice(1), esSolta = !d.edicio_id && solta.has(d.clau[0] === 'm' ? 'msid:' + k : k);
-      const extra = d.edicio_id ? '' : esSolta ? ` · <i>cançó solta</i>` : ` · <i>pendent: a dalt</i>`;
-      return minDisc(d, extra) + (esSolta ? `<button class="sf-link" style="padding:0 0 6px 54px" data-sfdisc="${esc(d.clau[0] === 'm' ? 'msid:' + k : k)}">És un disc</button>` : '')
-        + (d.edicio_id ? `<button class="sf-link sf-canal" data-sfcanaldisc="${d.edicio_id}">Canal: ${esc(nomCanal(d.app_escolta))} · canvia'l</button>` : '');
+      const k = clauDisc(d), esSolta = !d.edicio_id && k && solta.has(k);
+      let bloc = '';
+      if (k && (q2.has(k) || nous.has(k))) {
+        if (posats.has(k)) bloc = `<p class="sf-pre" style="padding-left:54px">Es resol a la targeta de sobre.</p>`;
+        else { posats.add(k); bloc = q2.has(k) ? blocQ2(q2.get(k)) : blocNou(nous.get(k)); }
+      }
+      const extra = d.edicio_id ? '' : esSolta ? ` · <i>cançó solta</i>` : '';
+      return minDisc(d, extra) + (esSolta ? `<button class="sf-link" style="padding:0 0 6px 54px" data-sfdisc="${esc(k)}">És un disc</button>` : '')
+        + (d.edicio_id ? `<button class="sf-link sf-canal" data-sfcanaldisc="${d.edicio_id}">Canal: ${esc(nomCanal(d.app_escolta))} · canvia'l</button>` : '') + bloc;
     };
-    const cos = sep
-      ? c.discos.map(d => `<div class="sf-separat">${fila(d)}${xipsContext('d' + c.clau + ':' + d.clau, c, 'On escoltaves aquest?')}</div>`).join('')
-      : c.discos.map(fila).join('') + xipsContext('t' + c.clau, c) + (c.discos.length > 1 ? `<button class="sf-link" data-sfsepara="${c.clau}">Separa: cada disc per la seva banda</button>` : '');
+    const cos = c.estat === 'resolta'
+      ? c.discos.map(fila).join('') + `<p class="sf-pre">On ho escoltaves: <b>${esc(c.context || '')}</b>, ja contestat.</p>`
+      : sep
+        ? c.discos.map(d => `<div class="sf-separat">${fila(d)}${xipsContext('d' + c.clau + ':' + d.clau, c, 'On escoltaves aquest?')}</div>`).join('')
+        : c.discos.map(fila).join('') + xipsContext('t' + c.clau, c) + (c.discos.length > 1 ? `<button class="sf-link" data-sfsepara="${c.clau}">Separa: cada disc per la seva banda</button>` : '');
     return `<div class="sf-card"><div class="sf-cap"><b>${esc(franja(c))}</b><span>${nomCompte(c.comptes)} · ${c.discos.length} ${c.discos.length === 1 ? 'disc' : 'discos'}</span></div>${cos}</div>`;
   }).join('');
-  if (!h) h = `<div class="sf-buit"><b>Res per resoldre</b>${E.arrencada(db()) ? 'La màquina llegeix les dues comptes de ListenBrainz des del ' + dia(E.arrencada(db())) + ' cada vegada que obres l\'app i quan toques la safata.' : 'Quan hi hagi connexió, la màquina començarà a llegir ListenBrainz.'}${estat.lbError ? '<br><small>' + esc(estat.lbError) + '</small>' : ''}</div>`;
+  if (!n) h += `<div class="sf-buit"><b>Res per resoldre</b>${E.arrencada(db()) ? 'La màquina llegeix les dues comptes de ListenBrainz des del ' + dia(E.arrencada(db())) + ' cada vegada que obres l\'app i quan toques la safata.' : 'Quan hi hagi connexió, la màquina començarà a llegir ListenBrainz.'}${estat.lbError ? '<br><small>' + esc(estat.lbError) + '</small>' : ''}</div>`;
   // les resoltes, amb «Canvia» (tot el que es contesta aquí és editable sempre, §8.7)
-  const res = E.targetes(db(), { estat: 'resolt', limit: 8 });
+  const res = tg.filter(c => c.estat === 'resolta' && !cuaTg.includes(c)).slice(0, 8);
   if (res.length) h += `<h2 style="margin-top:22px">Resoltes</h2>` + res.map(c => `<div class="sf-resolta"><span><b>${esc(franja(c))}</b> · ${esc(c.discos.map(d => d.titol).join(', '))} · ${esc(c.context || '')}</span>
       <button data-sfresolta="${c.clau}">Canvia</button></div>`).join('');
   caixa.innerHTML = h;
@@ -463,11 +495,19 @@ async function llegeixEscoltes() {
     const arr = E.arrencada(db()) || new Date().toISOString();
     const noves = [];
     for (const c of E.COMPTES) {
-      const des = [arr, E.darrerLlegit(db(), c.nom)].filter(Boolean).sort().pop();
+      // Amb un marge de 24 hores enrere: un mòbil sense cobertura envia les pistes tard, amb la seva hora d'inici, i
+      // ListenBrainz filtra per aquesta hora. Sense el marge, una pista enviada tard i més antiga que l'última llegida
+      // es perdria. Rellegir no duplica res (la clau única de Scrobble). Mai abans de l'Arrencada.
+      const ult = E.darrerLlegit(db(), c.nom);
+      const des = [arr, ult ? new Date(Date.parse(ult) - 24 * 3600e3).toISOString() : null].filter(Boolean).sort().pop();
       noves.push(...await LB.llegeixCompte(c.nom, des));
     }
-    if (!E.arrencada(db()) || noves.length) {
-      const r = await fes(x => { E.fixaArrencada(arr)(x); const n = E.desaScrobbles(noves)(x); return { n, ...(n ? E.recalcula(x) : {}) }; }, null, { desfes: false });
+    // Les pistes que arriben tard a una targeta ja contestada n'hereten la resposta (1-11). Es mira cada vegada, encara que
+    // no n'arribi cap de nova, perquè una targeta es tanca amb el temps: 30 minuts sense sonar.
+    const tard = db_ => E.heretaRespostes()(db_);
+    const cal = !E.arrencada(db()) || noves.length || E.calHeretar(db());
+    if (cal) {
+      const r = await fes(x => { E.fixaArrencada(arr)(x); const n = E.desaScrobbles(noves)(x); const h = tard(x); return { n, h, ...((n || h) ? E.recalcula(x) : {}) }; }, null, { desfes: false, auto: true });
       if (r?.n) avisa(`ListenBrainz: ${r.n === 1 ? 'una pista nova' : r.n + ' pistes noves'}.`);
     }
   } catch (e) { estat.lbError = e.message; }
@@ -575,7 +615,8 @@ function fullEscoltar(d, tots) {
     ${!k && !fisic ? `<p>${d.fisic ? 'És un disc físic: fora de Lleida, tria un canal per escoltar-lo.' : 'Aquest disc no té canal: tria\'n un.'}</p>` : ''}
     ${(tots || !k) ? `<p style="margin:14px 0 8px">${d.id ? 'Tria el canal d\'aquest disc. Queda recordat.' : 'Tria el canal.'}</p>
       <div class="canals">${altres.map(x => `<button data-canvicanal="${x}">${CANALS[x].nom}</button>`).join('')}</div>`
-      : `<div class="barra-accions" style="position:static;padding:10px 0 0"><button class="bt discret" data-altrecanal="1">Un altre canal</button></div>`}`);
+      : `<div class="barra-accions" style="position:static;padding:10px 0 0"><button class="bt discret" data-altrecanal="1">Un altre canal</button></div>`}
+    ${d.id ? `<div class="barra-accions" style="position:static;padding:6px 0 0"><button class="bt discret" data-fitxa="${d.id}">Fitxa del disc</button></div>` : ''}`);
 }
 
 function fullFitxa(d) {
@@ -589,7 +630,9 @@ function fullFitxa(d) {
       <li><b>Nota</b><span>${textNota(d)} <button class="sf-link" style="padding:0 0 0 8px" data-notafitxa="${d.id}">${d.nota ? 'canvia-la' : 'posa-li nota'}</button></span></li>
       ${d.formats.length ? `<li><b>Format</b><span>${esc(d.formats.map(f => NOMS_FISICS[f] || f).join(', '))}</span></li>` : ''}
       <li><b>Edició</b><span>${d.nom_edicio ? esc(d.nom_edicio) : (d.n_edicions > 1 ? 'sense nom' : 'l\'única que hi ha')} <button class="sf-link" style="padding:0 0 0 8px" data-canviaedicio="${d.id}">canvia-la</button></span></li>
-      ${d.discosGrup.length > 1 ? `<li><b>Grup</b><span>${d.discosGrup.map(x => x.id === d.album_id ? `<u>${esc(x.titol)}</u>` : esc(x.titol)).join(' · ')}</span></li>` : ''}
+      <li><b>Grup</b><span>${d.discosGrup.length > 1 ? d.discosGrup.map(x => x.id === d.album_id ? `<u>${esc(x.titol)}</u>` : esc(x.titol)).join(' · ') : 'cap'}
+        <button class="sf-link" style="padding:0 0 0 8px" data-agrupa="${d.id}">${d.discosGrup.length > 1 ? 'afegeix-hi un disc' : 'agrupa\'l amb…'}</button>
+        ${d.discosGrup.length > 1 ? `<button class="sf-link" style="padding:0 0 0 8px" data-treugrup="${d.id}">treu-lo del grup</button>` : ''}</span></li>
       ${d.parts.length ? `<li><b>Part viva</b><span>${d.esperant ? 'cap: la caixa espera' : esc(d.viva.nom || '') + ' · ' + d.viva.numero + ' de ' + d.parts.length}</span></li>` : ''}
       <li><b>Portada</b><span>${ORIGEN_PORTADA[d.portada ? d.portada_origen || 'escolta' : d.portada_origen === 'rebutjada' ? 'rebutjada' : 'cap']}
         <button class="sf-link" style="padding:0 0 0 8px" data-canviaportada="${d.id}">canvia-la</button></span></li>
@@ -598,8 +641,21 @@ function fullFitxa(d) {
     <div class="barra-accions" style="position:static;padding:0">
       ${d.esperant ? `<button class="bt principal" data-repren="${d.id}">Reprèn</button>` : `<button class="bt principal" data-escoltar="${d.id}">Escoltar ara</button>`}
       ${jaPref ? '' : `<button class="bt" data-fespref="${d.artista_id}">Afegir a Artistes Preferents</button>`}
-      <button class="bt" data-treure="${d.id}">Treu de rotació</button>
+      ${d.rotacio_actual ? `<button class="bt" data-treure="${d.id}">Treu de rotació</button>` : `<button class="bt" data-hrot="${d.id}">Posa'l en rotació</button>`}
     </div>`);
+}
+
+// Agrupar des de la fitxa (1-11): es busca l'altre disc a l'arxiu. Crear un grup, sumar-s'hi i treure'n un disc;
+// la pestanya Agrupacions de La Prestatgeria (tram 6) ho farà tot amb més calma.
+function fullAgrupa(d, filtre = '') {
+  const tots = D.albumsPerAgrupar(db(), d.album_id), f = norm(filtre);
+  const l = tots.filter(x => !f || norm(x.art + ' ' + x.titol).includes(f)).slice(0, 40);
+  obreFull(`<h3>Agrupa «${esc(d.titol)}»</h3>
+    <p>${d.conjunt ? `És al grup «${esc(d.conjunt)}». El disc que triïs s'hi suma al final.` : 'Tria l\'altre disc. Aquest serà el primer del grup, i el grup en portarà el nom.'}</p>
+    <label class="camp"><span>Busca a l'arxiu</span><input id="inAgrupa" type="search" value="${esc(filtre)}" placeholder="artista o títol"></label>
+    <div class="llista-grup">${l.map(x => `<div class="membre"><button class="txt" data-agrupaamb="${d.id}|${x.id}" ${x.conjunt && d.conjunt && x.conjunt !== d.conjunt ? 'disabled' : ''}>
+      <b>${esc(x.titol)}</b><small>${esc(x.art)}${x.conjunt ? ' · grup «' + esc(x.conjunt) + '»' : ''}</small></button></div>`).join('') || '<p class="gris">Res amb aquest nom.</p>'}</div>`);
+  const i = $('#inAgrupa'); if (i) { i.oninput = () => { const pos = i.selectionStart; fullAgrupa(d, i.value); const j = $('#inAgrupa'); j.focus(); j.setSelectionRange(pos, pos); }; }
 }
 
 // ───────── la nota a la fitxa (bloc 3.2 bis) ─────────
@@ -797,6 +853,11 @@ function fullCabina() {
     <ul class="llista-ajust">
       <li><button data-connecta="1">${conn ? 'Torna a obrir des del Drive' : 'Connecta amb el Drive'} <small>${conn ? 'baixa la versió del Drive' : 'cal per desar'}</small></button></li>
       ${A.estat.pendent && conn ? `<li><button data-desaara="1">Desa ara <small>prova-ho una altra vegada</small></button></li>` : ''}
+      ${(() => { const v = E.veredicte(db()); if (!v) return '';
+        const pc = x => Math.round(x * 100) + ' %';
+        return `<li><span class="ll-info">Prova de la safata <small>${v.llest
+          ? `${v.falla ? '<b class="mal">no la passa</b>' : '<b class="ok">la passa</b>'} · «No ho sé» ${pc(v.pctNose)} de ${v.contestades} (màxim 33 %) · ignorades ${pc(v.pctIgnorades)} de ${v.targetes} (màxim 10 %)`
+          : `el resultat surt el ${dia(v.dataLlesta)}, quan faci un mes`}</small></span></li>`; })()}
       <li><span class="ll-info">ListenBrainz <small>${E.arrencada(db()) ? 'les dues comptes, des del ' + dia(E.arrencada(db())) + ' · ' + r.scrobble + ' pistes' : 'encara no s\'ha llegit'}${estat.lbError ? ' · ' + esc(estat.lbError) : ''}</small></span></li>
       <li><button disabled style="opacity:.6">Còpia de seguretat i Excel <small>tram 4</small></button></li>
       <li><a href="privadesa.html" target="_blank" rel="noopener">Política de privadesa <small>què surt d'aquest mòbil, i cap a on</small></a></li>
@@ -906,6 +967,14 @@ document.addEventListener('click', e => {
     return;
   }
   if (d.fitxa) { const x = rot(d.fitxa); if (x) fullFitxa(x); return; }
+  if (d.agrupa) { const x = rot(d.agrupa); if (x) fullAgrupa(x); return; }
+  if (d.agrupaamb) { const [id, amb] = d.agrupaamb.split('|').map(Number); const x = rot(id); if (!x) return;
+    // L'error (un disc que ja és d'un altre grup) es mira abans d'escriure: un canvi que llança no s'ha de desar.
+    const amb_ = D.albumsPerAgrupar(db(), x.album_id).find(y => y.id === amb);
+    if (amb_?.conjunt && x.conjunt && amb_.conjunt !== x.conjunt) { avisa(`«${amb_.titol}» ja és al grup «${amb_.conjunt}». Treu-lo'n primer.`); return; }
+    let r; fes(y => { r = D.agrupa(x.album_id, amb)(y); }, () => `Agrupats al grup «${r.grup}»`); fullFitxa(rot(id)); return; }
+  if (d.treugrup) { const x = rot(d.treugrup); if (!x) return; const id = x.id;
+    let r; fes(y => { r = D.treuDelGrup(x.album_id)(y); }, () => r?.desfet ? `Grup «${r.grup}» desfet: només hi quedava un disc` : `Fora del grup «${r?.grup}»`); fullFitxa(rot(id)); return; }
   if (d.durada) { const x = rot(d.durada); if (x) fullDurada(x); return; }
   if (d.desadurada) { const x = rot(d.desadurada), m = parseInt($('#inDurada').value, 10);
     if (!x) return; if (!m || m < 1) { avisa('Cap disc es queda sense durada.'); return; }
@@ -1023,7 +1092,7 @@ document.addEventListener('click', e => {
   if (d.hescoltar) { const x = D.fitxa(db(), +d.hescoltar); if (!x) return;
     fullEscoltar({ id: x.id, art: x.art, tit: x.titol, min: x.min, canal: x.app_escolta, bc: x.bc, fisic: x.fisic }); return; }
   if (d.hrot) { const id = +d.hrot, x = D.fitxa(db(), id); if (!x) return;
-    fes(D.posaIdEnRotacio(id), `${x.titol} entra a Discos en Rotació`); return; }
+    fes(D.posaIdEnRotacio(id), `${x.titol} entra a Discos en Rotació`); if (t.closest('#full')) fullFitxa(rot(id)); return; }
   if (d.hgrup) { fullGrupHistorial(d.hgrup); return; }
 
   // La fitxa que creix (bloc 3.2 bis)
@@ -1146,8 +1215,15 @@ async function connecta(ambGest) {
     if (r.cas === 'conflicte') {
       entrada(`L'arxiu ha canviat en un altre lloc (${hora(r.drive.modifiedTime)}) i aquest mòbil té canvis sense pujar. Quin mana? L'altre no s'esborra: es desa apart al Drive.`,
         BT('mDrive', 'Mana el Drive') + BT('mAqui', 'Mana aquest mòbil'), 'avis');
-      $('#mDrive').onclick = async () => { await A.resolConflicte('drive', r); connecta(false); };
-      $('#mAqui').onclick = async () => { await A.resolConflicte('aqui', r); document.body.classList.remove('desconnectat'); mostraMaquina(); };
+      // Els dos botons diuen que treballen i, si falla, ensenyen l'error i es poden tornar a tocar (fallada ACT-493).
+      const treballa = async (boto, text, feina) => {
+        const bs = [$('#mDrive'), $('#mAqui')]; bs.forEach(b => { b.disabled = true; }); const abans = boto.textContent; boto.textContent = text;
+        try { await feina(); }
+        catch (e) { bs.forEach(b => { b.disabled = false; }); boto.textContent = abans;
+                    $('#entradaTxt').textContent = 'No s\'ha pogut fer: ' + e.message + '. Torna-ho a provar.'; $('#entradaTxt').className = 'mal'; }
+      };
+      $('#mDrive').onclick = () => treballa($('#mDrive'), 'Baixant el Drive…', async () => { const x = await A.resolConflicte('drive', r); if (x?.cas !== 'obert') throw new Error('el Drive no s\'ha pogut obrir'); connecta(false); });
+      $('#mAqui').onclick = () => treballa($('#mAqui'), 'Pujant aquest mòbil…', async () => { await A.resolConflicte('aqui', r); document.body.classList.remove('desconnectat'); mostraMaquina(); avisa('Pujat al Drive. L\'altra versió s\'ha desat apart.'); });
       return;
     }
   } catch (e) {
@@ -1185,7 +1261,7 @@ async function bustia() {
   if (bustiant || !navigator.onLine || !A.tePermis()) return; bustiant = true;
   try {
     const codis = await A.llegeixCodisBustia();
-    const fets = codis.length ? await fes(E.aplicaCodis(codis), null, { desfes: false }) : [];
+    const fets = codis.length ? await fes(E.aplicaCodis(codis), null, { desfes: false, auto: true }) : [];
     if (fets.length) avisa(`Bandcamp: ${fets.length === 1 ? 'un codi nou' : fets.length + ' codis nous'}. El ▶ ja obre el disc a l'app.`);
     const text = E.textPendents(E.pendentsBandcamp(db()));
     let abans = null; try { abans = localStorage.getItem('tria-bustia'); } catch {}
@@ -1207,9 +1283,9 @@ async function sondes() {
     const arts = D.artistesSenseRetrat(db()).filter(x => fresc('a' + x.id));
     if (!discos.length && !arts.length) return;
     const n1 = await I.passa(discos, async x => { const r = await I.sondaPortada(x); if (!r) apunta('e' + x.id); return r; },
-      lot => fes(D.posaPortadaSonda(lot), null, { desfes: false }), { cada: 2 });
+      lot => fes(D.posaPortadaSonda(lot), null, { desfes: false, auto: true }), { cada: 2 });
     const n2 = await I.passa(arts, async x => { const r = await I.sondaRetrat(x); if (!r) apunta('a' + x.id); return r; },
-      lot => fes(D.posaRetratSonda(lot), null, { desfes: false }), { cada: 2 });
+      lot => fes(D.posaRetratSonda(lot), null, { desfes: false, auto: true }), { cada: 2 });
     avisa(`La sonda: ${n1} portades de ${discos.length} i ${n2} fotos de ${arts.length}.`);
   } finally { sondant = false; }
 }

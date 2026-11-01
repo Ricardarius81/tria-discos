@@ -12,7 +12,7 @@ const llista = s => { try { return s ? JSON.parse(s) : []; } catch { return []; 
 const json = v => (v && v.length ? JSON.stringify(v) : null);
 const ara = () => new Date().toISOString();
 import * as T from './tags.js?v=1';
-import { SQL_COMPTA } from './escoltes.js?v=2';
+import { SQL_COMPTA } from './escoltes.js?v=3';
 
 const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
 
@@ -337,4 +337,41 @@ export const ajusta32bis = db => {
   }
   db.run('INSERT INTO meta (clau, valor) VALUES (?, ?)', [AJUST_3_2_BIS, ara() + ' · ' + fets.join(' · ')]);
   return fets;
+};
+
+// ───────── agrupar des de la fitxa (1-11, adelanta una part de la pestanya Agrupacions) ─────────
+// Àlbum.Conjunt és el nom del grup i Àlbum.Posició l'ordre (§7.5). Un àlbum és d'un sol grup.
+// L'ordre és el d'afegir-los: el disc de la fitxa d'on es parteix és el primer d'un grup nou; un disc que s'hi suma va al final.
+// El nom d'un grup nou és el títol del primer disc, com els de la llavor («Careful Now», «Infinitati»).
+export const albumsPerAgrupar = (db, albumId) => files(db, `
+  SELECT a.id, a.titol, a.conjunt, ar.nom_canonic AS art, (SELECT MIN(e.id) FROM edicio e WHERE e.album_id = a.id) AS edicio_id
+  FROM album a JOIN artista ar ON ar.id = a.artista_id WHERE a.id != ? ORDER BY ar.nom_canonic, a.titol`, [albumId]);
+export const agrupa = (deId, ambId) => db => {
+  const de = un(db, 'SELECT id, titol, conjunt FROM album WHERE id = ?', [deId]), amb = un(db, 'SELECT id, titol, conjunt FROM album WHERE id = ?', [ambId]);
+  if (!de || !amb) throw new Error('No trobo el disc.');
+  if (de.conjunt && amb.conjunt) {
+    if (de.conjunt === amb.conjunt) return { grup: de.conjunt, res: true };
+    throw new Error(`«${amb.titol}» ja és al grup «${amb.conjunt}». Un disc només pot ser d'un grup: treu-lo'n primer.`);
+  }
+  const seguent = g => (un(db, 'SELECT MAX(posicio) AS m FROM album WHERE conjunt = ?', [g])?.m || 0) + 1;
+  if (de.conjunt || amb.conjunt) {
+    const g = de.conjunt || amb.conjunt, nou = de.conjunt ? amb : de;
+    db.run('UPDATE album SET conjunt = ?, posicio = ? WHERE id = ?', [g, seguent(g), nou.id]);
+    return { grup: g };
+  }
+  let g = de.titol, i = 2;
+  while (un(db, 'SELECT 1 AS x FROM album WHERE conjunt = ?', [g])) g = `${de.titol} (${i++})`;
+  db.run('UPDATE album SET conjunt = ?, posicio = 1 WHERE id = ?', [g, de.id]);
+  db.run('UPDATE album SET conjunt = ?, posicio = 2 WHERE id = ?', [g, amb.id]);
+  return { grup: g };
+};
+// Treure un disc del grup. Si només en queda un, el grup es desfà: un grup d'un sol disc no és un grup.
+// Els que queden es tornen a numerar sense forats, en el mateix ordre.
+export const treuDelGrup = albumId => db => {
+  const a = un(db, 'SELECT conjunt FROM album WHERE id = ?', [albumId]); if (!a?.conjunt) return null;
+  db.run('UPDATE album SET conjunt = NULL, posicio = NULL WHERE id = ?', [albumId]);
+  const resta = files(db, 'SELECT id FROM album WHERE conjunt = ? ORDER BY COALESCE(posicio, 99), id', [a.conjunt]);
+  if (resta.length < 2) { db.run('UPDATE album SET conjunt = NULL, posicio = NULL WHERE conjunt = ?', [a.conjunt]); return { grup: a.conjunt, desfet: true }; }
+  resta.forEach((x, i) => db.run('UPDATE album SET posicio = ? WHERE id = ?', [i + 1, x.id]));
+  return { grup: a.conjunt, desfet: false };
 };

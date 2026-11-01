@@ -464,6 +464,8 @@ body.procs-off #btProcs{display:none}
 .sf-altre{display:flex; gap:7px; flex:1 1 100%; align-items:center}
 .sf-altre input{flex:1; min-width:0; background:var(--fons-3); border:1px solid var(--vora-2); border-radius:18px; color:var(--os); padding:8px 12px; font:13.5px var(--sans)}
 .sf-altre input:focus{outline:2px solid var(--accent); outline-offset:1px}
+.sf-oberta{opacity:.6; border:1px dashed var(--linia, rgba(255,255,255,.18))}
+.sf-oberta .sf-tipus{color:inherit}
 .sf-tipus{font-size:12px; color:var(--accent); font-weight:600; margin-bottom:6px; display:block}
 .sf-buit{text-align:center; padding:28px 10px; color:var(--os-2)}
 .sf-buit b{display:block; font-family:var(--titol); font-weight:800; font-stretch:80%; font-size:24px; color:var(--os); margin-bottom:6px}

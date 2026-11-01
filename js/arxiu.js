@@ -144,17 +144,28 @@ export const estat = {
   db: null, fitxerId: null, carpetaId: null,
   base: null,          // modifiedTime del Drive sobre el qual es treballa
   pendent: false,      // hi ha canvis que no han arribat al Drive
+  manual: false,       // entre els pendents n'hi ha algun de Ricard (no només lectures automàtiques)
   origen: null         // 'drive' | 'local'
 };
+// Mentre s'obre l'arxiu (connectar), els desats automàtics esperen: si no, el reintent i la connexió pujarien alhora
+// i el segon prendria per conflicte la data que acaba de posar el primer (fallada ACT-494).
+let obrint = false;
 
 async function desaLocal() {
   await local('put', { bytes: estat.db.export(), fitxerId: estat.fitxerId, carpetaId: estat.carpetaId,
-                       base: estat.base, pendent: estat.pendent, desat: new Date().toISOString() });
+                       base: estat.base, pendent: estat.pendent, manual: estat.manual, desat: new Date().toISOString() });
 }
 
 // Resultat d'obrir: { cas: 'obert' } o un cas que demana decisió de Ricard.
 export async function obre() {
   await motor();
+  await cua;                      // primer, que acabi el desat que hi hagi en marxa (ACT-494)
+  obrint = true;
+  try { return await obreAra(); } finally { obrint = false; }
+}
+// Una còpia antiga, d'abans que existís la marca, es tracta com si tingués canvis de Ricard: el cas prudent.
+const teCanvisDeRicard = c => c.manual !== false;
+async function obreAra() {
   const copia = await local('get');
 
   // Sense xarxa o sense permís: es treballa amb la còpia del navegador, si n'hi ha.
@@ -162,7 +173,7 @@ export async function obre() {
   if (enLinia) { try { await permis({ silenci: true }); } catch { enLinia = false; } }
   if (!enLinia) {
     if (!copia) return { cas: 'sense-res', detall: 'Sense connexió i sense còpia en aquest navegador.' };
-    obreBytes(copia.bytes); Object.assign(estat, { fitxerId: copia.fitxerId, carpetaId: copia.carpetaId, base: copia.base, pendent: copia.pendent, origen: 'local' });
+    obreBytes(copia.bytes); Object.assign(estat, { fitxerId: copia.fitxerId, carpetaId: copia.carpetaId, base: copia.base, pendent: copia.pendent, manual: teCanvisDeRicard(copia) && copia.pendent, origen: 'local' });
     return { cas: 'obert', fora: true };
   }
 
@@ -173,20 +184,23 @@ export async function obre() {
     if (copia?.pendent && copia.fitxerId === f.id) {
       if (copia.base === f.modifiedTime) {           // els canvis locals parteixen de la versió que hi ha al Drive
         await copiaAbansDeMigrar(await baixa(f.id), copia.carpetaId || f.parents?.[0]);
-        obreBytes(copia.bytes); Object.assign(estat, { fitxerId: f.id, carpetaId: copia.carpetaId, base: f.modifiedTime, pendent: true, origen: 'local' });
-        const r = await desa();                      // i es pugen ara mateix: no s'esperen a un altre canvi
+        obreBytes(copia.bytes); Object.assign(estat, { fitxerId: f.id, carpetaId: copia.carpetaId, base: f.modifiedTime, pendent: true, manual: teCanvisDeRicard(copia), origen: 'local' });
+        const r = await desaAra({ intern: true });   // i es pugen ara mateix: no s'esperen a un altre canvi
         return { cas: 'obert', avis, desat: r };
       }
-      return { cas: 'conflicte', drive: f, copia };  // el Drive ha canviat des d'un altre lloc i aquí hi ha canvis sense pujar
+      // El Drive ha canviat des d'un altre lloc i aquí hi ha canvis sense pujar. Si només són lectures automàtiques
+      // (ListenBrainz, la sonda, la bústia, una estructura nova), no és un conflicte: es tornen a fer sobre la versió
+      // del Drive, que és el que passarà sol després de connectar (fallada ACT-492). Només els canvis de Ricard pregunten.
+      if (teCanvisDeRicard(copia)) return { cas: 'conflicte', drive: f, copia };
     }
     const bytes = await baixa(f.id);
     await copiaAbansDeMigrar(bytes, f.parents?.[0]);
     obreBytes(bytes);
     const ok = integritat(estat.db);
     if (ok !== 'ok') return { cas: 'malmes', detall: ok, fitxer: f };
-    Object.assign(estat, { fitxerId: f.id, carpetaId: f.parents?.[0] || null, base: f.modifiedTime, pendent: false, origen: 'drive' });
+    Object.assign(estat, { fitxerId: f.id, carpetaId: f.parents?.[0] || null, base: f.modifiedTime, pendent: false, manual: false, origen: 'drive' });
     const aplicades = migra(estat.db);
-    if (aplicades) { estat.pendent = true; await desaLocal(); await desa(); } else await desaLocal();
+    if (aplicades) { estat.pendent = true; await desaLocal(); await desaAra({ intern: true }); } else await desaLocal();
     return { cas: 'obert', avis };
   }
 
@@ -240,15 +254,19 @@ export async function resolConflicte(guanya, { drive, copia }) {
     return obre();
   }
   obreBytes(copia.bytes);
-  Object.assign(estat, { fitxerId: drive.id, carpetaId: copia.carpetaId, base: drive.modifiedTime, pendent: true, origen: 'local' });
-  await desa({ forca: true });
+  Object.assign(estat, { fitxerId: drive.id, carpetaId: copia.carpetaId, base: drive.modifiedTime, pendent: true, manual: true, origen: 'local' });
+  const r = await desa({ forca: true });
+  if (!r.desat) throw new Error('no s\'ha pogut pujar: ' + r.motiu);
   return { cas: 'obert' };
 }
 
 // Escriure: primer a la còpia del navegador (no es perd res), després al Drive.
-export async function canvia(fn) {
+// auto: una escriptura que la màquina pot tornar a fer sola (lectura de ListenBrainz, sonda, bústia). No compta com a canvi
+// de Ricard a l'hora de decidir si hi ha conflicte (ACT-492).
+export async function canvia(fn, { auto = false } = {}) {
   fn(estat.db);
   estat.pendent = true;
+  if (!auto) estat.manual = true;
   await desaLocal();
   return desa();
 }
@@ -263,8 +281,9 @@ export function desa(opcions) {
 }
 
 // Puja l'arxiu sencer. Si el Drive ha canviat des d'un altre lloc, no el trepitja.
-async function desaAra({ forca = false } = {}) {
+async function desaAra({ forca = false, intern = false } = {}) {
   if (!estat.pendent) return { desat: true };
+  if (obrint && !intern) return { desat: false, motiu: 'obrint' };
   if (!navigator.onLine) return { desat: false, motiu: 'sense connexió' };
   // Sense permís vigent no es demana res a Google: demanar-lo sense un toc obriria una finestra a destemps (tram 3).
   if (!tePermis()) return { desat: false, motiu: 'sense connectar amb el Drive' };
@@ -274,7 +293,7 @@ async function desaAra({ forca = false } = {}) {
     if (!forca && ara.modifiedTime !== estat.base) return { desat: false, motiu: 'conflicte', drive: ara };
     const r = await sobreescriu(estat.fitxerId, estat.db.export());
     if (r.modifiedTime === ara.modifiedTime) return { desat: false, motiu: 'el Drive no ha canviat la data' };
-    estat.base = r.modifiedTime; estat.pendent = false;
+    estat.base = r.modifiedTime; estat.pendent = false; estat.manual = false;
     await desaLocal();
     return { desat: true };
   } catch (e) { return { desat: false, motiu: e.message }; }
@@ -285,12 +304,13 @@ async function desaAra({ forca = false } = {}) {
 let rellotge = null, provant = false;
 export function vigilaPendents(avisa) {
   const prova = async (esperes = [0]) => {
-    if (provant || !estat.pendent || !estat.db) return;
+    if (provant || obrint || !estat.pendent || !estat.db) return;
     provant = true;
     try {
       for (const ms of esperes) {
         if (ms) await new Promise(r => setTimeout(r, ms));
         const r = await desa();
+        if (r.motiu === 'obrint') break;
         avisa(r);
         if (r.desat || r.motiu === 'conflicte' || r.motiu?.includes('paperera')) break;
       }
@@ -305,7 +325,7 @@ export function vigilaPendents(avisa) {
 // Desfés (tram 3): torna l'arxiu a l'estat d'abans d'un canvi, i ho desa com un canvi més.
 export async function restaura(bytes) {
   obreBytes(bytes);
-  estat.pendent = true;
+  estat.pendent = true; estat.manual = true;
   await desaLocal();
   return desa();
 }
@@ -318,8 +338,11 @@ export async function obreLocal() {
   if (!copia?.bytes) return false;
   obreBytes(copia.bytes);
   if (integritat(estat.db) !== 'ok') { estat.db.close(); estat.db = null; return false; }
-  Object.assign(estat, { fitxerId: copia.fitxerId, carpetaId: copia.carpetaId, base: copia.base, pendent: copia.pendent, origen: 'local' });
-  if (migra(estat.db)) { estat.pendent = true; await desaLocal(); }
+  Object.assign(estat, { fitxerId: copia.fitxerId, carpetaId: copia.carpetaId, base: copia.base, pendent: !!copia.pendent,
+                        manual: !!copia.pendent && teCanvisDeRicard(copia), origen: 'local' });
+  // Una estructura nova a la còpia del mòbil no és un canvi per pujar: l'arxiu del Drive la rebrà quan s'obri
+  // (fallada ACT-492: abans es marcava com a canvi i feia sortir «Mana el Drive / Mana aquest mòbil» sense cap canvi de Ricard).
+  if (migra(estat.db)) await desaLocal();
   return true;
 }
 

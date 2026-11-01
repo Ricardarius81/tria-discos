@@ -343,25 +343,35 @@ const atencioDe = ctx => ctx === 'Dormir' ? 'Dormir' : 'Efectes plens';
 // Una targeta acaba quan passen més de 30 minuts de silenci entre el final d'una pista (listened_at + duration_ms) i
 // l'inici de la següent, sigui de la compte que sigui: canviar de mòbil no obre targeta. Sense duration_ms, d'inici a inici.
 // Dins de cada targeta, els discos: els emparellats, per edició; els altres, pel nom de l'àlbum (o per la pista).
-export function targetes(db, { estat = 'pendent', limit = null } = {}) {
+//
+// Des de l'1-11 (petició de Ricard: «esperar a resoldre les coses quan cada escolta ha finalitzat»), les targetes es
+// tallen sobre TOTES les pistes no ignorades, contestades o no, i una targeta té tres estats:
+//   'oberta'  · encara sona: no han passat 30 minuts des del final de l'última pista. No es pot contestar.
+//   'pendent' · tancada i amb alguna pista sense contestar.
+//   'resolta' · tancada i tota contestada.
+// Abans es tallaven només les pendents, i una targeta contestada mentre sonava tornava a sortir amb les pistes que
+// arribaven després (la «mateixa cosa dues vegades» de la prova de l'1-11, Glass Menagerie).
+export function targetes(db, { estat = 'pendent', limit = null, ara = Date.now() } = {}) {
   const mapa = mapaEmparellaments(db);
   const scr = files(db, `SELECT s.id, s.compte, s.listened_at, s.duration_ms, s.artista, s.pista, s.album, s.recording_msid,
-                                s.release_mbid, s.escolta_id, s.context, s.atencio
-                         FROM scrobble s WHERE s.estat = ? ORDER BY s.listened_at, s.id`, [estat]).map(s => ({ ...s, t: ms(s.listened_at) }));
+                                s.release_mbid, s.escolta_id, s.context, s.atencio, s.estat
+                         FROM scrobble s WHERE s.estat != 'ignorat' ORDER BY s.listened_at, s.id`).map(s => ({ ...s, t: ms(s.listened_at) }));
   const out = []; let cur = null, fi = 0;
   for (const s of scr) {
-    if (!cur || s.t - fi > SILENCI_TARGETA) { cur = { scr: [] }; out.push(cur); fi = 0; }
-    cur.scr.push(s); fi = Math.max(fi, s.t + (s.duration_ms || 0));
+    if (!cur || s.t - fi > SILENCI_TARGETA) { cur = { scr: [], fiMs: 0 }; out.push(cur); fi = 0; }
+    cur.scr.push(s); fi = Math.max(fi, s.t + (s.duration_ms || 0)); cur.fiMs = fi;
   }
   const eds = new Map(files(db, `SELECT e.id, a.titol, ar.nom_canonic AS art, e.durada_total, e.portada, e.app_escolta
                                  FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id`).map(e => [e.id, e]));
   for (const c of out) {
     c.clau = c.scr[0].id;                         // la targeta es reconeix per la seva primera pista
     c.inici = c.scr[0].listened_at;
-    const u = c.scr[c.scr.length - 1]; c.fi = new Date(u.t + (u.duration_ms || 0)).toISOString();
+    c.fi = new Date(c.fiMs).toISOString();
+    c.estat = ara - c.fiMs <= SILENCI_TARGETA ? 'oberta' : c.scr.some(s => s.estat === 'pendent') ? 'pendent' : 'resolta';
     c.comptes = [...new Set(c.scr.map(s => s.compte))];
     c.feina = c.scr.some(s => COMPTES.find(k => k.nom === s.compte)?.feina);
-    c.context = c.scr[0].context; c.atencio = c.scr[0].atencio;
+    const r = c.scr.find(s => s.estat === 'resolt');
+    c.context = r?.context ?? null; c.atencio = r?.atencio ?? null;
     const discos = new Map();
     for (const s of c.scr) {
       const ed = edicioDe(mapa, s);
@@ -372,7 +382,49 @@ export function targetes(db, { estat = 'pendent', limit = null } = {}) {
     c.discos = [...discos.values()];
   }
   out.reverse();                                  // la més recent primer
-  return limit ? out.slice(0, limit) : out;
+  const triades = estat === 'totes' ? out : out.filter(c => c.estat === (estat === 'resolt' ? 'resolta' : estat));
+  return limit ? triades.slice(0, limit) : triades;
+}
+// Una pista que arriba tard a una targeta ja contestada (un mòbil sense cobertura que envia després) hereta la resposta
+// de la targeta: la del mateix disc si n'hi ha, i si no, la de la pista contestada més propera. Retorna quantes.
+// Una targeta amb respostes diferents per disc és una targeta separada: per això es mira primer el disc.
+export const calHeretar = (db, ara = Date.now()) => targetes(db, { estat: 'totes', ara })
+  .some(c => c.estat !== 'oberta' && c.scr.some(s => s.estat === 'resolt') && c.scr.some(s => s.estat === 'pendent'));
+export const heretaRespostes = (ara = Date.now()) => db => {
+  let n = 0;
+  const st = db.prepare("UPDATE scrobble SET context = ?, atencio = ?, estat = 'resolt' WHERE id = ? AND estat = 'pendent'");
+  for (const c of targetes(db, { estat: 'totes', ara })) {
+    if (c.estat === 'oberta') continue;
+    const fetes = c.scr.filter(s => s.estat === 'resolt'), pend = c.scr.filter(s => s.estat === 'pendent');
+    if (!fetes.length || !pend.length) continue;
+    for (const s of pend) {
+      const d = c.discos.find(x => x.scr.includes(s));
+      const pool = d.scr.some(x => x.estat === 'resolt') ? d.scr.filter(x => x.estat === 'resolt') : fetes;
+      const m = pool.reduce((a, b) => Math.abs(b.t - s.t) < Math.abs(a.t - s.t) ? b : a);
+      st.run([m.context, m.atencio, s.id]); n++;
+    }
+  }
+  st.free();
+  return n;
+};
+
+// El veredicte de la prova de la safata (ACT-453, ACT-463 i ACT-499): més d'un terç de targetes contestades «No ho sé»,
+// o més d'una de cada deu ignorada, en un mes. Es compta per targetes tancades des de l'Arrencada, amb les ignorades
+// incloses (aquí sí: són el segon símptoma). Camps: Scrobble.context i Scrobble.estat. Es veu a La Cabina a partir del dia 30.
+export function veredicte(db, ara = Date.now()) {
+  const arr = arrencada(db); if (!arr) return null;
+  const scr = files(db, 'SELECT listened_at, duration_ms, estat, context FROM scrobble ORDER BY listened_at, id').map(s => ({ ...s, t: ms(s.listened_at) }));
+  const tg = []; let cur = null, fi = 0;
+  for (const s of scr) { if (!cur || s.t - fi > SILENCI_TARGETA) { cur = []; tg.push(cur); fi = 0; } cur.push(s); fi = Math.max(fi, s.t + (s.duration_ms || 0)); }
+  const tancades = tg.filter(c => ara - Math.max(...c.map(s => s.t + (s.duration_ms || 0))) > SILENCI_TARGETA);
+  const ignorades = tancades.filter(c => c.every(s => s.estat === 'ignorat')).length;
+  const contestades = tancades.filter(c => c.some(s => s.estat === 'resolt'));
+  const nose = contestades.filter(c => c.some(s => s.estat === 'resolt' && s.context === 'No ho sé')).length;
+  const dies = Math.floor((ara - ms(arr)) / 864e5);
+  return { dies, llest: dies >= 30, dataLlesta: new Date(ms(arr) + 30 * 864e5).toISOString(), targetes: tancades.length,
+           contestades: contestades.length, nose, ignorades,
+           pctNose: contestades.length ? nose / contestades.length : 0, pctIgnorades: tancades.length ? ignorades / tancades.length : 0,
+           falla: (contestades.length && nose / contestades.length > 1 / 3) || (tancades.length && ignorades / tancades.length > 0.1) };
 }
 
 // Contestar una targeta (o un disc d'una targeta separada): la resposta va a cada pista, i l'escolta es torna a calcular.
