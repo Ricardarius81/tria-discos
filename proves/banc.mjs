@@ -56,7 +56,9 @@ pagina.on('console', m => { if (m.type() === 'error' && !/ERR_BLOCKED_BY_CLIENT|
 
 // ───────── el que fan servir les comprovacions ─────────
 const S = await motor();
+const versioInicial = (() => { const d = new S.Database(bytes); const v = d.exec('PRAGMA user_version')[0].values[0][0]; d.close(); return v; })();
 const ctx = {
+  versioInicial,
   pagina, drive, lb, ara, ORIGEN, fugides, errors, real: !!ARXIU,
   $: s => pagina.locator(s),
   espera: ms => pagina.waitForTimeout(ms),

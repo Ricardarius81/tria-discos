@@ -155,6 +155,13 @@ export const MIGRACIONS = [
   );
   CREATE INDEX scrobble_temps ON scrobble(listened_at);
   CREATE INDEX scrobble_escolta ON scrobble(escolta_id);
+  `,
+  // v5 · com es va donar la resposta (ACT-528 i ACT-537, opció B de Ricard del 2-11). Des que cada disc d'una sessió que
+  // encara sona es pot contestar sol, «heretar la resposta» feia dues feines: la pista que arriba tard a una targeta
+  // contestada sencera, i el disc que encara no s'ha contestat. Amb aquest camp, una pista només hereta d'un altre disc si
+  // la resposta es va donar a la targeta sencera. 'targeta' · 'disc'. Buit = 'targeta' (totes les respostes d'abans).
+  `
+  ALTER TABLE scrobble ADD COLUMN resposta_de TEXT;
   `
 ];
 

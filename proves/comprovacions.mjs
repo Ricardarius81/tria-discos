@@ -20,6 +20,12 @@ export const COMPROVACIONS = [
     igual(noms.filter(x => x === 'la-meva-discoteca.sqlite').length, 1, 'arxius amb el nom de l\'arxiu');
     cal(!noms.some(x => x.includes('abans de l\'estructura')), 'ha fet una còpia d\'estructura: ' + noms.join(', '));
   } },
+  { nom: 'connecta: un arxiu d\'una estructura anterior es migra, i abans en queda una còpia al Drive', sempre: true, async fes({ drive, consulta, versioInicial }) {
+    const { MIGRACIONS } = await import('../js/esquema.js');
+    igual(consulta('PRAGMA user_version')[0].user_version, MIGRACIONS.length, 'estructura de l\'arxiu del Drive');
+    const copies = [...drive.fitxers.values()].filter(f => f.name.includes('abans de l\'estructura ' + MIGRACIONS.length));
+    igual(copies.length, versioInicial < MIGRACIONS.length ? 1 : 0, 'còpies «abans de l\'estructura ' + MIGRACIONS.length + '»');
+  } },
   { nom: 'connecta: l\'arxiu del Drive passa la comprovació d\'integritat', sempre: true, async fes({ consulta }) {
     igual(consulta('PRAGMA integrity_check')[0].integrity_check, 'ok', 'integritat');
   } },
@@ -63,6 +69,47 @@ export const COMPROVACIONS = [
     const t = await pagina.locator('#safataCos').innerText();
     cal(t.includes('In a Silent Way'), 'falta la targeta d\'In a Silent Way');
     cal(t.includes('Beck Did It Better'), 'falta la targeta del pòdcast');
+  } },
+  // ───────── ACT-528 i ACT-537 (B): cada disc d'una sessió que sona, quan acaba ─────────
+  { nom: 'sessió que sona: Angel\'s Flight (acabat fa 10′) es pot contestar; Structures (sonant) no', sintetic: true, async fes({ pagina }) {
+    const ob = pagina.locator('#safataCos .sf-oberta');
+    const angel = ob.locator('.sf-separat', { hasText: 'Angel\'s Flight' });
+    cal(await angel.locator('[data-sfctx^="d"]').count() > 0, 'Angel\'s Flight no té els botons per contestar-lo');
+    const sonant = ob.locator('.sf-sonant', { hasText: 'Structures from Silence' });
+    cal(await sonant.count() === 1 && !(await sonant.locator('[data-sfctx]').count()), 'Structures from Silence no surt com a «sonant» sense botons');
+  } },
+  { nom: 'sessió que sona: el disc llest compta al número de la safata (ACT-530)', sintetic: true, async fes({ pagina }) {
+    igual(await pagina.locator('#safataNum').innerText(), '3', 'número de la safata (In a Silent Way, el pòdcast i Angel\'s Flight)');
+  } },
+  { nom: 'sessió que sona: contestar Angel\'s Flight sol escriu resposta_de «disc» i deixa Structures per contestar', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    const b = pagina.locator('#safataCos .sf-oberta .sf-separat', { hasText: 'Angel\'s Flight' }).locator('[data-sfctx^="d"]:not([data-sfctx$="|A casa"]):not([data-sfctx$="|No ho sé"])').first();
+    const ctx = (await b.getAttribute('data-sfctx')).split('|')[1];
+    await b.click(); await esperaDesat();
+    const a = consulta("SELECT estat, context, resposta_de FROM scrobble WHERE album = 'Angel''s Flight'");
+    cal(a.length === 3 && a.every(x => x.estat === 'resolt' && x.context === ctx && x.resposta_de === 'disc'), 'Angel\'s Flight: ' + JSON.stringify(a));
+    igual(consulta("SELECT estat FROM scrobble WHERE album = 'Structures from Silence'")[0].estat, 'pendent', 'Structures from Silence');
+    igual(await pagina.locator('#safataNum').innerText(), '2', 'número de la safata després de contestar Angel\'s Flight');
+    cal((await pagina.locator('#safataCos .sf-oberta').innerText()).includes('ja contestat'), 'Angel\'s Flight no surt com a contestat dins la sessió');
+  } },
+  { nom: 'herència (B): quan la sessió es tanqui, Structures no hereta la resposta d\'Angel\'s Flight; una pista tardana d\'Angel\'s sí', sintetic: true, async fes({ pagina, lb, esperaDesat }) {
+    // una pista d'Angel's Flight que arriba tard (un mòbil sense cobertura), dins la mateixa sessió
+    lb.escoltes.push({ compte: 'crimsonnnnfeina', listened_at: Math.floor((Date.now() - 52 * 60e3) / 1000), recording_msid: 'msid-banc-tard',
+      track_metadata: { artist_name: 'Biosphere', track_name: 'Angel\'s Flight (bonus)', release_name: 'Angel\'s Flight', additional_info: { duration_ms: 60e3 } } });
+    await pagina.click('#btSafata'); await pagina.waitForTimeout(900); await esperaDesat();
+    const r = await pagina.evaluate(async () => {
+      const E = await import('./js/escoltes.js?v=5'); const A = await import('./js/arxiu.js?v=13');
+      const SQL = await initSqlJs({ locateFile: f => 'vendor/sqljs/' + f });
+      const c = new SQL.Database(A.estat.db.export()), despres = Date.now() + 2 * 3600e3;
+      const n = E.heretaRespostes(despres)(c);
+      const q = sql => c.exec(sql)[0]?.values || [];
+      const out = { n, tard: q("SELECT estat, resposta_de FROM scrobble WHERE recording_msid = 'msid-banc-tard'")[0],
+        structures: q("SELECT estat FROM scrobble WHERE album = 'Structures from Silence'")[0]?.[0],
+        estatTargeta: E.targetes(c, { estat: 'totes', ara: despres }).find(t => t.discos.some(d => d.titol === 'Structures from Silence'))?.estat };
+      c.close(); return out;
+    });
+    igual(JSON.stringify(r.tard), '["resolt","disc"]', 'la pista tardana d\'Angel\'s Flight (hereta del seu disc)');
+    igual(r.structures, 'pendent', 'Structures from Silence (no hereta d\'un altre disc contestat sol)');
+    igual(r.estatTargeta, 'pendent', 'la sessió, tancada, segueix per contestar');
   } },
   { nom: 'safata: contestar In a Silent Way «A casa · Despert» escriu la resposta a les dues pistes', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
     const targeta = pagina.locator('#safataCos .sf-card', { hasText: 'In a Silent Way' }).first();
@@ -164,13 +211,14 @@ export const COMPROVACIONS = [
   } },
   { nom: 'ignora sempre: no compta al veredicte de la safata', sintetic: true, async fes({ pagina }) {
     // El veredicte és una funció pura sobre l'arxiu: es crida dins la pàgina, amb el mòdul de la màquina.
-    const v = await pagina.evaluate(async () => { const E = await import('./js/escoltes.js?v=4'); const A = await import('./js/arxiu.js?v=12'); return E.veredicte(A.estat.db); });
+    const v = await pagina.evaluate(async () => { const E = await import('./js/escoltes.js?v=5'); const A = await import('./js/arxiu.js?v=13'); return E.veredicte(A.estat.db); });
     igual(v.ignorades, 0, 'targetes ignorades al veredicte');
   } },
-  { nom: 'ignora sempre: la llista és a La Cabina, i «treu-lo» la buida', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+  { nom: 'ignora sempre: un botó de La Cabina obre la llista, i «Treu-lo» la buida', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
     await pagina.click('#btAjustos'); await pagina.waitForSelector('#full.obert');
+    await pagina.locator('#full [data-ignorats]').click(); await pagina.waitForTimeout(150);
     const b = pagina.locator('#full [data-treuignora="Beck Did It Better"]');
-    cal(await b.count() === 1, 'La Cabina no ensenya la llista');
+    cal(await b.count() === 1, 'el botó de La Cabina no obre la llista amb el nom');
     await b.click(); await esperaDesat();
     igual(consulta("SELECT valor FROM meta WHERE clau = 'ignora-sempre'")[0]?.valor, '[]', 'meta ignora-sempre després de treure');
     igual(consulta("SELECT estat FROM scrobble WHERE artista = 'Beck Did It Better'")[0].estat, 'ignorat', 'el ja ignorat s\'hi queda');
@@ -178,28 +226,48 @@ export const COMPROVACIONS = [
   } },
 
   // ───────── v1.46: «canvia-li el nom» d'un grup (ACT-520) ─────────
-  { nom: 'nom del grup: «canvia-li el nom» el desa a meta i surt a la rajola i a la fitxa', sintetic: true, async fes({ pagina, consulta, esperaDesat, tornaFaristol }) {
+  { nom: 'fitxa del grup: la portada del grup l\'obre, amb tots els discos, el nom i afegir o treure', sintetic: true, async fes({ pagina, tornaFaristol }) {
     await tornaFaristol('rot');
-    await pagina.locator('#reixa .disc.grup [data-grup]').first().click(); await pagina.waitForSelector('#full.obert');
-    await pagina.locator('#full [data-fitxa]').first().click(); await pagina.waitForTimeout(200);
+    await pagina.locator('#reixa .disc.grup .coberta[data-grup]').click(); await pagina.waitForSelector('#full.obert');
+    const f = pagina.locator('#full');
+    igual(await f.locator('.membre').count(), 2, 'discos a la fitxa del grup');
+    cal(await f.locator('[data-nomgrup]').count() === 1 && await f.locator('[data-agrupa]').count() === 1 && await f.locator('[data-treugrup]').count() === 2,
+        'falten «Canvia-li el nom», «Afegeix-hi un disc» o els «treu-lo»');
+    igual(await f.locator('a.play, button.play').count(), 2, '▶ a la fitxa del grup');
+    await pagina.click('[data-tornafull]'); await pagina.waitForTimeout(150);
+  } },
+  { nom: 'fitxa del grup: el ▶ de la rajola obre la fulla d\'escoltar, no la fitxa', sintetic: true, async fes({ pagina }) {
+    await pagina.locator('#reixa .disc.grup [data-grupplay]').click(); await pagina.waitForSelector('#full.obert');
+    cal(!(await pagina.locator('#full [data-treugrup]').count()) && await pagina.locator('#full [data-fitxagrup]').count() === 1, 'no és la fulla d\'escoltar del grup');
+    await pagina.click('[data-tornafull]'); await pagina.waitForTimeout(150);
+  } },
+  { nom: 'fitxa d\'un disc: la línia Grup només porta «obre el grup»', sintetic: true, async fes({ pagina }) {
+    await pagina.locator('#reixa .disc.grup .coberta[data-grup]').click(); await pagina.waitForSelector('#full.obert');
+    await pagina.locator('#full .membre [data-fitxa]').first().click(); await pagina.waitForTimeout(150);
+    const f = pagina.locator('#full');
+    cal(await f.locator('[data-fitxagrup]').count() === 1 && !(await f.locator('[data-nomgrup], [data-treugrup]').count()), 'la fitxa del disc encara porta les accions del grup');
+    await f.locator('[data-fitxagrup]').click(); await pagina.waitForTimeout(150);
+    igual(await f.locator('.membre').count(), 2, '«obre el grup» no porta a la fitxa del grup');
+  } },
+  { nom: 'nom del grup: «Canvia-li el nom» el desa a meta i surt a la fitxa del grup i a la rajola', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
     await pagina.locator('#full [data-nomgrup]').click(); await pagina.waitForTimeout(150);
     await pagina.fill('#inNomGrup', 'Les dues Careful'); await pagina.click('[data-desanomgrup]'); await esperaDesat();
     igual(consulta("SELECT valor FROM meta WHERE clau = 'noms-grups'")[0]?.valor, '{"Careful Now":"Les dues Careful"}', 'meta noms-grups');
-    cal((await pagina.locator('#full').innerText()).includes('Les dues Careful'), 'la fitxa no ensenya el nom');
+    cal((await pagina.locator('#full h3').innerText()).includes('Les dues Careful'), 'la fitxa del grup no ensenya el nom');
     await pagina.click('[data-tornafull]'); await pagina.waitForTimeout(200);
     cal((await pagina.locator('#reixa .disc.grup').innerText()).includes('Les dues Careful'), 'la rajola encara porta el títol automàtic');
     igual(consulta("SELECT COUNT(*) AS n FROM album WHERE conjunt = 'Careful Now'")[0].n, 2, 'Àlbum.Conjunt no s\'ha de tocar');
   } },
-  { nom: 'nom del grup: si el grup es desfà, el nom es perd', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
-    await pagina.locator('#reixa .disc.grup [data-grup]').first().click(); await pagina.waitForSelector('#full.obert');
-    await pagina.locator('#full [data-fitxa]').first().click(); await pagina.waitForTimeout(200);
-    await pagina.locator('#full [data-treugrup]').click(); await esperaDesat();
+  { nom: 'nom del grup: si el grup es desfà des de la seva fitxa, el nom es perd; i es torna a fer des de la fitxa del disc', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    await pagina.locator('#reixa .disc.grup .coberta[data-grup]').click(); await pagina.waitForSelector('#full.obert');
+    await pagina.locator('#full [data-treugrup]').first().click(); await esperaDesat();
     igual(consulta("SELECT valor FROM meta WHERE clau = 'noms-grups'")[0]?.valor, '{}', 'meta noms-grups després de desfer');
-    // es torna a agrupar, per deixar el banc com estava
+    igual(consulta("SELECT COUNT(*) AS n FROM album WHERE conjunt IS NOT NULL")[0].n, 0, 'discos agrupats després de desfer');
     await pagina.locator('#full [data-agrupa]').click(); await pagina.waitForTimeout(200);
     await pagina.locator('#full [data-agrupaamb]', { hasText: 'Unmasked' }).click(); await esperaDesat();
-    await pagina.click('[data-tornafull]').catch(() => {}); await pagina.waitForTimeout(200);
     igual(consulta("SELECT COUNT(*) AS n FROM album WHERE conjunt IS NOT NULL")[0].n, 2, 'discos agrupats de nou');
+    igual(await pagina.locator('#full .membre').count(), 2, 'després d\'agrupar, s\'obre la fitxa del grup');
+    await pagina.click('[data-tornafull]'); await pagina.waitForTimeout(200);
   } },
 
   // ───────── v1.46: el permís guardat (ACT-522), l'avís (ACT-525) i la vista ampla (ACT-523) ─────────

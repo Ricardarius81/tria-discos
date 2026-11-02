@@ -12,7 +12,7 @@ const llista = s => { try { return s ? JSON.parse(s) : []; } catch { return []; 
 const json = v => (v && v.length ? JSON.stringify(v) : null);
 const ara = () => new Date().toISOString();
 import * as T from './tags.js?v=1';
-import { SQL_COMPTA } from './escoltes.js?v=4';
+import { SQL_COMPTA } from './escoltes.js?v=5';
 
 const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
 
@@ -120,6 +120,15 @@ export const canviaDurada = (id, min, partId) => db => partId
   ? db.run('UPDATE part SET durada = ? WHERE id = ?', [min, partId])
   : db.run('UPDATE edicio SET durada_total = ? WHERE id = ?', [min, id]);
 export const canviaCanal = (id, canal) => db => db.run('UPDATE edicio SET app_escolta = ? WHERE id = ?', [canal, id]);
+
+// La fitxa d'un grup (2-11, proposta de Ricard): tots els discos del grup que són a l'arxiu, en el seu ordre, en rotació o no.
+// Per a cada àlbum, l'edició que es pinta és la que és en rotació, i si no, la més recent.
+export function grup(db, conjunt) {
+  return files(db, 'SELECT id, posicio FROM album WHERE conjunt = ? ORDER BY COALESCE(posicio, 99), id', [conjunt]).map(a => {
+    const e = un(db, 'SELECT id FROM edicio WHERE album_id = ? ORDER BY rotacio_actual DESC, id DESC LIMIT 1', [a.id]);
+    return e ? fitxa(db, e.id) : null;
+  }).filter(Boolean);
+}
 
 // El nom d'un grup posat per Ricard (v1.46, ACT-520 i ACT-521). Àlbum.Conjunt identifica el grup i el títol curt
 // es calcula amb ell, així que no es toca: el nom que posa Ricard viu a meta, clau 'noms-grups', com { conjunt: nom }.

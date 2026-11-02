@@ -32,6 +32,7 @@ export const COMPTES = [{ nom: 'crimsonnnn', feina: false }, { nom: 'crimsonnnnf
 export const FINESTRA_ESCOLTA = 15 * H;   // §8.5
 export const FINESTRA_TIRADA = 24 * H;    // §7.5, ACT-446 — dues finestres, dos números (ACT-447)
 export const SILENCI_TARGETA = 30 * MIN;  // §8.7, ACT-455 — sense calibrar
+export const ESPERA_DISC = 5 * MIN;       // ACT-528: un disc d'una sessió que sona es pot contestar 5 minuts després de la seva última pista
 export const LLINDAR = 0.75, LLINDAR_DORMIR = 0.5;
 
 // ───────── l'Arrencada (ACT-453) ─────────
@@ -354,7 +355,7 @@ const atencioDe = ctx => ctx === 'Dormir' ? 'Dormir' : 'Efectes plens';
 export function targetes(db, { estat = 'pendent', limit = null, ara = Date.now() } = {}) {
   const mapa = mapaEmparellaments(db);
   const scr = files(db, `SELECT s.id, s.compte, s.listened_at, s.duration_ms, s.artista, s.pista, s.album, s.recording_msid,
-                                s.release_mbid, s.escolta_id, s.context, s.atencio, s.estat
+                                s.release_mbid, s.escolta_id, s.context, s.atencio, s.estat, s.resposta_de
                          FROM scrobble s WHERE s.estat != 'ignorat' ORDER BY s.listened_at, s.id`).map(s => ({ ...s, t: ms(s.listened_at) }));
   const out = []; let cur = null, fi = 0;
   for (const s of scr) {
@@ -380,6 +381,17 @@ export function targetes(db, { estat = 'pendent', limit = null, ara = Date.now()
       d.scr.push(s); discos.set(k, d);
     }
     c.discos = [...discos.values()];
+    // Cada disc, el seu estat (ACT-528). Dins d'una sessió que encara sona, un disc es pot contestar quan fa 5 minuts que
+    // ha acabat la seva última pista (listened_at + duration_ms) o quan ja ha començat una pista d'un altre disc.
+    // Pano envia cada pista al 50 % o als 4 minuts (ACT-529): la següent sempre arriba abans dels 5 minuts.
+    for (const d of c.discos) {
+      const fiD = Math.max(...d.scr.map(s => s.t + (s.duration_ms || 0))), iniciDarrera = Math.max(...d.scr.map(s => s.t));
+      d.fiMs = fiD;
+      d.contestat = d.scr.every(s => s.estat === 'resolt');
+      d.llest = c.estat !== 'oberta' || ara - fiD >= ESPERA_DISC || c.scr.some(s => s.t > iniciDarrera && !d.scr.includes(s));
+      d.context = d.scr.find(s => s.estat === 'resolt')?.context ?? null;
+    }
+    c.contextos = [...new Set(c.scr.filter(s => s.estat === 'resolt').map(s => s.context))];
   }
   out.reverse();                                  // la més recent primer
   const triades = estat === 'totes' ? out : out.filter(c => c.estat === (estat === 'resolt' ? 'resolta' : estat));
@@ -388,24 +400,32 @@ export function targetes(db, { estat = 'pendent', limit = null, ara = Date.now()
 // Una pista que arriba tard a una targeta ja contestada (un mòbil sense cobertura que envia després) hereta la resposta
 // de la targeta: la del mateix disc si n'hi ha, i si no, la de la pista contestada més propera. Retorna quantes.
 // Una targeta amb respostes diferents per disc és una targeta separada: per això es mira primer el disc.
-export const calHeretar = (db, ara = Date.now()) => targetes(db, { estat: 'totes', ara })
-  .some(c => c.estat !== 'oberta' && c.scr.some(s => s.estat === 'resolt') && c.scr.some(s => s.estat === 'pendent'));
-export const heretaRespostes = (ara = Date.now()) => db => {
-  let n = 0;
-  const st = db.prepare("UPDATE scrobble SET context = ?, atencio = ?, estat = 'resolt' WHERE id = ? AND estat = 'pendent'");
+// Des de la v1.46 (ACT-537, opció B): d'un altre disc només s'hereta una resposta donada a la targeta sencera
+// (Scrobble.resposta_de 'targeta' o buit). Un disc que no s'ha contestat i que comparteix sessió amb un disc contestat
+// sol no hereta res: es pregunta.
+function herencies(db, ara) {
+  const out = [];
   for (const c of targetes(db, { estat: 'totes', ara })) {
     if (c.estat === 'oberta') continue;
-    const fetes = c.scr.filter(s => s.estat === 'resolt'), pend = c.scr.filter(s => s.estat === 'pendent');
-    if (!fetes.length || !pend.length) continue;
-    for (const s of pend) {
+    const deTargeta = c.scr.filter(s => s.estat === 'resolt' && s.resposta_de !== 'disc');
+    for (const s of c.scr.filter(x => x.estat === 'pendent')) {
       const d = c.discos.find(x => x.scr.includes(s));
-      const pool = d.scr.some(x => x.estat === 'resolt') ? d.scr.filter(x => x.estat === 'resolt') : fetes;
+      const mateix = d.scr.filter(x => x.estat === 'resolt');
+      const pool = mateix.length ? mateix : deTargeta;
+      if (!pool.length) continue;
       const m = pool.reduce((a, b) => Math.abs(b.t - s.t) < Math.abs(a.t - s.t) ? b : a);
-      st.run([m.context, m.atencio, s.id]); n++;
+      out.push([m.context, m.atencio, m.resposta_de || 'targeta', s.id]);
     }
   }
+  return out;
+}
+export const calHeretar = (db, ara = Date.now()) => herencies(db, ara).length > 0;
+export const heretaRespostes = (ara = Date.now()) => db => {
+  const h = herencies(db, ara);
+  const st = db.prepare("UPDATE scrobble SET context = ?, atencio = ?, resposta_de = ?, estat = 'resolt' WHERE id = ? AND estat = 'pendent'");
+  for (const x of h) st.run(x);
   st.free();
-  return n;
+  return h.length;
 };
 
 // El veredicte de la prova de la safata (ACT-453, ACT-463 i ACT-499): més d'un terç de targetes contestades «No ho sé»,
@@ -432,17 +452,18 @@ export function veredicte(db, ara = Date.now()) {
 
 // Contestar una targeta (o un disc d'una targeta separada): la resposta va a cada pista, i l'escolta es torna a calcular.
 // «A casa» + «Dormint» es reescriu a Dormir (pregunta 4, v1.10).
-export const contesta = (ids, context, atencioBoto = null) => db => {
+// de: 'targeta' si es contesta la targeta sencera, 'disc' si es contesta un disc sol (ACT-528, ACT-537).
+export const contesta = (ids, context, atencioBoto = null, de = 'targeta') => db => {
   let ctx = context, at = atencioBoto ? (ATENCIONS.find(([b]) => b === atencioBoto)?.[1] || atencioBoto) : atencioDe(context);
   if (ctx === 'A casa' && at === 'Dormir') ctx = 'Dormir';
-  const st = db.prepare("UPDATE scrobble SET context = ?, atencio = ?, estat = 'resolt' WHERE id = ? AND estat != 'ignorat'");
-  for (const id of ids) st.run([ctx, at, id]);
+  const st = db.prepare("UPDATE scrobble SET context = ?, atencio = ?, resposta_de = ?, estat = 'resolt' WHERE id = ? AND estat != 'ignorat'");
+  for (const id of ids) st.run([ctx, at, de, id]);
   st.free();
   return { ctx, at, ...recalcula(db) };
 };
 // «Canvia»: la targeta torna a la safata, sense resposta.
 export const reobre = ids => db => {
-  const st = db.prepare("UPDATE scrobble SET context = NULL, atencio = NULL, estat = 'pendent' WHERE id = ?");
+  const st = db.prepare("UPDATE scrobble SET context = NULL, atencio = NULL, resposta_de = NULL, estat = 'pendent' WHERE id = ?");
   for (const id of ids) st.run([id]); st.free();
   return recalcula(db);
 };
