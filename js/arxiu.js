@@ -20,6 +20,11 @@ const PUJADA = 'https://www.googleapis.com/upload/drive/v3/files';
 
 // ───────── permís ─────────
 let testimoni = null, caducitat = 0, client = null;
+// El permís es guarda en aquest mòbil fins que caduca (v1.46, ACT-522): quan Android recarrega l'app, o en lliscar per
+// actualitzar, la franja magenta no torna mentre el permís sigui vigent. Google el dona per una hora i no s'allarga.
+// No surt del mòbil i només obre els fitxers que ha creat la màquina (drive.file).
+const PERMIS = 'tria-permis';
+try { const p = JSON.parse(localStorage.getItem(PERMIS) || 'null'); if (p?.t && p.c > Date.now() + 60_000) { testimoni = p.t; caducitat = p.c; } } catch {}
 export function permis({ silenci = false } = {}) {
   if (testimoni && Date.now() < caducitat - 60_000) return Promise.resolve(testimoni);
   return new Promise((resol, rebutja) => {
@@ -30,6 +35,7 @@ export function permis({ silenci = false } = {}) {
     client.callback = r => {
       if (r.error) return rebutja(new Error('Permís de Google: ' + r.error));
       testimoni = r.access_token; caducitat = Date.now() + r.expires_in * 1000; resol(testimoni);
+      try { localStorage.setItem(PERMIS, JSON.stringify({ t: testimoni, c: caducitat })); } catch {}
       recordaCompte();
     };
     client.error_callback = e => rebutja(new Error('Permís de Google: ' + (e?.type || 'cancel·lat')));
@@ -38,7 +44,9 @@ export function permis({ silenci = false } = {}) {
     client.requestAccessToken({ prompt: (silenci || pista) ? '' : undefined });
   });
 }
-export const tePermis = () => !!testimoni && Date.now() < caducitat;
+export const tePermis = () => !!testimoni && Date.now() < caducitat - 60_000;
+// Un permís que Google ja no accepta (revocat, o caducat abans d'hora): s'oblida, i el proper toc en demana un de nou.
+export function oblidaPermis() { testimoni = null; caducitat = 0; try { localStorage.removeItem(PERMIS); } catch {} }
 // Desa el correu del compte al navegador (no surt d'aquest mòbil) per fer-lo servir de pista la propera vegada.
 async function recordaCompte() {
   try {
@@ -50,6 +58,7 @@ async function recordaCompte() {
 async function g(url, opcions = {}) {
   const t = await permis({ silenci: true });
   const r = await fetch(url, { ...opcions, headers: { Authorization: 'Bearer ' + t, ...(opcions.headers || {}) } });
+  if (r.status === 401) oblidaPermis();
   if (!r.ok) throw new Error(`Drive ${r.status}: ${(await r.text()).slice(0, 200)}`);
   return r;
 }

@@ -7,9 +7,9 @@
 // Blocs 3.3 + 3.4 + 3.5 (v1.44), una sola publicació: les escoltes de ListenBrainz, la safata viva i la bústia.
 // Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 
-import * as A from './arxiu.js?v=11';
-import * as D from './dades.js?v=12';
-import * as E from './escoltes.js?v=3';
+import * as A from './arxiu.js?v=12';
+import * as D from './dades.js?v=13';
+import * as E from './escoltes.js?v=4';
 import * as LB from './listenbrainz.js?v=1';
 import * as I from './imatges.js?v=3';
 import * as T from './tags.js?v=1';
@@ -148,6 +148,9 @@ const membresDe = nom => junts(D.rotacio(db()), nom);
 // El títol d'un grup: el del primer disc, i dels altres només el que els distingeix (decisió de Ricard, 31-10).
 // «Careful Now + Unmasked», «Infinitati + Intrusion Dubs + Variant Immersions».
 function titolGrup(nom, m) {
+  return D.nomsGrups(db())[nom] || titolAuto(nom, m);     // el que hi ha posat Ricard, si n'hi ha (ACT-520)
+}
+function titolAuto(nom, m) {
   const re = new RegExp('^' + nom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i');
   return m.map((x, i) => i === 0 ? x.titol : (x.titol.replace(re, '').replace(/^\((.*)\)$/, '$1').trim() || x.titol)).join(' + ');
 }
@@ -169,7 +172,7 @@ function tileGrup(g, prefs) {
 function fullGrup(nom) {
   const m = membresDe(nom);
   if (!m.length) return;
-  obreFull(`<h3>${esc(nom)}</h3><p>${m.length} discos que van junts${m.every(x => x.min) ? ' · ' + m.reduce((s, x) => s + x.min, 0) + '′ en total' : ''}.</p>
+  obreFull(`<h3>${esc(titolGrup(nom, m))}</h3><p>${m.length} discos que van junts${m.every(x => x.min) ? ' · ' + m.reduce((s, x) => s + x.min, 0) + '′ en total' : ''}.</p>
     <div class="llista-grup">${m.map((x, i) => {
       const e = x.app_escolta ? enllac(x.app_escolta, { art: x.art, tit: x.titol, bc: x.bc }) : null;
       return `<div class="membre">
@@ -180,6 +183,12 @@ function fullGrup(nom) {
     <p class="gris" style="font-size:12px">Toca un títol per obrir-ne la fitxa. Des de la fitxa pots afegir un disc al grup o treure'l.</p>`);
 }
 
+function botoPlay(d, classe) {
+  if (d.esperant) return '';
+  return d.app_escolta
+    ? `<a class="${classe}" ${aAttrs(enllac(d.app_escolta, { art: d.art, tit: d.titol, bc: d.bc }))} data-obre="${d.id}" aria-label="Escoltar ara ${esc(d.titol)}">▶</a>`
+    : `<button class="${classe}" data-escoltar="${d.id}" aria-label="Escoltar ara ${esc(d.titol)}">▶</button>`;
+}
 function pintaReixa() {
   const rot = D.rotacio(db()), prefs = D.artistesPreferents(db());
   $('#reixa').innerHTML = grups(rot).map(d => { if (d.grup) return tileGrup(d, prefs);
@@ -203,6 +212,13 @@ function pintaReixa() {
   }).join('') || `<p class="subtitol" style="margin:6px 0 0">No hi ha cap disc en rotació.</p>`;
 }
 
+// El «proper» és un títol sense fitxa (§7.7, v1.34): el ▶ no pot obrir el disc, només buscar-lo al canal de l'artista.
+function playPreferent(p) {
+  if (p.rot) return botoPlay(p.rot, 'fplay');
+  if (!p.proper_titol) return '';
+  const canal = D.canalPerDefecte(db(), p.artista_id), e = enllac(canal, { art: p.nom, tit: p.proper_titol });
+  return `<a class="fplay cerca" ${aAttrs(e)} aria-label="Busca ${esc(p.proper_titol)} a ${esc(nomCanal(canal))}">▶</a>`;
+}
 function pintaFiles() {
   let ps = D.preferents(db());
   if (estat.ordena && estat.ordreTmp) ps = estat.ordreTmp.map(id => ps.find(p => p.id === id)).filter(Boolean);
@@ -219,7 +235,7 @@ function pintaFiles() {
       <button class="fila-cap" data-artista="${p.id}">
         <span class="foto ${!p.retrat && foto ? 'quadrat' : ''} ${r ? 'viu' : ''}">${esc(inicials(p.nom))}${foto ? IMG(foto) : ''}</span>
         <span class="fila-txt"><span class="nom">${esc(p.nom)}</span>${linia ? `<span class="estat">${linia}</span>` : ''}</span>${cob}
-      </button>${mou}
+      </button>${estat.ordena ? '' : playPreferent(p)}${mou}
     </div>`;
   }).join('') || `<p class="subtitol" style="margin:12px 0 0">Encara no hi ha cap artista preferent.</p>`;
 }
@@ -287,19 +303,19 @@ function pintaHistorial() {
           <span class="htxt"><span class="htit">${esc(f.titol)}</span><span class="hart">${esc(f.art)}</span>
             <span class="hmeta"><u>${quan(f.darrera)}</u> · ${n} · d'una tirada</span></span>
         </button>
-        <span class="hdreta">${f.min ? `<span class="hdur">${f.min}′</span>` : ''}</span>
+        <span class="hdreta">${f.min ? `<span class="hdur">${f.min}′</span>` : ''}</span><button class="hplay" data-hgrup="${esc(f.grup)}" aria-label="Escoltar ${esc(f.titol)}">▶</button>
       </div>`;
       continue;
     }
     const d = f.d, fons = d.portada && I.adreca(d.portada) ? `--img:url('${esc(I.adreca(d.portada))}')` : '';
     h += `<div class="hfila" style="${fons}">
-      <button class="hcap" data-hescoltar="${d.id}" aria-label="Escoltar ara ${esc(d.titol)}">
+      <button class="hcap" data-fitxa="${d.id}" aria-label="Fitxa de ${esc(d.titol)}">
         <span class="hcob">${esc(inicials(d.art))}${d.portada ? IMG(d.portada) : ''}</span>
         <span class="htxt"><span class="htit">${esc(d.titol)}</span><span class="hart">${esc(d.art)}</span>
           <span class="hmeta"><u>${quan(f.darrera)}</u> · ${n}</span></span>
       </button>
       <span class="hdreta">${d.min ? `<span class="hdur">${d.min}′</span>` : ''}
-        ${d.rotacio_actual ? `<span class="hja">en rotació</span>` : `<button class="hrot" data-hrot="${d.id}">＋ Rotació</button>`}</span>
+        ${d.rotacio_actual ? `<span class="hja">en rotació</span>` : `<button class="hrot" data-hrot="${d.id}">＋ Rotació</button>`}</span>${botoPlay(d, 'hplay')}
     </div>`;
   }
   caixa.innerHTML = h || (totes.length ? `<p class="subtitol" style="margin:18px 0 0">Res amb aquest nom.</p>`
@@ -347,8 +363,19 @@ function xipsContext(clau, c, cap) {
     <p class="sf-q">${cap || 'On ho escoltaves?'}</p>
     <div class="sf-chips">${ll.map(x => `<button class="${x === pre ? 'principal' : ''}" data-sfctx="${clau}|${esc(x)}">${esc(x)}</button>`).join('')}
       <button class="nose" data-sfctx="${clau}|No ho sé">No ho sé</button>
-      ${tots ? '' : `<button class="mes" data-sftots="${clau}">Tots (${E.CONTEXTOS.length})</button>`}
-      <button class="mes" data-sfignora="${clau}">Ignora</button></div>`;
+      ${tots ? '' : `<button class="mes" data-sftots="${clau}">Veure'ls tots</button>`}
+      <button class="mes" data-sfignora="${clau}">Ignora</button>
+      <button class="mes" data-sfignorasempre="${clau}">Ignora sempre…</button></div>`;
+}
+// Els artistes de les pistes d'una targeta o d'un disc, sense repetir, tal com arriben (ACT-524).
+function artistesDe(clau) {
+  const ids = new Set(idsDe(clau, E.targetes(db(), { estat: 'totes' })));
+  const out = [];
+  for (const c of E.targetes(db(), { estat: 'totes' })) for (const s of c.scr) if (ids.has(s.id) && s.artista && !out.some(a => norm(a) === norm(s.artista))) out.push(s.artista);
+  return out;
+}
+function ignoraSempreArt(nom) {
+  fes(E.afegeixIgnoraSempre(nom), r => `«${nom}» s'ignorarà sempre${r.n ? ' (' + (r.n === 1 ? 'una pista' : r.n + ' pistes') + ' ja fora)' : ''}. La llista és a La Cabina.`);
 }
 // Les claus de resposta: «t<primera pista>» per a la targeta sencera, «d<primera pista>:<disc>» per a un disc separat.
 function idsDe(clau, tg) {
@@ -507,7 +534,7 @@ async function llegeixEscoltes() {
     const tard = db_ => E.heretaRespostes()(db_);
     const cal = !E.arrencada(db()) || noves.length || E.calHeretar(db());
     if (cal) {
-      const r = await fes(x => { E.fixaArrencada(arr)(x); const n = E.desaScrobbles(noves)(x); const h = tard(x); return { n, h, ...((n || h) ? E.recalcula(x) : {}) }; }, null, { desfes: false, auto: true });
+      const r = await fes(x => { E.fixaArrencada(arr)(x); const n = E.desaScrobbles(noves)(x); E.aplicaIgnoraSempre(x); const h = tard(x); return { n, h, ...((n || h) ? E.recalcula(x) : {}) }; }, null, { desfes: false, auto: true });
       if (r?.n) avisa(`ListenBrainz: ${r.n === 1 ? 'una pista nova' : r.n + ' pistes noves'}.`);
     }
   } catch (e) { estat.lbError = e.message; }
@@ -630,9 +657,10 @@ function fullFitxa(d) {
       <li><b>Nota</b><span>${textNota(d)} <button class="sf-link" style="padding:0 0 0 8px" data-notafitxa="${d.id}">${d.nota ? 'canvia-la' : 'posa-li nota'}</button></span></li>
       ${d.formats.length ? `<li><b>Format</b><span>${esc(d.formats.map(f => NOMS_FISICS[f] || f).join(', '))}</span></li>` : ''}
       <li><b>Edició</b><span>${d.nom_edicio ? esc(d.nom_edicio) : (d.n_edicions > 1 ? 'sense nom' : 'l\'única que hi ha')} <button class="sf-link" style="padding:0 0 0 8px" data-canviaedicio="${d.id}">canvia-la</button></span></li>
-      <li><b>Grup</b><span>${d.discosGrup.length > 1 ? d.discosGrup.map(x => x.id === d.album_id ? `<u>${esc(x.titol)}</u>` : esc(x.titol)).join(' · ') : 'cap'}
+      <li><b>Grup</b><span>${d.discosGrup.length > 1 ? (D.nomsGrups(db())[d.conjunt] ? `<b>${esc(D.nomsGrups(db())[d.conjunt])}</b>: ` : '') + d.discosGrup.map(x => x.id === d.album_id ? `<u>${esc(x.titol)}</u>` : esc(x.titol)).join(' · ') : 'cap'}
         <button class="sf-link" style="padding:0 0 0 8px" data-agrupa="${d.id}">${d.discosGrup.length > 1 ? 'afegeix-hi un disc' : 'agrupa\'l amb…'}</button>
-        ${d.discosGrup.length > 1 ? `<button class="sf-link" style="padding:0 0 0 8px" data-treugrup="${d.id}">treu-lo del grup</button>` : ''}</span></li>
+        ${d.discosGrup.length > 1 ? `<button class="sf-link" style="padding:0 0 0 8px" data-nomgrup="${d.id}">canvia-li el nom</button>
+        <button class="sf-link" style="padding:0 0 0 8px" data-treugrup="${d.id}">treu-lo del grup</button>` : ''}</span></li>
       ${d.parts.length ? `<li><b>Part viva</b><span>${d.esperant ? 'cap: la caixa espera' : esc(d.viva.nom || '') + ' · ' + d.viva.numero + ' de ' + d.parts.length}</span></li>` : ''}
       <li><b>Portada</b><span>${ORIGEN_PORTADA[d.portada ? d.portada_origen || 'escolta' : d.portada_origen === 'rebutjada' ? 'rebutjada' : 'cap']}
         <button class="sf-link" style="padding:0 0 0 8px" data-canviaportada="${d.id}">canvia-la</button></span></li>
@@ -643,6 +671,17 @@ function fullFitxa(d) {
       ${jaPref ? '' : `<button class="bt" data-fespref="${d.artista_id}">Afegir a Artistes Preferents</button>`}
       ${d.rotacio_actual ? `<button class="bt" data-treure="${d.id}">Treu de rotació</button>` : `<button class="bt" data-hrot="${d.id}">Posa'l en rotació</button>`}
     </div>`);
+}
+
+// El nom d'un grup (ACT-520): el posa la màquina i Ricard el canvia. Es desa a meta; Àlbum.Conjunt no es toca.
+function fullNomGrup(d) {
+  const propi = D.nomsGrups(db())[d.conjunt], auto = titolAuto(d.conjunt, d.discosGrup);
+  estat.nomGrupDe = d.id;
+  obreFull(`<h3>El nom del grup</h3><p>El que posa la màquina: <b>${esc(auto)}</b>.${propi ? ` Ara surt el teu: <b>${esc(propi)}</b>.` : ''} Si el grup es desfà, el nom es perd.</p>
+    <label class="camp"><span>Nom</span><input id="inNomGrup" type="text" autocomplete="off" value="${esc(propi || auto)}"></label>
+    <div class="barra-accions" style="position:static;padding:4px 0 0"><button class="bt principal" data-desanomgrup="1">Desa'l</button>
+      ${propi ? `<button class="bt discret" data-nomgrupauto="1">Torna al de la màquina</button>` : ''}</div>`);
+  setTimeout(() => $('#inNomGrup')?.select(), 30);
 }
 
 // Agrupar des de la fitxa (1-11): es busca l'altre disc a l'arxiu. Crear un grup, sumar-s'hi i treure'n un disc;
@@ -858,6 +897,8 @@ function fullCabina() {
         return `<li><span class="ll-info">Prova de la safata <small>${v.llest
           ? `${v.falla ? '<b class="mal">no la passa</b>' : '<b class="ok">la passa</b>'} · «No ho sé» ${pc(v.pctNose)} de ${v.contestades} (màxim 33 %) · ignorades ${pc(v.pctIgnorades)} de ${v.targetes} (màxim 10 %)`
           : `el resultat surt el ${dia(v.dataLlesta)}, quan faci un mes`}</small></span></li>`; })()}
+      ${E.ignoraSempre(db()).length ? `<li><span class="ll-info">S'ignoren sempre <small>el que arriba amb un artista que comença per aquests noms; no compta al veredicte</small></span></li>
+        ${E.ignoraSempre(db()).map(n => `<li><button data-treuignora="${esc(n)}">${esc(n)} <small>treu-lo</small></button></li>`).join('')}` : ''}
       <li><span class="ll-info">ListenBrainz <small>${E.arrencada(db()) ? 'les dues comptes, des del ' + dia(E.arrencada(db())) + ' · ' + r.scrobble + ' pistes' : 'encara no s\'ha llegit'}${estat.lbError ? ' · ' + esc(estat.lbError) : ''}</small></span></li>
       <li><button disabled style="opacity:.6">Còpia de seguretat i Excel <small>tram 4</small></button></li>
       <li><a href="privadesa.html" target="_blank" rel="noopener">Política de privadesa <small>què surt d'aquest mòbil, i cap a on</small></a></li>
@@ -973,6 +1014,11 @@ document.addEventListener('click', e => {
     const amb_ = D.albumsPerAgrupar(db(), x.album_id).find(y => y.id === amb);
     if (amb_?.conjunt && x.conjunt && amb_.conjunt !== x.conjunt) { avisa(`«${amb_.titol}» ja és al grup «${amb_.conjunt}». Treu-lo'n primer.`); return; }
     let r; fes(y => { r = D.agrupa(x.album_id, amb)(y); }, () => `Agrupats al grup «${r.grup}»`); fullFitxa(rot(id)); return; }
+  if (d.nomgrup) { const x = rot(d.nomgrup); if (x?.conjunt) fullNomGrup(x); return; }
+  if (d.desanomgrup || d.nomgrupauto) { const x = rot(estat.nomGrupDe); if (!x?.conjunt) return;
+    const nom = d.nomgrupauto ? null : $('#inNomGrup')?.value.trim();
+    if (d.desanomgrup && !nom) { avisa('Cal un nom. Per tornar al de la màquina, «Torna al de la màquina».'); return; }
+    fes(D.posaNomGrup(x.conjunt, nom), nom ? 'El grup es diu «' + nom + '»' : 'El grup torna a portar el nom de la màquina'); fullFitxa(rot(x.id)); return; }
   if (d.treugrup) { const x = rot(d.treugrup); if (!x) return; const id = x.id;
     let r; fes(y => { r = D.treuDelGrup(x.album_id)(y); }, () => r?.desfet ? `Grup «${r.grup}» desfet: només hi quedava un disc` : `Fora del grup «${r?.grup}»`); fullFitxa(rot(id)); return; }
   if (d.durada) { const x = rot(d.durada); if (x) fullDurada(x); return; }
@@ -1029,6 +1075,12 @@ document.addEventListener('click', e => {
   if (d.sfsepara) { (estat.separades ||= new Set()).add(+d.sfsepara); pintaSafata(); return; }
   if (d.sfignora) { const ids = idsDe(d.sfignora, E.targetes(db())); if (!ids.length) return;
     fes(E.ignora(ids), 'Ignorat. No compta i no tornarà.'); return; }
+  if (d.sfignorasempre) { const arts = artistesDe(d.sfignorasempre); if (!arts.length) { avisa('Aquestes pistes no porten nom d\'artista.'); return; }
+    if (arts.length === 1) { ignoraSempreArt(arts[0]); return; }
+    obreFull(`<h3>Ignora sempre</h3><p>Tot el que arribi amb un artista que comenci per aquest nom s'ignorarà sol. La llista és a La Cabina, per treure'n un nom.</p>
+      <div class="canals">${arts.map(a => `<button data-ignoraart="${esc(a)}">${esc(a)}</button>`).join('')}</div>`); return; }
+  if (d.ignoraart) { tancaFull(); ignoraSempreArt(d.ignoraart); return; }
+  if (d.treuignora) { const nom = d.treuignora; fes(E.treuIgnoraSempre(nom), `«${nom}» ja no s'ignora sol. El que ja estava ignorat, s'hi queda.`); fullCabina(); return; }
   if (d.sfresolta) { const c = E.targetes(db(), { estat: 'resolt' }).find(x => x.clau === +d.sfresolta); if (!c) return;
     obreFull(`<h3>${esc(franja(c))}</h3><p>${esc(c.context || '')}</p><div class="canals">
       <button data-sfreobre="${c.scr.map(x => x.id).join(',')}">On ho escoltaves <small>torna la targeta a la safata</small></button>
@@ -1303,8 +1355,14 @@ try { navigator.permissions?.query({ name: 'geolocation' }).then(r => { if (r.st
 (async () => {
   try {
     // La sonda no espera el Drive: busca sempre que hi ha xarxa, i el que troba es desa quan es connecti.
-    if (await A.obreLocal()) { document.body.classList.add('desconnectat'); mostraMaquina(); sondes(); llegeixEscoltes(); return; }
+    if (await A.obreLocal()) {
+      document.body.classList.add('desconnectat'); mostraMaquina(); sondes();
+      // Amb el permís encara vigent en aquest mòbil (ACT-522), es connecta sol, sense toc i sense franja.
+      if (A.tePermis() && navigator.onLine) connecta(false); else llegeixEscoltes();
+      return;
+    }
   } catch {}
+  if (A.tePermis() && navigator.onLine) { connecta(false); return; }
   entrada('Entra amb Google per obrir l\'arxiu del teu Drive.', BT('entra', 'Entra amb Google', true));
   $('#entra').onclick = () => connecta(true);
 })();

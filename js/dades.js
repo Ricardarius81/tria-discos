@@ -12,7 +12,7 @@ const llista = s => { try { return s ? JSON.parse(s) : []; } catch { return []; 
 const json = v => (v && v.length ? JSON.stringify(v) : null);
 const ara = () => new Date().toISOString();
 import * as T from './tags.js?v=1';
-import { SQL_COMPTA } from './escoltes.js?v=3';
+import { SQL_COMPTA } from './escoltes.js?v=4';
 
 const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
 
@@ -120,6 +120,18 @@ export const canviaDurada = (id, min, partId) => db => partId
   ? db.run('UPDATE part SET durada = ? WHERE id = ?', [min, partId])
   : db.run('UPDATE edicio SET durada_total = ? WHERE id = ?', [min, id]);
 export const canviaCanal = (id, canal) => db => db.run('UPDATE edicio SET app_escolta = ? WHERE id = ?', [canal, id]);
+
+// El nom d'un grup posat per Ricard (v1.46, ACT-520 i ACT-521). Àlbum.Conjunt identifica el grup i el títol curt
+// es calcula amb ell, així que no es toca: el nom que posa Ricard viu a meta, clau 'noms-grups', com { conjunt: nom }.
+// Si hi és, surt en lloc del títol automàtic a Discos en Rotació, a l'Historial i a la fitxa. Buit = el de la màquina.
+const NOMS_GRUPS = 'noms-grups';
+export const nomsGrups = db => { try { return JSON.parse(un(db, 'SELECT valor FROM meta WHERE clau = ?', [NOMS_GRUPS])?.valor || '{}'); } catch { return {}; } };
+export const posaNomGrup = (conjunt, nom) => db => {
+  const m = nomsGrups(db), net = String(nom || '').trim();
+  if (net) m[conjunt] = net; else delete m[conjunt];
+  db.run('INSERT OR REPLACE INTO meta (clau, valor) VALUES (?, ?)', [NOMS_GRUPS, JSON.stringify(m)]);
+  return net || null;
+};
 
 // Els canals escrits a mà (v1.35, «Altre»): entren a la llista i la propera vegada surten com a opció.
 // Viuen a meta, clau 'canals-propis' (camp de la construcció, per ratificar), i viatgen amb l'arxiu.
@@ -371,7 +383,8 @@ export const treuDelGrup = albumId => db => {
   const a = un(db, 'SELECT conjunt FROM album WHERE id = ?', [albumId]); if (!a?.conjunt) return null;
   db.run('UPDATE album SET conjunt = NULL, posicio = NULL WHERE id = ?', [albumId]);
   const resta = files(db, 'SELECT id FROM album WHERE conjunt = ? ORDER BY COALESCE(posicio, 99), id', [a.conjunt]);
-  if (resta.length < 2) { db.run('UPDATE album SET conjunt = NULL, posicio = NULL WHERE conjunt = ?', [a.conjunt]); return { grup: a.conjunt, desfet: true }; }
+  // Un grup que es desfà perd el nom que li havia posat Ricard (consequència dita, ACT-520).
+  if (resta.length < 2) { db.run('UPDATE album SET conjunt = NULL, posicio = NULL WHERE conjunt = ?', [a.conjunt]); posaNomGrup(a.conjunt, null)(db); return { grup: a.conjunt, desfet: true }; }
   resta.forEach((x, i) => db.run('UPDATE album SET posicio = ? WHERE id = ?', [i + 1, x.id]));
   return { grup: a.conjunt, desfet: false };
 };

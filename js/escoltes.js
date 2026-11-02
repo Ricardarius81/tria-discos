@@ -413,7 +413,10 @@ export const heretaRespostes = (ara = Date.now()) => db => {
 // incloses (aquí sí: són el segon símptoma). Camps: Scrobble.context i Scrobble.estat. Es veu a La Cabina a partir del dia 30.
 export function veredicte(db, ara = Date.now()) {
   const arr = arrencada(db); if (!arr) return null;
-  const scr = files(db, 'SELECT listened_at, duration_ms, estat, context FROM scrobble ORDER BY listened_at, id').map(s => ({ ...s, t: ms(s.listened_at) }));
+  // El que «Ignora sempre» treu sol no entra al compte: ni obre targetes ni les fa ignorades (ACT-524).
+  const isem = ignoraSempre(db);
+  const scr = files(db, 'SELECT listened_at, duration_ms, estat, context, artista FROM scrobble ORDER BY listened_at, id')
+    .filter(s => !(s.estat === 'ignorat' && esIgnoratSempre(isem, s.artista))).map(s => ({ ...s, t: ms(s.listened_at) }));
   const tg = []; let cur = null, fi = 0;
   for (const s of scr) { if (!cur || s.t - fi > SILENCI_TARGETA) { cur = []; tg.push(cur); fi = 0; } cur.push(s); fi = Math.max(fi, s.t + (s.duration_ms || 0)); }
   const tancades = tg.filter(c => ara - Math.max(...c.map(s => s.t + (s.duration_ms || 0))) > SILENCI_TARGETA);
@@ -443,6 +446,34 @@ export const reobre = ids => db => {
   for (const id of ids) st.run([id]); st.free();
   return recalcula(db);
 };
+// «Ignora sempre» (v1.46, ACT-524): els noms d'artista a meta, clau 'ignora-sempre'. Tot el que arriba amb un artista que
+// COMENÇA per un d'aquests noms es marca ignorat sol («Outkast [feat. Killer Mike]» comença per «Outkast»). Camps:
+// Scrobble.artista i Scrobble.estat. No compta al veredicte: si comptés, els pòdcasts farien saltar el símptoma.
+// Només toca pistes pendents: una de contestada no es desfà. Treure un nom de la llista val per al que arribi després;
+// el que ja es va ignorar sol es queda ignorat (decisió de construcció de Claude, per ratificar).
+const IGNORA_SEMPRE = 'ignora-sempre';
+export const ignoraSempre = db => { try { return JSON.parse(un(db, 'SELECT valor FROM meta WHERE clau = ?', [IGNORA_SEMPRE])?.valor || '[]'); } catch { return []; } };
+export const esIgnoratSempre = (llistaNoms, artista) => { const a = norm(artista); return !!a && llistaNoms.some(n => norm(n) && a.startsWith(norm(n))); };
+export const aplicaIgnoraSempre = db => {
+  const l = ignoraSempre(db); if (!l.length) return 0;
+  let n = 0;
+  const st = db.prepare("UPDATE scrobble SET estat = 'ignorat', context = NULL, atencio = NULL WHERE id = ?");
+  for (const s of files(db, "SELECT id, artista FROM scrobble WHERE estat = 'pendent'")) if (esIgnoratSempre(l, s.artista)) { st.run([s.id]); n++; }
+  st.free();
+  return n;
+};
+export const afegeixIgnoraSempre = nom => db => {
+  const l = ignoraSempre(db), net = String(nom || '').trim(); if (!net) return { n: 0 };
+  if (!l.some(x => norm(x) === norm(net))) l.push(net);
+  db.run('INSERT OR REPLACE INTO meta (clau, valor) VALUES (?, ?)', [IGNORA_SEMPRE, JSON.stringify(l)]);
+  const n = aplicaIgnoraSempre(db);
+  return { n, ...recalcula(db) };
+};
+export const treuIgnoraSempre = nom => db => {
+  const l = ignoraSempre(db).filter(x => norm(x) !== norm(nom));
+  db.run('INSERT OR REPLACE INTO meta (clau, valor) VALUES (?, ?)', [IGNORA_SEMPRE, JSON.stringify(l)]);
+};
+
 // «Ignora» (ACT-462): un estat del Scrobble, no un esborrat. Rellegir ListenBrainz el reconeix i no torna.
 export const ignora = ids => db => {
   const st = db.prepare("UPDATE scrobble SET estat = 'ignorat', context = NULL, atencio = NULL WHERE id = ?");
