@@ -390,6 +390,19 @@ export const COMPROVACIONS = [
     igual(baixades(), n, 'baixades en tornar a primer pla sense cap canvi al Drive');
   } },
 
+  { nom: 'dos mòbils: una lectura de la màquina que xoca amb el Drive es torna a fer en silenci, sense l\'avís «ha canviat en un altre lloc»', sintetic: true, async fes({ pagina, drive, lb, esperaDesat, consulta }) {
+    const f = drive.per('la-meva-discoteca.sqlite');
+    f.modifiedTime = drive.hora();                               // «l'altre mòbil» desa mentre aquest llegeix
+    lb.escoltes.push({ compte: 'crimsonnnnfeina', listened_at: Math.floor((Date.now() - 90e3) / 1000), recording_msid: 'msid-banc-dosmobils',
+      track_metadata: { artist_name: 'Miles Davis', track_name: 'Summertime', release_name: 'Porgy and Bess', additional_info: { duration_ms: 202e3 } } });
+    await pagina.evaluate(() => document.getElementById('avis').classList.remove('obert'));
+    await pagina.click('#btSafata'); await pagina.waitForTimeout(2500); await esperaDesat();
+    const avis = await pagina.evaluate(() => document.getElementById('avis').classList.contains('obert') ? document.getElementById('avisTxt').textContent : '');
+    cal(!avis.includes('ha canviat en un altre lloc'), 'ha sortit l\'avís: ' + avis);
+    igual(consulta("SELECT COUNT(*) AS n FROM scrobble WHERE recording_msid = 'msid-banc-dosmobils'")[0].n, 1, 'la pista nova, al Drive');
+    igual(await pagina.evaluate(async () => (await import('./js/arxiu.js?v=14')).estat.base), drive.per('la-meva-discoteca.sqlite').modifiedTime, 'la versió del Drive sobre la qual treballa');
+  } },
+
   // ───────── el que no ha de passar mai ─────────
   { nom: 'cap petició no surt a internet', sempre: true, async fes({ fugides }) {
     const fora = fugides.filter(h => !/musicbrainz|coverartarchive|wikipedia|wikimedia|wikidata|bandcamp/.test(h));

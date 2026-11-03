@@ -97,6 +97,9 @@ function marcaDesat(r) {
   if (r && r.motiu === 'sense connectar amb el Drive') document.body.classList.add('desconnectat');
   $('#desat').classList.toggle('visible', !!pendent);
   if (r && !r.desat && r.motiu !== 'obrint' && !document.body.classList.contains('desconnectat')) {
+    // Si el que hi ha pendent són només lectures de la màquina (ListenBrainz, sonda, bústia), no és un conflicte: es torna a
+    // obrir l'arxiu del Drive en silenci i es tornen a fer (ACT-492). El sortia en tornar a primer pla amb dos mòbils (3-11).
+    if (r.motiu === 'conflicte' && !A.estat.manual) { connecta(false); return; }
     if (r.motiu === 'conflicte') avisa('L\'arxiu ha canviat en un altre lloc: torna a connectar per triar quin mana.');
     else avisa('Encara no s\'ha pogut desar al Drive (' + r.motiu + '). Queda en aquest mòbil i es torna a provar sol.');
   }
