@@ -317,7 +317,8 @@ function pintaHistorial() {
   for (const f of totes) {
     if (filtre && !norm(f.art + ' ' + f.titol).includes(filtre)) continue;
     const g = tram(f.darrera); if (g !== tr) { tr = g; h += `<div class="hgrup">${g}</div>`; }
-    const n = f.n + (f.grup ? (f.n === 1 ? ' tirada' : ' tirades') : (f.n === 1 ? ' escolta' : ' escoltes'));
+    // Un grup sonat d'una tirada compta com una escolta, igual que un disc (3-11, Ricard): el «tirada» de la fila sobrava.
+    const n = f.n + (f.n === 1 ? ' escolta' : ' escoltes');
     if (f.grup) {
       const cob = f.membres.find(x => x.portada)?.portada;
       const fons = cob && I.adreca(cob) ? `--img:url('${esc(I.adreca(cob))}')` : '';
@@ -325,7 +326,7 @@ function pintaHistorial() {
         <button class="hcap" data-fitxagrup="${esc(f.grup)}" aria-label="Fitxa del grup ${esc(f.titol)}">
           <span class="hcob collage n${Math.min(f.membres.length, 4)}"><span class="trossos">${f.membres.slice(0, 4).map(x => `<span class="tros">${x.portada ? IMG(x.portada) : ''}</span>`).join('')}</span></span>
           <span class="htxt"><span class="htit">${esc(f.titol)}</span><span class="hart">${esc(f.art)}</span>
-            <span class="hmeta"><u>${quan(f.darrera)}</u> · ${n} · d'una tirada</span></span>
+            <span class="hmeta"><u>${quan(f.darrera)}</u> · ${n}</span></span>
         </button>
         <span class="hdreta">${f.min ? `<span class="hdur">${f.min}′</span>` : ''}</span><button class="hplay" data-hgrup="${esc(f.grup)}" aria-label="Escoltar ${esc(f.titol)}">▶</button>
       </div>`;
@@ -349,7 +350,7 @@ function pintaHistorial() {
 // La fila d'un grup a l'Historial s'obre com la del ▶ d'un grup: els discos de l'última tirada, cadascun amb el seu ▶.
 function fullGrupHistorial(nom) {
   const f = filesHistorial().find(x => x.grup === nom); if (!f) return;
-  obreFull(`<h3>${esc(f.titol)}</h3><p>${f.n === 1 ? 'Una tirada' : f.n + ' tirades'} · l'última, ${esc(quan(f.darrera))}.</p>
+  obreFull(`<h3>${esc(f.titol)}</h3><p>${f.n === 1 ? 'Una escolta' : f.n + ' escoltes'} · l'última, ${esc(quan(f.darrera))}.</p>
     <div class="llista-grup">${f.membres.map((x, i) => {
       const e = x.app_escolta ? enllac(x.app_escolta, { art: x.art, tit: x.titol, bc: x.bc }) : null;
       return `<div class="membre">

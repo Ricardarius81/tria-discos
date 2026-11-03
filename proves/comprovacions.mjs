@@ -260,6 +260,12 @@ export const COMPROVACIONS = [
   { nom: 'rotació (B): Careful Now, ara emparellat, puja per les seves escoltes', sintetic: true, async fes({ consulta }) {
     cal(consulta('SELECT COUNT(*) AS n FROM escolta WHERE edicio_id IN (2, 3)')[0].n === 2, 'Careful Now i Unmasked no tenen escolta');
   } },
+  { nom: 'historial: el grup Careful Now compta en escoltes, com un disc, sense «tirada»', sintetic: true, async fes({ pagina, tornaFaristol, consulta }) {
+    await tornaFaristol('hist'); await pagina.waitForTimeout(300);
+    const t = await pagina.locator('#hist').innerText();
+    cal(t.includes('Careful Now'), 'el grup no surt a l\'Historial');
+    cal(!/tirad/i.test(t), 'a l\'Historial encara hi diu «tirada»');
+  } },
   { nom: 'pantalla completa: la fitxa del disc i La Cabina ocupen tota la pantalla; la fulla del ▶ del grup, no', sintetic: true, async fes({ pagina, tornaFaristol }) {
     await tornaFaristol('rot');
     const alt = async () => { const b = await pagina.locator('#full').boundingBox(); return { y: b.y, h: b.height }; };
