@@ -89,6 +89,24 @@ export const confirmaEdicio = (edicioId, { album, recording_msid }) => db => {
   db.run('UPDATE edicio SET emparellaments = ? WHERE id = ?', [JSON.stringify(l), edicioId]);
 };
 
+// L'emparellament sol quan no hi ha dubte (opció B de Ricard, 3-11; revisa la confirmació d'un a un del 31-10):
+// el release_name és exactament el títol (normalitzat), l'artista coincideix, només hi ha un àlbum així i aquest àlbum
+// té una sola edició a l'arxiu. S'escriu a Edició.Emparellaments com si l'hagués confirmat Ricard: cap regla no els
+// distingeix, i «Canvia l'edició» ho corregeix. La pregunta 2 queda per als casos amb dubte. Retorna quants n'ha fet.
+export const emparellaSols = db => {
+  let n = 0;
+  for (const q of preguntes2(db)) {
+    if (!q.album) continue;
+    const aid = artistaDe(db, q.artista); if (!aid) continue;
+    const ok = files(db, `SELECT e.id, a.titol, a.id AS album_id, (SELECT COUNT(*) FROM edicio x WHERE x.album_id = a.id) AS n_eds
+                          FROM edicio e JOIN album a ON a.id = e.album_id WHERE a.artista_id = ?`, [aid])
+      .filter(e => norm(e.titol) === norm(q.album));
+    if (ok.length !== 1 || ok[0].n_eds !== 1) continue;
+    confirmaEdicio(ok[0].id, { album: q.album })(db); n++;
+  }
+  return n;
+};
+
 // «No és cap d'aquestes»: es recorda per al nom, perquè la pregunta 2 no torni i el disc passi a ser candidat a nou
 // (§8.10, pregunta 2). Es desa a meta, que viatja amb l'arxiu. Camp de la construcció, per ratificar.
 const REBUTJATS = 'emparellaments-rebutjats';

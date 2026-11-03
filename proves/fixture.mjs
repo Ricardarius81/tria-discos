@@ -54,16 +54,16 @@ export async function arxiu(ara = Date.now()) {
   const run = (sql, p = []) => db.run(sql, p);
   run(`INSERT INTO meta (clau, valor) VALUES ('creat', ?), ('arrencada-escoltes', ?), ('ajust-car-pendent-30-10', 'banc'), ('ajust-3-2-bis-31-10', 'banc')`,
       [iso(ara - 10 * D), iso(ara - 3 * D)]);
-  const art = [[1, 'Biosphere'], [2, 'James Murray'], [3, 'Steve Roach'], [4, 'Miles Davis'], [5, 'Phase90']];
+  const art = [[1, 'Biosphere'], [2, 'James Murray'], [3, 'Steve Roach'], [4, 'Miles Davis'], [5, 'Phase90'], [6, 'Outkast']];
   for (const [id, n] of art) run('INSERT INTO artista (id, nom_canonic) VALUES (?, ?)', [id, n]);
   // [id, títol, artista, conjunt, posició]
   const alb = [[1, 'Angel\'s Flight', 1, null, null], [2, 'Careful Now', 2, 'Careful Now', 1], [3, 'Careful Now (Unmasked)', 2, 'Careful Now', 2],
-               [4, 'Structures from Silence', 3, null, null], [5, 'In a Silent Way', 4, null, null], [6, 'Infinitati', 5, null, null]];
+               [4, 'Structures from Silence', 3, null, null], [5, 'In a Silent Way', 4, null, null], [6, 'Infinitati', 5, null, null], [7, 'Stankonia', 6, null, null]];
   for (const [id, t, a, c, p] of alb) run('INSERT INTO album (id, titol, artista_id, conjunt, posicio) VALUES (?, ?, ?, ?, ?)', [id, t, a, c, p]);
   // [id, àlbum, durada, rotació, canal, codi bandcamp, emparellaments]
-  const eds = [[1, 1, 45, 1, 'amazon', null, ['Angel\'s Flight']], [2, 2, 52, 1, 'amazon', null, ['Careful Now']], [3, 3, 48, 1, 'amazon', null, ['Careful Now (Unmasked)']],
+  const eds = [[1, 1, 45, 1, 'amazon', null, ['Angel\'s Flight']], [2, 2, 52, 1, 'amazon', null, null], [3, 3, 48, 1, 'amazon', null, null],
                [4, 4, 60, 1, 'bandcamp', '1234567890', ['Structures from Silence']], [5, 5, 38, 0, 'youtube', null, ['In a Silent Way']],
-               [6, 6, 41, 1, 'aimp', null, null]];
+               [6, 6, 41, 1, 'aimp', null, null], [7, 7, 98, 0, 'amazon', null, null], [8, 7, 112, 0, 'amazon', null, null]];
   eds.forEach(([id, a, d, r, c, bc, emp], i) => run(`INSERT INTO edicio (id, album_id, durada_total, rotacio_actual, app_escolta, codi_bandcamp,
       emparellaments, data_referencia_rotacio) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [id, a, d, r, c, bc, emp ? JSON.stringify(emp) : null, iso(ara - 5 * D + i * MIN)]));

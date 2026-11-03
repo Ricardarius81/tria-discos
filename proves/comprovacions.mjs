@@ -105,7 +105,7 @@ export const COMPROVACIONS = [
       track_metadata: { artist_name: 'Biosphere', track_name: 'Angel\'s Flight (bonus)', release_name: 'Angel\'s Flight', additional_info: { duration_ms: 60e3 } } });
     await pagina.click('#btSafata'); await pagina.waitForTimeout(900); await esperaDesat();
     const r = await pagina.evaluate(async () => {
-      const E = await import('./js/escoltes.js?v=6'); const A = await import('./js/arxiu.js?v=13');
+      const E = await import('./js/escoltes.js?v=7'); const A = await import('./js/arxiu.js?v=13');
       const SQL = await initSqlJs({ locateFile: f => 'vendor/sqljs/' + f });
       const c = new SQL.Database(A.estat.db.export()), despres = Date.now() + 2 * 3600e3;
       const n = E.heretaRespostes(despres)(c);
@@ -219,7 +219,7 @@ export const COMPROVACIONS = [
   } },
   { nom: 'ignora sempre: no compta al veredicte de la safata', sintetic: true, async fes({ pagina }) {
     // El veredicte és una funció pura sobre l'arxiu: es crida dins la pàgina, amb el mòdul de la màquina.
-    const v = await pagina.evaluate(async () => { const E = await import('./js/escoltes.js?v=6'); const A = await import('./js/arxiu.js?v=13'); return E.veredicte(A.estat.db); });
+    const v = await pagina.evaluate(async () => { const E = await import('./js/escoltes.js?v=7'); const A = await import('./js/arxiu.js?v=13'); return E.veredicte(A.estat.db); });
     igual(v.ignorades, 0, 'targetes ignorades al veredicte');
   } },
   { nom: 'ignora sempre: un botó de La Cabina obre la llista, i «Treu-lo» la buida', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
@@ -240,11 +240,25 @@ export const COMPROVACIONS = [
       track_metadata: { artist_name: 'James Murray', track_name: 'Careful Now', release_name: 'Careful Now', additional_info: { duration_ms: 52 * m } } });
     lb.escoltes.push({ compte: 'crimsonnnn', listened_at: Math.floor((t0 + 52 * m) / 1000), recording_msid: 'msid-banc-cn2',
       track_metadata: { artist_name: 'James Murray', track_name: 'Unmasked', release_name: 'Careful Now (Unmasked)', additional_info: { duration_ms: 48 * m } } });
+    // i un disc amb dues edicions a l'arxiu (Stankonia): aquest no s'empareja sol
+    lb.escoltes.push({ compte: 'crimsonnnn', listened_at: Math.floor((t0 - 3 * 3600e3) / 1000), recording_msid: 'msid-banc-stk',
+      track_metadata: { artist_name: 'Outkast', track_name: 'So Fresh, So Clean', release_name: 'Stankonia', additional_info: { duration_ms: 4 * m } } });
     await obreSafata(); await pagina.waitForTimeout(800); await esperaDesat();
     const g = pagina.locator('#safataCos .sf-grup');
     igual(await g.count(), 1, 'blocs de grup a la safata');
     cal((await g.innerText()).includes('Careful Now + Unmasked'), 'el bloc no porta el nom del grup: ' + await g.innerText());
     igual(await g.locator('.sf-disc').count(), 2, 'discos dins el bloc del grup');
+  } },
+  { nom: 'emparellament sol (B): Careful Now i Unmasked s\'emparellen sense preguntar; Stankonia, amb dues edicions, no', sintetic: true, async fes({ pagina, consulta }) {
+    igual(consulta('SELECT emparellaments FROM edicio WHERE id = 2')[0].emparellaments, '["Careful Now"]', 'Edició.Emparellaments de Careful Now');
+    igual(consulta('SELECT emparellaments FROM edicio WHERE id = 3')[0].emparellaments, '["Careful Now (Unmasked)"]', 'Edició.Emparellaments d\'Unmasked');
+    igual(consulta('SELECT COUNT(*) AS n FROM edicio WHERE id IN (7, 8) AND emparellaments IS NOT NULL')[0].n, 0, 'edicions de Stankonia emparellades soles');
+    const t = await pagina.locator('#safataCos').innerText();
+    cal(t.includes('Stankonia') && (await pagina.locator('#safataCos [data-q2si]').count()) > 0, 'Stankonia no fa la pregunta 2');
+    cal(!(await pagina.locator('#safataCos .sf-grup [data-q2si]').count()), 'el grup Careful Now encara fa la pregunta 2');
+  } },
+  { nom: 'rotació (B): Careful Now, ara emparellat, puja per les seves escoltes', sintetic: true, async fes({ consulta }) {
+    cal(consulta('SELECT COUNT(*) AS n FROM escolta WHERE edicio_id IN (2, 3)')[0].n === 2, 'Careful Now i Unmasked no tenen escolta');
   } },
   { nom: 'pantalla completa: la fitxa del disc i La Cabina ocupen tota la pantalla; la fulla del ▶ del grup, no', sintetic: true, async fes({ pagina, tornaFaristol }) {
     await tornaFaristol('rot');

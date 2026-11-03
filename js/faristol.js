@@ -8,8 +8,8 @@
 // Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 
 import * as A from './arxiu.js?v=13';
-import * as D from './dades.js?v=15';
-import * as E from './escoltes.js?v=6';
+import * as D from './dades.js?v=16';
+import * as E from './escoltes.js?v=7';
 import * as LB from './listenbrainz.js?v=1';
 import * as I from './imatges.js?v=3';
 import * as T from './tags.js?v=1';
@@ -585,7 +585,7 @@ async function llegeixEscoltes() {
     const tard = db_ => E.heretaRespostes()(db_);
     const cal = !E.arrencada(db()) || noves.length || E.calHeretar(db());
     if (cal) {
-      const r = await fes(x => { E.fixaArrencada(arr)(x); const n = E.desaScrobbles(noves)(x); E.aplicaIgnoraSempre(x); const h = tard(x); return { n, h, ...((n || h) ? E.recalcula(x) : {}) }; }, null, { desfes: false, auto: true });
+      const r = await fes(x => { E.fixaArrencada(arr)(x); const n = E.desaScrobbles(noves)(x); E.aplicaIgnoraSempre(x); const h = tard(x); const em = E.emparellaSols(x); return { n, h, em, ...((n || h || em) ? E.recalcula(x) : {}) }; }, null, { desfes: false, auto: true });
       // Sense avís de «pistes noves» (2-11): el número de la safata ja ho diu, i l'avís tapava la franja magenta.
     }
   } catch (e) { estat.lbError = e.message; }
