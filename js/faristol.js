@@ -8,8 +8,8 @@
 // Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 
 import * as A from './arxiu.js?v=13';
-import * as D from './dades.js?v=14';
-import * as E from './escoltes.js?v=5';
+import * as D from './dades.js?v=15';
+import * as E from './escoltes.js?v=6';
 import * as LB from './listenbrainz.js?v=1';
 import * as I from './imatges.js?v=3';
 import * as T from './tags.js?v=1';
@@ -69,8 +69,11 @@ function avisa(txt, desfes) {
   $('#avisBt').style.display = desfes ? 'inline' : 'none'; estat.ultima = desfes || null;
   clearTimeout(window._t); window._t = setTimeout(() => $('#avis').classList.remove('obert'), 6500);
 }
-function obreFull(h) {
+// complet: les fitxes i La Cabina ocupen tota la pantalla, com la safata (3-11, Ricard). Les fulles d'acció ràpida
+// (la nota, el ▶ del grup, el canal…) es queden a mitja pantalla, perquè el fons fa de context.
+function obreFull(h, complet = false) {
   $('#full').innerHTML = '<button class="torna-full" data-tornafull="1">← Tornar</button>' + h;
+  $('#full').classList.toggle('complet', complet);
   $('#full').classList.add('obert'); $('#fons').classList.add('obert'); $('#full').scrollTop = 0;
   I.omple($('#full'));
 }
@@ -201,7 +204,7 @@ function fullGrup(nom) {
         <button class="treu" data-treugrup="${x.id}" aria-label="Treu ${esc(x.titol)} del grup">treu-lo</button>
         ${botoPlay(x, 'play')}
       </div>`).join('')}</div>
-    <p class="gris" style="font-size:12px">${m.length === 2 ? 'Si en treus un, el grup es desfà: un grup d\'un sol disc no és un grup.' : 'Un disc que s\'afegeix va al final.'}${propi ? ' Si el grup es desfà, el nom es perd.' : ''}</p>`);
+    <p class="gris" style="font-size:12px">${m.length === 2 ? 'Si en treus un, el grup es desfà: un grup d\'un sol disc no és un grup.' : 'Un disc que s\'afegeix va al final.'}${propi ? ' Si el grup es desfà, el nom es perd.' : ''}</p>`, true);
 }
 
 function botoPlay(d, classe) {
@@ -437,6 +440,20 @@ function blocNou(x) {
     </div></div>`;
 }
 // La clau d'un disc d'una targeta, tal com la fan servir la pregunta 2 i el disc nou.
+// Els discos d'una targeta que són del mateix grup surten junts sota el nom del grup (3-11, Ricard). Només es veu:
+// la resposta continua sent de la targeta o de cada disc, i Scrobble.resposta_de no guanya cap tercer valor.
+function perGrups(discos, pinta) {
+  const n = {}; for (const d of discos) if (d.conjunt) n[d.conjunt] = (n[d.conjunt] || 0) + 1;
+  const fets = new Set(); let h = '';
+  for (const d of discos) {
+    const g = d.conjunt && n[d.conjunt] > 1 ? d.conjunt : null;
+    if (!g) { h += pinta(d); continue; }
+    if (fets.has(g)) continue; fets.add(g);
+    const ms = discos.filter(x => x.conjunt === g), m = D.grup(db(), g);
+    h += `<div class="sf-grup"><p class="sf-grupcap">Grup · <b>${esc(titolGrup(g, m.length ? m : ms))}</b></p>${ms.map(pinta).join('')}</div>`;
+  }
+  return h;
+}
 const clauDisc = d => d.clau[0] === 'n' ? d.clau.slice(1) : d.clau[0] === 'm' ? 'msid:' + d.clau.slice(1) : null;
 function pintaSafata() {
   sincroCanals();
@@ -478,9 +495,9 @@ function pintaSafata() {
   // La sessió que encara sona (ACT-528): els discos acabats es contesten ara, un per un; el que sona, en gris.
   h += obertes.map(c => `<div class="sf-card sf-oberta${c.discos.some(d => d.llest && perFer(d)) ? ' amb-llestos' : ''}"><span class="sf-tipus">Sonant ara</span>
       <div class="sf-cap"><b>${esc(quan(c.inici).replace(/ · .*/, ''))} · des de les ${hm(c.inici)}</b><span>${nomCompte(c.comptes)}</span></div>
-      ${c.discos.map(d => !d.llest ? `<div class="sf-sonant">${minDisc(d, ' · <i>sonant</i>')}</div>`
+      ${perGrups(c.discos, d => !d.llest ? `<div class="sf-sonant">${minDisc(d, ' · <i>sonant</i>')}</div>`
         : d.contestat ? fila(d) + jaContestat(d)
-        : `<div class="sf-separat">${fila(d)}${xipsContext('d' + c.clau + ':' + d.clau, c, 'Acabat. On l\'escoltaves?')}</div>`).join('')}
+        : `<div class="sf-separat">${fila(d)}${xipsContext('d' + c.clau + ':' + d.clau, c, 'Acabat. On l\'escoltaves?')}</div>`)}
       <p class="sf-pre">Cada disc es pot contestar quan fa 5 minuts que ha acabat o quan en comença un altre. Si esperes, quan faci 30 minuts que no sona res, la sessió sencera es contesta amb un toc.</p></div>`).join('');
   // la pregunta 2 i el disc nou que no tenen cap targeta a la cua (per exemple, d'escoltes d'abans de l'1-11)
   h += q2Sols.map(q => `<div class="sf-card"><span class="sf-tipus">És aquesta edició?</span>
@@ -508,10 +525,10 @@ function pintaSafata() {
     // Una sessió on algun disc ja es va contestar sol (ACT-528): aquests surten contestats i la pregunta és per a la resta.
     const parcial = c.estat === 'pendent' && c.discos.some(d => d.contestat);
     const cos = c.estat === 'resolta'
-      ? c.discos.map(fila).join('') + `<p class="sf-pre">On ho escoltaves: <b>${esc(c.contextos.join(' · ') || c.context || '')}</b>, ja contestat.</p>`
+      ? perGrups(c.discos, fila) + `<p class="sf-pre">On ho escoltaves: <b>${esc(c.contextos.join(' · ') || c.context || '')}</b>, ja contestat.</p>`
       : sep
-        ? c.discos.map(d => d.contestat ? fila(d) + jaContestat(d) : `<div class="sf-separat">${fila(d)}${xipsContext('d' + c.clau + ':' + d.clau, c, 'On escoltaves aquest?')}</div>`).join('')
-        : c.discos.map(d => fila(d) + (parcial && d.contestat ? jaContestat(d) : '')).join('') + xipsContext('t' + c.clau, c, parcial ? 'On escoltaves la resta?' : null)
+        ? perGrups(c.discos, d => d.contestat ? fila(d) + jaContestat(d) : `<div class="sf-separat">${fila(d)}${xipsContext('d' + c.clau + ':' + d.clau, c, 'On escoltaves aquest?')}</div>`)
+        : perGrups(c.discos, d => fila(d) + (parcial && d.contestat ? jaContestat(d) : '')) + xipsContext('t' + c.clau, c, parcial ? 'On escoltaves la resta?' : null)
           + (c.discos.filter(d => !d.contestat).length > 1 ? `<button class="sf-link" data-sfsepara="${c.clau}">Separa: cada disc per la seva banda</button>` : '');
     return `<div class="sf-card"><div class="sf-cap"><b>${esc(franja(c))}</b><span>${nomCompte(c.comptes)} · ${c.discos.length} ${c.discos.length === 1 ? 'disc' : 'discos'}</span></div>${cos}</div>`;
   }).join('');
@@ -605,7 +622,7 @@ function fullPortada(d) {
       <button data-pujaportada="1">Puja-la <small>si no surt enlloc: una foto o una imatge teva</small></button>
       ${d.portada ? `<button data-noportada="${d.id}">Treu-la <small>no és aquesta, i no en tinc cap altra</small></button>` : ''}
     </div>
-    <input type="file" id="inPortada" accept="image/*" hidden>`);
+    <input type="file" id="inPortada" accept="image/*" hidden>`, true);
   $('#inPortada').onchange = e => { const f = e.target.files?.[0]; if (f) pujaPortada(d, f); };
   cercaPortada();
 }
@@ -646,7 +663,7 @@ function fullFoto(p) {
       <button data-pujafoto="1">Puja'n una <small>es desa al teu Drive</small></button>
       ${p.retrat ? `<button data-noretrat="${p.artista_id}">Treu-la <small>no és ell, i no en tinc cap altra</small></button>` : ''}
     </div>
-    <input type="file" id="inFoto" accept="image/*" hidden>`);
+    <input type="file" id="inFoto" accept="image/*" hidden>`, true);
   $('#inFoto').onchange = e => { const f = e.target.files?.[0]; if (f) pujaFoto(p, f); };
   estat.fotoDe = p; cercaFoto();
 }
@@ -703,7 +720,7 @@ function fullFitxa(d) {
       ${d.esperant ? `<button class="bt principal" data-repren="${d.id}">Reprèn</button>` : `<button class="bt principal" data-escoltar="${d.id}">Escoltar ara</button>`}
       ${jaPref ? '' : `<button class="bt" data-fespref="${d.artista_id}">Afegir a Artistes Preferents</button>`}
       ${d.rotacio_actual ? `<button class="bt" data-treure="${d.id}">Treu de rotació</button>` : `<button class="bt" data-hrot="${d.id}">Posa'l en rotació</button>`}
-    </div>`);
+    </div>`, true);
 }
 
 // El nom d'un grup (ACT-520): el posa la màquina i Ricard el canvia. Es desa a meta; Àlbum.Conjunt no es toca.
@@ -934,7 +951,7 @@ function fullCabina() {
       <li><span class="ll-info">ListenBrainz <small>${E.arrencada(db()) ? 'les dues comptes, des del ' + dia(E.arrencada(db())) + ' · ' + r.scrobble + ' pistes' : 'encara no s\'ha llegit'}${estat.lbError ? ' · ' + esc(estat.lbError) : ''}</small></span></li>
       <li><button disabled style="opacity:.6">Còpia de seguretat i Excel <small>tram 4</small></button></li>
       <li><a href="privadesa.html" target="_blank" rel="noopener">Política de privadesa <small>què surt d'aquest mòbil, i cap a on</small></a></li>
-    </ul></div>`);
+    </ul></div>`, true);
 }
 
 // La llista d'«Ignora sempre» (2-11): un botó a La Cabina que l'obre, i cada nom amb el seu «Treu-lo».
@@ -945,7 +962,7 @@ function fullIgnorats() {
     ${l.length ? `<div class="llista-grup">${l.map(n => `<div class="membre"><span class="txt"><b>${esc(n)}</b></span>
       <button class="treu" data-treuignora="${esc(n)}">Treu-lo</button></div>`).join('')}</div>`
       : `<p class="gris">Cap. Es posa amb «Ignora sempre…» a una targeta de la safata.</p>`}
-    <div class="barra-accions" style="position:static;padding:10px 0 0"><button class="bt discret" data-cabina="1">← La Cabina</button></div>`);
+    <div class="barra-accions" style="position:static;padding:10px 0 0"><button class="bt discret" data-cabina="1">← La Cabina</button></div>`, true);
 }
 function fullLloc() {
   obreFull(`<h3>On ets?</h3>
@@ -1299,8 +1316,8 @@ async function connecta(ambGest) {
       mostraMaquina();
       if (r.fora) avisa('Sense connexió: treballes amb la còpia d\'aquest mòbil.');
       else if (r.desat && !r.desat.desat) avisa('Hi ha canvis d\'aquest mòbil que encara no s\'han pogut desar: ' + r.desat.motiu + '.');
-      else if (r.desat) avisa('Connectat. Els canvis d\'aquest mòbil ja són al Drive.');
-      else avisa(r.avis || 'Connectat amb el Drive.');
+      // «Connectat» ja no s'avisa (3-11, Ricard): la franja magenta que desapareix ja ho diu. Només els avisos que diuen alguna cosa.
+      else if (r.avis) avisa(r.avis);
       if (!r.fora) despresDeConnectar();
       llegeixEscoltes();
       return;

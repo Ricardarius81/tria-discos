@@ -12,7 +12,7 @@ const llista = s => { try { return s ? JSON.parse(s) : []; } catch { return []; 
 const json = v => (v && v.length ? JSON.stringify(v) : null);
 const ara = () => new Date().toISOString();
 import * as T from './tags.js?v=1';
-import { SQL_COMPTA } from './escoltes.js?v=5';
+import { SQL_COMPTA } from './escoltes.js?v=6';
 
 const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
 
@@ -22,8 +22,8 @@ export const FISICS = ['CD', 'vinil'];
 
 // ───────── Discos en Rotació ─────────
 // Una edició és a la rotació si té Rotació actual. Si té parts i cap no és viva, la caixa espera (§7.1, v1.33).
-// L'ordre (§7.7, v1.37, opció C): el més recent entre l'últim «Escoltar ara», l'última escolta real
-// i el dia que va entrar a la rotació. Si empaten —la llavor va entrar tota alhora—, l'ordre de càrrega (ACT-356).
+// L'ordre (§7.7, v1.37, opció C): el més recent entre l'últim «Escoltar ara», l'última escolta real, l'última pista
+// que ha sonat (3-11, opció B) i el dia que va entrar a la rotació. Si empaten —la llavor va entrar tota alhora—, l'ordre de càrrega (ACT-356).
 export function rotacio(db) {
   return carrega(db, 'e.rotacio_actual = 1').sort((x, y) => (y.clau.localeCompare(x.clau)) || (x.id - y.id));
 }
@@ -35,7 +35,8 @@ function carrega(db, on, params = []) {
            e.darrera_obertura, e.data_referencia_rotacio, e.portada, e.portada_origen, e.data_darrera_pregunta_puntuacio,
            a.titol, a.artista_id, a.tags AS album_tags, a.conjunt, a.posicio, ar.nom_canonic AS art,
            (SELECT COUNT(*) FROM edicio x WHERE x.album_id = e.album_id) AS n_edicions,
-           (SELECT MAX(s.data_hora) FROM escolta s WHERE s.edicio_id = e.id AND ${SQL_COMPTA}) AS darrera_escolta
+           (SELECT MAX(s.data_hora) FROM escolta s WHERE s.edicio_id = e.id AND ${SQL_COMPTA}) AS darrera_escolta,
+           (SELECT MAX(p.listened_at) FROM scrobble p JOIN escolta x ON x.id = p.escolta_id WHERE x.edicio_id = e.id) AS darrer_scrobble
     FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id
     WHERE ${on}`, params);
   for (const e of eds) {
@@ -49,7 +50,9 @@ function carrega(db, on, params = []) {
     e.fisic = e.formats.some(f => FISICS.includes(f));
     e.min = e.viva ? (e.viva.durada || null) : e.durada_total;
     e.bc = e.viva ? e.viva.codi_bandcamp : e.codi_bandcamp;
-    e.clau = [e.darrera_obertura, e.darrera_escolta, e.data_referencia_rotacio].filter(Boolean).sort().pop() || '';
+    // + l'última pista que ha sonat d'aquesta edició, encara que no arribi al 75 % (opció B de Ricard, 3-11: com el
+    // «escoltat recentment» d'Amazon, puja també el que només has començat). Només si el nom ja és emparellat.
+    e.clau = [e.darrera_obertura, e.darrera_escolta, e.darrer_scrobble, e.data_referencia_rotacio].filter(Boolean).sort().pop() || '';
     // La línia «Grup» de la fitxa (ACT-449): tots els discos del grup que són a l'arxiu, en el seu ordre, en rotació o no.
     e.discosGrup = e.conjunt ? files(db, 'SELECT id, titol, posicio FROM album WHERE conjunt = ? ORDER BY COALESCE(posicio, 99), id', [e.conjunt]) : [];
   }

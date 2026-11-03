@@ -61,7 +61,7 @@ export async function arxiu(ara = Date.now()) {
                [4, 'Structures from Silence', 3, null, null], [5, 'In a Silent Way', 4, null, null], [6, 'Infinitati', 5, null, null]];
   for (const [id, t, a, c, p] of alb) run('INSERT INTO album (id, titol, artista_id, conjunt, posicio) VALUES (?, ?, ?, ?, ?)', [id, t, a, c, p]);
   // [id, àlbum, durada, rotació, canal, codi bandcamp, emparellaments]
-  const eds = [[1, 1, 45, 1, 'amazon', null, ['Angel\'s Flight']], [2, 2, 52, 1, 'amazon', null, null], [3, 3, 48, 1, 'amazon', null, null],
+  const eds = [[1, 1, 45, 1, 'amazon', null, ['Angel\'s Flight']], [2, 2, 52, 1, 'amazon', null, ['Careful Now']], [3, 3, 48, 1, 'amazon', null, ['Careful Now (Unmasked)']],
                [4, 4, 60, 1, 'bandcamp', '1234567890', ['Structures from Silence']], [5, 5, 38, 0, 'youtube', null, ['In a Silent Way']],
                [6, 6, 41, 1, 'aimp', null, null]];
   eds.forEach(([id, a, d, r, c, bc, emp], i) => run(`INSERT INTO edicio (id, album_id, durada_total, rotacio_actual, app_escolta, codi_bandcamp,

@@ -58,6 +58,14 @@ export const COMPROVACIONS = [
     await esperaDesat();
     igual(consulta('SELECT COUNT(*) AS n FROM scrobble')[0].n, 7, 'pistes a Scrobble');
   } },
+  // ───────── 3-11: el disc que sona puja a dalt encara que no arribi al 75 % (opció B) ─────────
+  { nom: 'rotació (B): Structures from Silence, que sona ara, puja al primer lloc pel seu darrer scrobble', sintetic: true, async fes({ pagina, consulta, tornaFaristol }) {
+    // el camp: l'última pista d'aquesta edició, lligada a una escolta que encara no arriba al 75 %
+    const r = consulta(`SELECT MAX(p.listened_at) AS m, MAX(x.completitud) AS c FROM scrobble p JOIN escolta x ON x.id = p.escolta_id WHERE x.edicio_id = 4`)[0];
+    cal(r.m && r.c < 0.75, 'Structures no té cap pista lligada a una escolta per sota del 75 %: ' + JSON.stringify(r));
+    await tornaFaristol('rot'); await pagina.waitForTimeout(300);
+    cal((await pagina.locator('#reixa .disc').first().innerText()).includes('Structures'), 'la primera rajola no és Structures from Silence');
+  } },
   { nom: 'listenbrainz: rellegir no duplica cap pista', sintetic: true, async fes({ pagina, consulta, esperaDesat, obreSafata }) {
     await obreSafata(); await pagina.waitForTimeout(600); await esperaDesat();
     igual(consulta('SELECT COUNT(*) AS n FROM scrobble')[0].n, 7, 'pistes a Scrobble després de rellegir');
@@ -97,7 +105,7 @@ export const COMPROVACIONS = [
       track_metadata: { artist_name: 'Biosphere', track_name: 'Angel\'s Flight (bonus)', release_name: 'Angel\'s Flight', additional_info: { duration_ms: 60e3 } } });
     await pagina.click('#btSafata'); await pagina.waitForTimeout(900); await esperaDesat();
     const r = await pagina.evaluate(async () => {
-      const E = await import('./js/escoltes.js?v=5'); const A = await import('./js/arxiu.js?v=13');
+      const E = await import('./js/escoltes.js?v=6'); const A = await import('./js/arxiu.js?v=13');
       const SQL = await initSqlJs({ locateFile: f => 'vendor/sqljs/' + f });
       const c = new SQL.Database(A.estat.db.export()), despres = Date.now() + 2 * 3600e3;
       const n = E.heretaRespostes(despres)(c);
@@ -211,7 +219,7 @@ export const COMPROVACIONS = [
   } },
   { nom: 'ignora sempre: no compta al veredicte de la safata', sintetic: true, async fes({ pagina }) {
     // El veredicte és una funció pura sobre l'arxiu: es crida dins la pàgina, amb el mòdul de la màquina.
-    const v = await pagina.evaluate(async () => { const E = await import('./js/escoltes.js?v=5'); const A = await import('./js/arxiu.js?v=13'); return E.veredicte(A.estat.db); });
+    const v = await pagina.evaluate(async () => { const E = await import('./js/escoltes.js?v=6'); const A = await import('./js/arxiu.js?v=13'); return E.veredicte(A.estat.db); });
     igual(v.ignorades, 0, 'targetes ignorades al veredicte');
   } },
   { nom: 'ignora sempre: un botó de La Cabina obre la llista, i «Treu-lo» la buida', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
@@ -223,6 +231,36 @@ export const COMPROVACIONS = [
     igual(consulta("SELECT valor FROM meta WHERE clau = 'ignora-sempre'")[0]?.valor, '[]', 'meta ignora-sempre després de treure');
     igual(consulta("SELECT estat FROM scrobble WHERE artista = 'Beck Did It Better'")[0].estat, 'ignorat', 'el ja ignorat s\'hi queda');
     await pagina.click('[data-tornafull]'); await pagina.waitForTimeout(200);
+  } },
+
+  // ───────── 3-11: el grup a la safata, i les fitxes a pantalla completa ─────────
+  { nom: 'safata: Careful Now + Unmasked escoltats seguits surten junts sota el nom del grup', sintetic: true, async fes({ pagina, lb, esperaDesat, obreSafata }) {
+    const t0 = Date.now() - 6 * 3600e3, m = 60e3;
+    lb.escoltes.push({ compte: 'crimsonnnn', listened_at: Math.floor(t0 / 1000), recording_msid: 'msid-banc-cn1',
+      track_metadata: { artist_name: 'James Murray', track_name: 'Careful Now', release_name: 'Careful Now', additional_info: { duration_ms: 52 * m } } });
+    lb.escoltes.push({ compte: 'crimsonnnn', listened_at: Math.floor((t0 + 52 * m) / 1000), recording_msid: 'msid-banc-cn2',
+      track_metadata: { artist_name: 'James Murray', track_name: 'Unmasked', release_name: 'Careful Now (Unmasked)', additional_info: { duration_ms: 48 * m } } });
+    await obreSafata(); await pagina.waitForTimeout(800); await esperaDesat();
+    const g = pagina.locator('#safataCos .sf-grup');
+    igual(await g.count(), 1, 'blocs de grup a la safata');
+    cal((await g.innerText()).includes('Careful Now + Unmasked'), 'el bloc no porta el nom del grup: ' + await g.innerText());
+    igual(await g.locator('.sf-disc').count(), 2, 'discos dins el bloc del grup');
+  } },
+  { nom: 'pantalla completa: la fitxa del disc i La Cabina ocupen tota la pantalla; la fulla del ▶ del grup, no', sintetic: true, async fes({ pagina, tornaFaristol }) {
+    await tornaFaristol('rot');
+    const alt = async () => { const b = await pagina.locator('#full').boundingBox(); return { y: b.y, h: b.height }; };
+    await pagina.locator('#reixa .coberta[data-fitxa]').first().click(); await pagina.waitForSelector('#full.obert'); await pagina.waitForTimeout(150);
+    let b = await alt(); cal(b.y < 1 && b.h > 840, `la fitxa no és a pantalla completa (y=${Math.round(b.y)}, h=${Math.round(b.h)})`);
+    await pagina.click('[data-tornafull]'); await pagina.waitForTimeout(150);
+    await pagina.click('#btAjustos'); await pagina.waitForSelector('#full.obert'); await pagina.waitForTimeout(150);
+    b = await alt(); cal(b.y < 1 && b.h > 840, 'La Cabina no és a pantalla completa');
+    await pagina.click('[data-tornafull]'); await pagina.waitForTimeout(150);
+    await pagina.locator('#reixa .disc.grup [data-grupplay]').click(); await pagina.waitForSelector('#full.obert'); await pagina.waitForTimeout(150);
+    b = await alt(); cal(b.y > 100, 'la fulla del ▶ del grup ha passat a pantalla completa');
+    await pagina.click('[data-tornafull]'); await pagina.waitForTimeout(150);
+  } },
+  { nom: 'connecta: ja no surt l\'avís «Connectat amb el Drive»', sintetic: true, async fes({ pagina }) {
+    cal(!(await pagina.evaluate(() => /Connectat/.test(document.getElementById('avisTxt').textContent))), 'l\'avís «Connectat» encara hi és');
   } },
 
   // ───────── v1.46: «canvia-li el nom» d'un grup (ACT-520) ─────────
@@ -292,8 +330,12 @@ export const COMPROVACIONS = [
     await pagina.setViewportSize({ width: 1280, height: 860 }); await pagina.waitForTimeout(250);
     igual(await cols(), 6, 'columnes al portàtil');
     await pagina.locator('#reixa .coberta[data-fitxa]').first().click(); await pagina.waitForSelector('#full.obert'); await pagina.waitForTimeout(250);
+    const fc = await pagina.locator('#full').boundingBox();
+    cal(Math.abs(fc.x + fc.width / 2 - 640) < 4 && fc.y < 1, 'la fitxa, al portàtil, no és centrada i d\'alt a baix');
+    await pagina.click('[data-tornafull]'); await pagina.waitForTimeout(150);
+    await pagina.locator('#reixa .disc.grup [data-grupplay]').click(); await pagina.waitForSelector('#full.obert'); await pagina.waitForTimeout(250);
     const f = await pagina.locator('#full').boundingBox();
-    cal(Math.abs(f.x + f.width / 2 - 640) < 4 && f.y > 20, 'la fulla no és al mig de la pantalla');
+    cal(Math.abs(f.x + f.width / 2 - 640) < 4 && f.y > 20, 'la fulla ràpida no és al mig de la pantalla');
     await pagina.click('[data-tornafull]'); await pagina.setViewportSize({ width: 390, height: 844 }); await pagina.waitForTimeout(250);
     igual(await cols(), 3, 'columnes al mòbil, després');
   } },
