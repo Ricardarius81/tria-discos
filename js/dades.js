@@ -12,7 +12,7 @@ const llista = s => { try { return s ? JSON.parse(s) : []; } catch { return []; 
 const json = v => (v && v.length ? JSON.stringify(v) : null);
 const ara = () => new Date().toISOString();
 import * as T from './tags.js?v=1';
-import { SQL_COMPTA } from './escoltes.js?v=7';
+import { SQL_COMPTA } from './escoltes.js?v=8';
 
 const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
 

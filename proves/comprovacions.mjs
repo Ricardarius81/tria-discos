@@ -105,14 +105,14 @@ export const COMPROVACIONS = [
       track_metadata: { artist_name: 'Biosphere', track_name: 'Angel\'s Flight (bonus)', release_name: 'Angel\'s Flight', additional_info: { duration_ms: 60e3 } } });
     await pagina.click('#btSafata'); await pagina.waitForTimeout(900); await esperaDesat();
     const r = await pagina.evaluate(async () => {
-      const E = await import('./js/escoltes.js?v=7'); const A = await import('./js/arxiu.js?v=13');
+      const E = await import('./js/escoltes.js?v=8'); const A = await import('./js/arxiu.js?v=14');
       const SQL = await initSqlJs({ locateFile: f => 'vendor/sqljs/' + f });
       const c = new SQL.Database(A.estat.db.export()), despres = Date.now() + 2 * 3600e3;
       const n = E.heretaRespostes(despres)(c);
       const q = sql => c.exec(sql)[0]?.values || [];
       const out = { n, tard: q("SELECT estat, resposta_de FROM scrobble WHERE recording_msid = 'msid-banc-tard'")[0],
         structures: q("SELECT estat FROM scrobble WHERE album = 'Structures from Silence'")[0]?.[0],
-        estatTargeta: E.targetes(c, { estat: 'totes', ara: despres }).find(t => t.discos.some(d => d.titol === 'Structures from Silence'))?.estat };
+        estatTargeta: E.targetes(c, { estat: 'totes', ara: despres, llegit: despres }).find(t => t.discos.some(d => d.titol === 'Structures from Silence'))?.estat };
       c.close(); return out;
     });
     igual(JSON.stringify(r.tard), '["resolt","disc"]', 'la pista tardana d\'Angel\'s Flight (hereta del seu disc)');
@@ -219,7 +219,7 @@ export const COMPROVACIONS = [
   } },
   { nom: 'ignora sempre: no compta al veredicte de la safata', sintetic: true, async fes({ pagina }) {
     // El veredicte és una funció pura sobre l'arxiu: es crida dins la pàgina, amb el mòdul de la màquina.
-    const v = await pagina.evaluate(async () => { const E = await import('./js/escoltes.js?v=7'); const A = await import('./js/arxiu.js?v=13'); return E.veredicte(A.estat.db); });
+    const v = await pagina.evaluate(async () => { const E = await import('./js/escoltes.js?v=8'); const A = await import('./js/arxiu.js?v=14'); return E.veredicte(A.estat.db); });
     igual(v.ignorades, 0, 'targetes ignorades al veredicte');
   } },
   { nom: 'ignora sempre: un botó de La Cabina obre la llista, i «Treu-lo» la buida', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
@@ -358,6 +358,36 @@ export const COMPROVACIONS = [
     cal(Math.abs(f.x + f.width / 2 - 640) < 4 && f.y > 20, 'la fulla ràpida no és al mig de la pantalla');
     await pagina.click('[data-tornafull]'); await pagina.setViewportSize({ width: 390, height: 844 }); await pagina.waitForTimeout(250);
     igual(await cols(), 3, 'columnes al mòbil, després');
+  } },
+
+  // ───────── la darrera lectura (3-11, Porgy and Bess) ─────────
+  { nom: 'lectura: un disc que sona no es dona per acabat fins que una lectura ho sap, encara que el rellotge digui que sí', sintetic: true, async fes({ pagina }) {
+    const r = await pagina.evaluate(async () => {
+      const E = await import('./js/escoltes.js?v=8'); const A = await import('./js/arxiu.js?v=14');
+      const ara = Date.now(), despres = ara + 40 * 60e3;          // Structures from Silence acaba d'aquí 22 minuts
+      const d = (llegit, a = despres) => { const c = E.targetes(A.estat.db, { estat: 'totes', ara: a, llegit }).find(t => t.discos.some(x => x.titol === 'Structures from Silence'));
+        return { targeta: c.estat, llest: c.discos.find(x => x.titol === 'Structures from Silence').llest }; };
+      return { guardada: +localStorage.getItem('tria-lectura-lb'), ara, vella: d(ara), nova: d(despres), cap: d(null, ara + 3 * 3600e3) };
+    });
+    cal(r.guardada > r.ara - 10 * 60e3 && r.guardada <= r.ara, 'la màquina no ha guardat al mòbil l\'hora de la darrera lectura: ' + r.guardada);
+    igual(r.vella.llest, false, 'Structures, d\'aquí 40 minuts però amb la lectura d\'ara, es pot contestar');
+    igual(r.vella.targeta, 'oberta', 'la sessió, amb la lectura d\'ara, ja es dona per tancada');
+    igual(r.nova.llest, true, 'Structures, amb una lectura d\'aquí 40 minuts, encara no es pot contestar');
+    igual(r.cap.targeta, 'oberta', 'sense cap lectura en aquest dispositiu, la sessió es dona per tancada');
+  } },
+  { nom: 'primer pla: si l\'arxiu ha canviat al Drive des d\'un altre lloc, la màquina el torna a obrir', sintetic: true, async fes({ pagina, drive, esperaDesat }) {
+    const f = drive.per('la-meva-discoteca.sqlite');
+    f.modifiedTime = drive.hora();                               // «l'altre mòbil» el desa
+    const baixades = () => drive.peticions.filter(x => x.includes('alt=media') && x.includes(f.id)).length;
+    const abans = baixades();
+    await pagina.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await pagina.waitForTimeout(1500); await esperaDesat();
+    cal(baixades() > abans, 'no ha tornat a baixar l\'arxiu del Drive');
+    igual(await pagina.evaluate(async () => (await import('./js/arxiu.js?v=14')).estat.base), f.modifiedTime, 'la versió del Drive sobre la qual treballa');
+    const n = baixades();
+    await pagina.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await pagina.waitForTimeout(800);
+    igual(baixades(), n, 'baixades en tornar a primer pla sense cap canvi al Drive');
   } },
 
   // ───────── el que no ha de passar mai ─────────

@@ -5,6 +5,14 @@
 const API = 'https://api.listenbrainz.org/1/user/';
 const PER_CRIDA = 1000;          // el màxim que admet l'API
 const MAX_CRIDES = 30;           // fre: 30.000 pistes en una sola lectura vol dir que alguna cosa no va
+const ESPERA = 30e3;             // una crida que no respon en 30 s es talla (3-11): una lectura penjada bloquejava les següents
+
+async function crida(f, url) {
+  const c = new AbortController(), t = setTimeout(() => c.abort(), ESPERA);
+  try { const r = await f(url, { signal: c.signal }); return { ok: r.ok, status: r.status, dades: r.ok ? await r.json() : null }; }
+  catch (e) { if (c.signal.aborted) throw new Error('ListenBrainz no respon (30 s)'); throw e; }
+  finally { clearTimeout(t); }
+}
 
 // Una pista de ListenBrainz → una fila de scrobble.
 export function aScrobble(compte, l) {
@@ -28,9 +36,9 @@ export async function llegeixCompte(compte, desDe, { fetch: f = fetch } = {}) {
   let min = Math.floor(Date.parse(desDe) / 1000);
   const out = [];
   for (let i = 0; i < MAX_CRIDES; i++) {
-    const r = await f(`${API}${encodeURIComponent(compte)}/listens?min_ts=${min}&count=${PER_CRIDA}`);
+    const r = await crida(f, `${API}${encodeURIComponent(compte)}/listens?min_ts=${min}&count=${PER_CRIDA}`);
     if (!r.ok) throw new Error(`ListenBrainz ${r.status} (${compte})`);
-    const l = (await r.json())?.payload?.listens || [];
+    const l = r.dades?.payload?.listens || [];
     if (!l.length) break;
     out.push(...l.map(x => aScrobble(compte, x)));
     const mx = Math.max(...l.map(x => x.listened_at));

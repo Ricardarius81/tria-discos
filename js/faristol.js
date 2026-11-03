@@ -7,10 +7,10 @@
 // Blocs 3.3 + 3.4 + 3.5 (v1.44), una sola publicació: les escoltes de ListenBrainz, la safata viva i la bústia.
 // Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 
-import * as A from './arxiu.js?v=13';
+import * as A from './arxiu.js?v=14';
 import * as D from './dades.js?v=16';
-import * as E from './escoltes.js?v=7';
-import * as LB from './listenbrainz.js?v=1';
+import * as E from './escoltes.js?v=8';
+import * as LB from './listenbrainz.js?v=2';
 import * as I from './imatges.js?v=3';
 import * as T from './tags.js?v=1';
 
@@ -566,10 +566,16 @@ async function consultaMB(nous) {
 // ───────── la lectura de ListenBrainz (§3.3, ACT-453 i ACT-454) ─────────
 // En obrir l'app amb connexió i en tocar la safata. Les dues comptes, des de l'Arrencada o des de l'últim que ja té.
 // L'Arrencada s'escriu una sola vegada, la primera vegada que aquesta versió llegeix.
+// La darrera lectura bona d'aquest dispositiu (3-11): els 5 i els 30 minuts es compten fins aquí (escoltes.js, finsA).
+// Es guarda al mòbil, no a l'arxiu: cada dispositiu té la seva i no escriu res al Drive per llegir.
+const LECTURA = 'tria-lectura-lb';
+E.fixaLectura((() => { try { return +localStorage.getItem(LECTURA) || null; } catch { return null; } })());
 let llegint = false;
 async function llegeixEscoltes() {
   if (llegint || !navigator.onLine || !A.estat.db) return;
   llegint = true; estat.lbError = null;
+  // L'hora d'abans de la primera crida: el que es llegeix és, com a mínim, tot el que hi havia en aquell moment.
+  const inici = Date.now();
   try {
     const arr = E.arrencada(db()) || new Date().toISOString();
     const noves = [];
@@ -589,6 +595,8 @@ async function llegeixEscoltes() {
       const r = await fes(x => { E.fixaArrencada(arr)(x); const n = E.desaScrobbles(noves)(x); E.aplicaIgnoraSempre(x); const h = tard(x); const em = E.emparellaSols(x); return { n, h, em, ...((n || h || em) ? E.recalcula(x) : {}) }; }, null, { desfes: false, auto: true });
       // Sense avís de «pistes noves» (2-11): el número de la safata ja ho diu, i l'avís tapava la franja magenta.
     }
+    // Només una lectura sencera (les dues comptes) i ja desada al mòbil compta com a bona.
+    E.fixaLectura(inici); try { localStorage.setItem(LECTURA, String(inici)); } catch {}
   } catch (e) { estat.lbError = e.message; }
   finally { llegint = false; pintaSafata(); }
 }
@@ -1416,6 +1424,15 @@ A.vigilaPendents(r => {
 lliscar($('#s-faristol'));
 try { const l = localStorage.getItem('tria-lloc'); if (l === 'Lleida' || l === 'Fora') posaLloc(l, false); } catch {}
 try { navigator.permissions?.query({ name: 'geolocation' }).then(r => { if (r.state === 'granted') detectaLloc(false); }).catch(() => {}); } catch {}
+
+// Quan la màquina torna a primer pla (3-11): un altre mòbil o el portàtil poden haver canviat l'arxiu mentrestant.
+// Si el Drive ha canviat, es torna a obrir pel camí de sempre (que llegeix ListenBrainz després); si no, només es llegeix.
+// Sense això, el mòbil que tornava seguia amb la seva còpia vella i, en contestar, xocava amb el Drive.
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState !== 'visible' || !A.estat.db || !navigator.onLine) return;
+  if (await A.haCanviat()) { connecta(false); return; }
+  llegeixEscoltes();
+});
 
 // Primer, la còpia d'aquest mòbil: el Faristol surt de seguida, sense esperar el Drive.
 // Després, un toc a «Connecta amb el Drive» (Google el demana amb un gest) i es desa tot el que hagi quedat pendent.

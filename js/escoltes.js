@@ -33,6 +33,16 @@ export const FINESTRA_ESCOLTA = 15 * H;   // §8.5
 export const FINESTRA_TIRADA = 24 * H;    // §7.5, ACT-446 — dues finestres, dos números (ACT-447)
 export const SILENCI_TARGETA = 30 * MIN;  // §8.7, ACT-455 — sense calibrar
 export const ESPERA_DISC = 5 * MIN;       // ACT-528: un disc d'una sessió que sona es pot contestar 5 minuts després de la seva última pista
+
+// La darrera lectura bona de ListenBrainz d'aquest dispositiu (3-11, opció A de Ricard). «Ha acabat» vol dir dues coses:
+// que ha passat el temps i que sabem que no ha sonat res més. El rellotge només diu la primera; la segona la diu la
+// lectura. Per això els 5 minuts d'un disc i els 30 d'una targeta es compten fins a la darrera lectura bona, no fins
+// ara: el que encara no s'ha llegit no es dona per acabat. Cada dispositiu té la seva (es guarda al mòbil o al
+// navegador, no a l'arxiu): cap dispositiu dona res per acabat amb el que va llegir un altre.
+// undefined = ningú no l'ha fixada (el banc en node, les proves): mana el rellotge, com abans. null = encara cap lectura.
+let darreraLectura;
+export const fixaLectura = t => { darreraLectura = Number.isFinite(t) && t > 0 ? t : null; };
+const finsA = (ara, llegit) => llegit === undefined ? ara : Math.min(ara, llegit ?? -Infinity);
 export const LLINDAR = 0.75, LLINDAR_DORMIR = 0.5;
 
 // ───────── l'Arrencada (ACT-453) ─────────
@@ -370,7 +380,8 @@ const atencioDe = ctx => ctx === 'Dormir' ? 'Dormir' : 'Efectes plens';
 //   'resolta' · tancada i tota contestada.
 // Abans es tallaven només les pendents, i una targeta contestada mentre sonava tornava a sortir amb les pistes que
 // arribaven després (la «mateixa cosa dues vegades» de la prova de l'1-11, Glass Menagerie).
-export function targetes(db, { estat = 'pendent', limit = null, ara = Date.now() } = {}) {
+export function targetes(db, { estat = 'pendent', limit = null, ara = Date.now(), llegit = darreraLectura } = {}) {
+  const ref = finsA(ara, llegit);
   const mapa = mapaEmparellaments(db);
   const scr = files(db, `SELECT s.id, s.compte, s.listened_at, s.duration_ms, s.artista, s.pista, s.album, s.recording_msid,
                                 s.release_mbid, s.escolta_id, s.context, s.atencio, s.estat, s.resposta_de
@@ -386,7 +397,7 @@ export function targetes(db, { estat = 'pendent', limit = null, ara = Date.now()
     c.clau = c.scr[0].id;                         // la targeta es reconeix per la seva primera pista
     c.inici = c.scr[0].listened_at;
     c.fi = new Date(c.fiMs).toISOString();
-    c.estat = ara - c.fiMs <= SILENCI_TARGETA ? 'oberta' : c.scr.some(s => s.estat === 'pendent') ? 'pendent' : 'resolta';
+    c.estat = ref - c.fiMs <= SILENCI_TARGETA ? 'oberta' : c.scr.some(s => s.estat === 'pendent') ? 'pendent' : 'resolta';
     c.comptes = [...new Set(c.scr.map(s => s.compte))];
     c.feina = c.scr.some(s => COMPTES.find(k => k.nom === s.compte)?.feina);
     const r = c.scr.find(s => s.estat === 'resolt');
@@ -402,11 +413,12 @@ export function targetes(db, { estat = 'pendent', limit = null, ara = Date.now()
     // Cada disc, el seu estat (ACT-528). Dins d'una sessió que encara sona, un disc es pot contestar quan fa 5 minuts que
     // ha acabat la seva última pista (listened_at + duration_ms) o quan ja ha començat una pista d'un altre disc.
     // Pano envia cada pista al 50 % o als 4 minuts (ACT-529): la següent sempre arriba abans dels 5 minuts.
+    // Els 5 minuts es compten fins a la darrera lectura bona (ref), no fins ara (3-11, Porgy and Bess).
     for (const d of c.discos) {
       const fiD = Math.max(...d.scr.map(s => s.t + (s.duration_ms || 0))), iniciDarrera = Math.max(...d.scr.map(s => s.t));
       d.fiMs = fiD;
       d.contestat = d.scr.every(s => s.estat === 'resolt');
-      d.llest = c.estat !== 'oberta' || ara - fiD >= ESPERA_DISC || c.scr.some(s => s.t > iniciDarrera && !d.scr.includes(s));
+      d.llest = c.estat !== 'oberta' || ref - fiD >= ESPERA_DISC || c.scr.some(s => s.t > iniciDarrera && !d.scr.includes(s));
       d.context = d.scr.find(s => s.estat === 'resolt')?.context ?? null;
     }
     c.contextos = [...new Set(c.scr.filter(s => s.estat === 'resolt').map(s => s.context))];
@@ -423,7 +435,7 @@ export function targetes(db, { estat = 'pendent', limit = null, ara = Date.now()
 // sol no hereta res: es pregunta.
 function herencies(db, ara) {
   const out = [];
-  for (const c of targetes(db, { estat: 'totes', ara })) {
+  for (const c of targetes(db, { estat: 'totes', ara, llegit: ara })) {   // només es crida just després d'una lectura bona
     if (c.estat === 'oberta') continue;
     const deTargeta = c.scr.filter(s => s.estat === 'resolt' && s.resposta_de !== 'disc');
     for (const s of c.scr.filter(x => x.estat === 'pendent')) {
@@ -450,6 +462,7 @@ export const heretaRespostes = (ara = Date.now()) => db => {
 // o més d'una de cada deu ignorada, en un mes. Es compta per targetes tancades des de l'Arrencada, amb les ignorades
 // incloses (aquí sí: són el segon símptoma). Camps: Scrobble.context i Scrobble.estat. Es veu a La Cabina a partir del dia 30.
 export function veredicte(db, ara = Date.now()) {
+  const ref = finsA(ara, darreraLectura);
   const arr = arrencada(db); if (!arr) return null;
   // El que «Ignora sempre» treu sol no entra al compte: ni obre targetes ni les fa ignorades (ACT-524).
   const isem = ignoraSempre(db);
@@ -457,7 +470,7 @@ export function veredicte(db, ara = Date.now()) {
     .filter(s => !(s.estat === 'ignorat' && esIgnoratSempre(isem, s.artista))).map(s => ({ ...s, t: ms(s.listened_at) }));
   const tg = []; let cur = null, fi = 0;
   for (const s of scr) { if (!cur || s.t - fi > SILENCI_TARGETA) { cur = []; tg.push(cur); fi = 0; } cur.push(s); fi = Math.max(fi, s.t + (s.duration_ms || 0)); }
-  const tancades = tg.filter(c => ara - Math.max(...c.map(s => s.t + (s.duration_ms || 0))) > SILENCI_TARGETA);
+  const tancades = tg.filter(c => ref - Math.max(...c.map(s => s.t + (s.duration_ms || 0))) > SILENCI_TARGETA);
   const ignorades = tancades.filter(c => c.every(s => s.estat === 'ignorat')).length;
   const contestades = tancades.filter(c => c.some(s => s.estat === 'resolt'));
   const nose = contestades.filter(c => c.some(s => s.estat === 'resolt' && s.context === 'No ho sé')).length;

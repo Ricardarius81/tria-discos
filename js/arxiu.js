@@ -289,6 +289,13 @@ export function desa(opcions) {
   return p;
 }
 
+// Ha canviat l'arxiu del Drive des d'un altre lloc? (3-11) Una consulta petita, sense baixar res: quan la màquina torna
+// a primer pla en un mòbil, l'altre mòbil o el portàtil poden haver-lo canviat mentrestant.
+export async function haCanviat() {
+  if (obrint || !estat.db || !estat.fitxerId || !estat.base || !tePermis() || !navigator.onLine) return false;
+  try { const f = await metadades(estat.fitxerId); return !f.trashed && f.modifiedTime !== estat.base; } catch { return false; }
+}
+
 // Puja l'arxiu sencer. Si el Drive ha canviat des d'un altre lloc, no el trepitja.
 async function desaAra({ forca = false, intern = false } = {}) {
   if (!estat.pendent) return { desat: true };
