@@ -459,6 +459,14 @@ function perGrups(discos, pinta) {
   return h;
 }
 const clauDisc = d => d.clau[0] === 'n' ? d.clau.slice(1) : d.clau[0] === 'm' ? 'msid:' + d.clau.slice(1) : null;
+// El context de cada disc d'una targeta contestada (3-11, Savall): una sessió pot tenir discos contestats diferent, i
+// ensenyar només el de la primera pista contestada va fer veure «Treballant» on Ricard havia posat «Amor».
+const ctxDisc = d => d.scr.find(s => s.estat === 'resolt')?.context || '';
+function ctxPerDisc(c) {
+  const v = c.discos.map(d => [d.titol, ctxDisc(d)]), unics = [...new Set(v.map(x => x[1]))];
+  return unics.length <= 1 ? esc(v.map(x => x[0]).join(', ')) + ' · ' + esc(unics[0] || '')
+    : v.map(([t, x]) => `${esc(t)} · <b>${esc(x)}</b>`).join('; ');
+}
 function pintaSafata() {
   sincroCanals();
   const cua = cuaSafata();
@@ -473,8 +481,10 @@ function pintaSafata() {
   for (const c of cuaTg) for (const d of c.discos) { const k = clauDisc(d); if (k && (q2.has(k) || nous.has(k))) dins.add(k); }
   // Una sessió que encara sona (ACT-528): cada disc que ja ha acabat es contesta dins la targeta, amb la seva pregunta 2 o
   // el seu disc nou; el que encara sona espera i no es pregunta a mitja escolta.
-  const obertes = tg.filter(c => c.estat === 'oberta');
   const perFer = d => !d.contestat || (() => { const k = clauDisc(d); return !!(k && (q2.has(k) || nous.has(k))); })();
+  // Una sessió oberta on ja està tot contestat i no sona res no surt (3-11, opció A de Ricard): no hi ha res a fer, i
+  // «Sonant ara» feia dues feines. Torna si comença un altre disc dins els 30 minuts; en tancar-se, va a les resoltes.
+  const obertes = tg.filter(c => c.estat === 'oberta' && c.discos.some(d => !d.llest || perFer(d)));
   for (const c of obertes) for (const d of c.discos) { const k = clauDisc(d); if (k) dins.add(k); }
   const q2Sols = cua.q2.filter(q => !dins.has(q.clau)), nousSols = cua.nous.filter(x => !dins.has(x.clau));
   // El número compta també cada disc llest d'una sessió que sona (ACT-530).
@@ -539,7 +549,7 @@ function pintaSafata() {
   if (!n) h += `<div class="sf-buit"><b>Res per resoldre</b>${E.arrencada(db()) ? 'La màquina llegeix les dues comptes de ListenBrainz des del ' + dia(E.arrencada(db())) + ' cada vegada que obres l\'app i quan toques la safata.' : 'Quan hi hagi connexió, la màquina començarà a llegir ListenBrainz.'}${estat.lbError ? '<br><small>' + esc(estat.lbError) + '</small>' : ''}</div>`;
   // les resoltes, amb «Canvia» (tot el que es contesta aquí és editable sempre, §8.7)
   const res = tg.filter(c => c.estat === 'resolta' && !cuaTg.includes(c)).slice(0, 8);
-  if (res.length) h += `<h2 style="margin-top:22px">Resoltes</h2>` + res.map(c => `<div class="sf-resolta"><span><b>${esc(franja(c))}</b> · ${esc(c.discos.map(d => d.titol).join(', '))} · ${esc(c.context || '')}</span>
+  if (res.length) h += `<h2 style="margin-top:22px">Resoltes</h2>` + res.map(c => `<div class="sf-resolta"><span><b>${esc(franja(c))}</b> · ${ctxPerDisc(c)}</span>
       <button data-sfresolta="${c.clau}">Canvia</button></div>`).join('');
   caixa.innerHTML = h;
   I.omple(caixa);
@@ -1160,8 +1170,9 @@ document.addEventListener('click', e => {
   if (d.ignorats) { fullIgnorats(); return; }
   if (d.cabina) { fullCabina(); return; }
   if (d.sfresolta) { const c = E.targetes(db(), { estat: 'resolt' }).find(x => x.clau === +d.sfresolta); if (!c) return;
-    obreFull(`<h3>${esc(franja(c))}</h3><p>${esc(c.context || '')}</p><div class="canals">
-      <button data-sfreobre="${c.scr.map(x => x.id).join(',')}">On ho escoltaves <small>torna la targeta a la safata</small></button>
+    obreFull(`<h3>${esc(franja(c))}</h3><p>${ctxPerDisc(c)}</p><div class="canals">
+      <button data-sfreobre="${c.scr.map(x => x.id).join(',')}">On ho escoltaves${c.discos.length > 1 ? ', tota la sessió' : ''} <small>torna la targeta a la safata</small></button>
+      ${c.discos.length > 1 ? c.discos.map(x => `<button data-sfreobre="${x.scr.map(s => s.id).join(',')}">On escoltaves ${esc(x.titol)} <small>ara: ${esc(ctxDisc(x))} · només aquest disc torna a la safata</small></button>`).join('') : ''}
       ${c.discos.filter(x => x.edicio_id).map(x => `<button data-canviaedicio="${x.edicio_id}">L'edició de ${esc(x.titol)} <small>la mateixa operació que a la fitxa</small></button>`).join('')}
       ${c.discos.filter(x => x.edicio_id).map(x => `<button data-sfcanaldisc="${x.edicio_id}">El canal de ${esc(x.titol)} <small>ara: ${esc(nomCanal(x.app_escolta))}</small></button>`).join('')}
     </div>`); return; }

@@ -394,13 +394,58 @@ export const COMPROVACIONS = [
     const f = drive.per('la-meva-discoteca.sqlite');
     f.modifiedTime = drive.hora();                               // «l'altre mòbil» desa mentre aquest llegeix
     lb.escoltes.push({ compte: 'crimsonnnnfeina', listened_at: Math.floor((Date.now() - 90e3) / 1000), recording_msid: 'msid-banc-dosmobils',
-      track_metadata: { artist_name: 'Miles Davis', track_name: 'Summertime', release_name: 'Porgy and Bess', additional_info: { duration_ms: 202e3 } } });
+      track_metadata: { artist_name: 'Biosphere', track_name: 'Angel\'s Flight (reprise)', release_name: 'Angel\'s Flight', additional_info: { duration_ms: 60e3 } } });
     await pagina.evaluate(() => document.getElementById('avis').classList.remove('obert'));
     await pagina.click('#btSafata'); await pagina.waitForTimeout(2500); await esperaDesat();
     const avis = await pagina.evaluate(() => document.getElementById('avis').classList.contains('obert') ? document.getElementById('avisTxt').textContent : '');
     cal(!avis.includes('ha canviat en un altre lloc'), 'ha sortit l\'avís: ' + avis);
     igual(consulta("SELECT COUNT(*) AS n FROM scrobble WHERE recording_msid = 'msid-banc-dosmobils'")[0].n, 1, 'la pista nova, al Drive');
     igual(await pagina.evaluate(async () => (await import('./js/arxiu.js?v=14')).estat.base), drive.per('la-meva-discoteca.sqlite').modifiedTime, 'la versió del Drive sobre la qual treballa');
+  } },
+
+  // ───────── la sessió acabada i els discos contestats diferent (3-11, Savall) ─────────
+  { nom: '«Canvia» d\'una sessió amb dos discos: cada disc amb el seu context, i es pot tornar a la safata un disc sol', sintetic: true, async fes({ pagina, lb, consulta, esperaDesat }) {
+    // una sessió tancada de fa tres hores, amb dos discos seguits, contestats per separat (com Porgy and Bess i Savall)
+    const t0 = Math.floor((Date.now() - 3 * 3600e3) / 1000);
+    lb.escoltes.push(
+      { compte: 'crimsonnnnfeina', listened_at: t0, recording_msid: 'msid-banc-sav1', track_metadata: { artist_name: 'Miles Davis', track_name: 'Shhh / Peaceful', release_name: 'In a Silent Way', additional_info: { duration_ms: 283e3 } } },
+      { compte: 'crimsonnnn', listened_at: t0 + 600, recording_msid: 'msid-banc-sav2', track_metadata: { artist_name: 'Phase90', track_name: 'Infinitati I', release_name: 'Infinitati', additional_info: { duration_ms: 240e3 } } });
+    await pagina.click('#btSafata'); await pagina.waitForTimeout(1200); await esperaDesat();
+    const card = () => pagina.locator('#safataCos .sf-card', { hasText: 'Infinitati' }).first();
+    await card().locator('[data-sfsepara]').click(); await pagina.waitForTimeout(250);
+    const respon = async (titol, ctx) => {
+      const bloc = card().locator('.sf-separat', { hasText: titol });
+      await bloc.locator('[data-sftots]').click(); await pagina.waitForTimeout(250);
+      await card().locator('.sf-separat', { hasText: titol }).locator(`[data-sfctx$="|${ctx}"]`).click(); await pagina.waitForTimeout(400); await esperaDesat();
+    };
+    await respon('In a Silent Way', 'Treballant');
+    await respon('Infinitati', 'Amor');
+    const fila = pagina.locator('#safataCos .sf-resolta', { hasText: 'Infinitati' }).first();
+    const text = await fila.innerText();
+    cal(text.includes('Treballant') && text.includes('Amor'), 'la fila de «Resoltes» no ensenya el context de cada disc: ' + text);
+    await fila.locator('[data-sfresolta]').click(); await pagina.waitForTimeout(300);
+    igual(await pagina.locator('#full [data-sfreobre]').count(), 3, 'botons de «Canvia» (la sessió i un per disc)');
+    await pagina.locator('#full [data-sfreobre]', { hasText: 'Infinitati' }).click();
+    await pagina.waitForTimeout(400); await esperaDesat();
+    igual(consulta("SELECT estat FROM scrobble WHERE recording_msid = 'msid-banc-sav2'")[0].estat, 'pendent', 'Infinitati, tornat a la safata');
+    igual(JSON.stringify(consulta("SELECT estat, context FROM scrobble WHERE recording_msid = 'msid-banc-sav1'")[0]), '{"estat":"resolt","context":"Treballant"}', 'In a Silent Way (no s\'ha de tocar)');
+    // es torna a contestar, per deixar-ho com estava («Veure'ls tots» ja hi pot ser obert)
+    if (!await card().locator('[data-sfctx$="|Amor"]').count()) { await card().locator('[data-sftots]').first().click(); await pagina.waitForTimeout(250); }
+    await card().locator('[data-sfctx$="|Amor"]').first().click(); await pagina.waitForTimeout(400); await esperaDesat();
+    igual(JSON.stringify(consulta("SELECT context FROM scrobble WHERE recording_msid IN ('msid-banc-sav1','msid-banc-sav2') ORDER BY recording_msid").map(x => x.context)), '["Treballant","Amor"]', 'contextos després de tornar a contestar Infinitati');
+  } },
+  { nom: 'sessió oberta: quan tot està contestat i no sona res, no surt a la safata (opció A)', sintetic: true, async fes({ pagina, esperaDesat }) {
+    // d'aquí 40 minuts: Structures from Silence ja ha acabat i la sessió encara no es tanca (fins als 52)
+    await pagina.clock.setFixedTime(new Date(Date.now() + 40 * 60e3));
+    await pagina.click('#btSafata'); await pagina.waitForTimeout(1200); await esperaDesat();
+    const oberta = () => pagina.locator('#safataCos .sf-oberta', { hasText: 'Structures from Silence' });
+    cal(await oberta().count() === 1, 'Structures, acabat i sense contestar, no surt dins la sessió oberta');
+    // es contesta tot el que hi queda (Structures i el que hagin deixat les comprovacions d'abans)
+    for (let i = 0; i < 6 && await oberta().locator('[data-sftots^="d"]').count(); i++) {
+      await oberta().locator('[data-sftots^="d"]').first().click(); await pagina.waitForTimeout(250);
+      await oberta().locator('[data-sfctx$="|Llegir"]').first().click(); await pagina.waitForTimeout(400); await esperaDesat();
+    }
+    igual(await oberta().count(), 0, 'sessions obertes amb Structures, tot contestat i res sonant');
   } },
 
   // ───────── el que no ha de passar mai ─────────
