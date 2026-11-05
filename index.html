@@ -8,7 +8,7 @@
 <link rel="icon" href="icones/icona-192.png">
 <link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
 <title>La Meva Discoteca</title>
-<link rel="stylesheet" href="css/faristol.css?v=13">
+<link rel="stylesheet" href="css/faristol.css?v=14">
 </head>
 <body data-lloc="Fora" data-estil="ricard">
 <div id="telefon">
@@ -88,10 +88,16 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
   // Si alguna peça no carrega, es diu a la pantalla en lloc de quedar-se en blanc.
-  window.addEventListener('error', e => { const m = document.getElementById('entradaTxt'); if (m && document.getElementById('s-entrada').classList.contains('activa')) { m.className = 'mal'; m.textContent = 'No s\'ha pogut carregar la màquina: ' + (e.message || e.filename || 'error') + '. Tanca la pestanya i torna-la a obrir.'; } }, true);
+  // Un fitxer de fora que no carrega (el component de Google, sense connexió) no és una peça de la màquina (ACT-581).
+  window.addEventListener('error', e => { const s = e.target && e.target.src; if (s && new URL(s, location.href).origin !== location.origin) return;
+    const m = document.getElementById('entradaTxt'); if (m && document.getElementById('s-entrada').classList.contains('activa')) { m.className = 'mal'; m.textContent = 'No s\'ha pogut carregar la màquina: ' + (e.message || e.filename || 'error') + '. Tanca la pestanya i torna-la a obrir.'; } }, true);
   setTimeout(() => { const m = document.getElementById('entradaTxt'); if (m && m.textContent === 'Obrint…') { m.className = 'mal'; m.textContent = 'La màquina no ha arrencat. Tanca la pestanya, espera un minut i torna-la a obrir.'; } }, 10000);
 </script>
 <script src="vendor/sqljs/sql-wasm.js?v=1"></script>
-<script type="module" src="js/faristol.js?v=21"></script>
+<script type="module" src="js/faristol.js?v=22"></script>
+<script>
+  // El codi de l'app es guarda al mòbil perquè s'obri sense connexió (ACT-581). Si el navegador no en sap, tot va com abans.
+  if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+</script>
 </body>
 </html>

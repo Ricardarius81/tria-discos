@@ -57,13 +57,21 @@ const enCurs = new Map();
 let baixaDrive = null;             // (id) => Blob, el posa la pantalla amb arxiu.js
 export const usaDrive = fn => { baixaDrive = fn; };
 
+// Cover Art Archive fa les miniatures (500, 250) una estona després que es pugi una portada, i alguna vegada no les fa:
+// llavors la de 500 dona 404 i la portada sencera sí que hi és (4-11, Infinitati). Es proven en aquest ordre.
+const MIDES = ['front-500', 'front-250', 'front'];
+const adreces = ref => /^(release|release-group)\//.test(ref) ? MIDES.map(m => `https://coverartarchive.org/${ref}/${m}`) : [adreca(ref)];
 async function blobDe(ref) {
   if (ref.startsWith('drive:')) { if (!baixaDrive) throw new Error('sense Drive'); return baixaDrive(ref.slice(6)); }
-  const r = await fetch(adreca(ref), { mode: 'cors', referrerPolicy: 'no-referrer' });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  const b = await r.blob();
-  if (!b.type.startsWith('image/')) throw new Error('no és una imatge');
-  return b;
+  let error = null;
+  for (const u of adreces(ref)) {
+    const r = await fetch(u, { mode: 'cors', referrerPolicy: 'no-referrer' });
+    if (!r.ok) { error = new Error('HTTP ' + r.status); if (r.status === 404) continue; throw error; }
+    const b = await r.blob();
+    if (!b.type.startsWith('image/')) throw new Error('no és una imatge');
+    return b;
+  }
+  throw error || new Error('sense adreça');
 }
 
 export async function url(ref) {
@@ -78,7 +86,9 @@ export async function url(ref) {
       const nou = await blobDe(ref);
       await guardat('put', ref, nou);
       const u = URL.createObjectURL(nou); urls.set(ref, u); return u;
-    } catch {
+    } catch (e) {
+      // Cap de les mides no hi és: no hi ha portada a buscar a la xarxa.
+      if (/^HTTP 404/.test(e?.message)) return null;
       return ref.startsWith('drive:') ? null : adreca(ref);   // sense guardar: només amb connexió
     }
   })();

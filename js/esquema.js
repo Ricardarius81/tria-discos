@@ -162,6 +162,14 @@ export const MIGRACIONS = [
   // la resposta es va donar a la targeta sencera. 'targeta' · 'disc'. Buit = 'targeta' (totes les respostes d'abans).
   `
   ALTER TABLE scrobble ADD COLUMN resposta_de TEXT;
+  `,
+  // v6 · l'escolta sencera feta de trossos (ACT-585, opció B de Ricard del 4-11; cas Savall del 3-11). Una escolta compta
+  // sumant trossos de contextos diferents. Cada tros continua sent la seva pròpia Escolta, amb el seu context i la seva
+  // atenció (La Gramola no en perd cap); unio és l'id de l'escolta sencera a què pertany: el del seu primer tros.
+  // Si una escolta compta es decideix sobre la unió, no sobre el tros. Buit = una escolta física, sense trossos.
+  `
+  ALTER TABLE escolta ADD COLUMN unio INTEGER;
+  CREATE INDEX escolta_unio ON escolta(unio);
   `
 ];
 

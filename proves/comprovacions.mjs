@@ -105,7 +105,7 @@ export const COMPROVACIONS = [
       track_metadata: { artist_name: 'Biosphere', track_name: 'Angel\'s Flight (bonus)', release_name: 'Angel\'s Flight', additional_info: { duration_ms: 60e3 } } });
     await pagina.click('#btSafata'); await pagina.waitForTimeout(900); await esperaDesat();
     const r = await pagina.evaluate(async () => {
-      const E = await import('./js/escoltes.js?v=8'); const A = await import('./js/arxiu.js?v=14');
+      const E = await import('./js/escoltes.js?v=9'); const A = await import('./js/arxiu.js?v=15');
       const SQL = await initSqlJs({ locateFile: f => 'vendor/sqljs/' + f });
       const c = new SQL.Database(A.estat.db.export()), despres = Date.now() + 2 * 3600e3;
       const n = E.heretaRespostes(despres)(c);
@@ -219,7 +219,7 @@ export const COMPROVACIONS = [
   } },
   { nom: 'ignora sempre: no compta al veredicte de la safata', sintetic: true, async fes({ pagina }) {
     // El veredicte és una funció pura sobre l'arxiu: es crida dins la pàgina, amb el mòdul de la màquina.
-    const v = await pagina.evaluate(async () => { const E = await import('./js/escoltes.js?v=8'); const A = await import('./js/arxiu.js?v=14'); return E.veredicte(A.estat.db); });
+    const v = await pagina.evaluate(async () => { const E = await import('./js/escoltes.js?v=9'); const A = await import('./js/arxiu.js?v=15'); return E.veredicte(A.estat.db); });
     igual(v.ignorades, 0, 'targetes ignorades al veredicte');
   } },
   { nom: 'ignora sempre: un botó de La Cabina obre la llista, i «Treu-lo» la buida', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
@@ -363,7 +363,7 @@ export const COMPROVACIONS = [
   // ───────── la darrera lectura (3-11, Porgy and Bess) ─────────
   { nom: 'lectura: un disc que sona no es dona per acabat fins que una lectura ho sap, encara que el rellotge digui que sí', sintetic: true, async fes({ pagina }) {
     const r = await pagina.evaluate(async () => {
-      const E = await import('./js/escoltes.js?v=8'); const A = await import('./js/arxiu.js?v=14');
+      const E = await import('./js/escoltes.js?v=9'); const A = await import('./js/arxiu.js?v=15');
       const ara = Date.now(), despres = ara + 40 * 60e3;          // Structures from Silence acaba d'aquí 22 minuts
       const d = (llegit, a = despres) => { const c = E.targetes(A.estat.db, { estat: 'totes', ara: a, llegit }).find(t => t.discos.some(x => x.titol === 'Structures from Silence'));
         return { targeta: c.estat, llest: c.discos.find(x => x.titol === 'Structures from Silence').llest }; };
@@ -383,7 +383,7 @@ export const COMPROVACIONS = [
     await pagina.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await pagina.waitForTimeout(1500); await esperaDesat();
     cal(baixades() > abans, 'no ha tornat a baixar l\'arxiu del Drive');
-    igual(await pagina.evaluate(async () => (await import('./js/arxiu.js?v=14')).estat.base), f.modifiedTime, 'la versió del Drive sobre la qual treballa');
+    igual(await pagina.evaluate(async () => (await import('./js/arxiu.js?v=15')).estat.base), f.modifiedTime, 'la versió del Drive sobre la qual treballa');
     const n = baixades();
     await pagina.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await pagina.waitForTimeout(800);
@@ -400,7 +400,7 @@ export const COMPROVACIONS = [
     const avis = await pagina.evaluate(() => document.getElementById('avis').classList.contains('obert') ? document.getElementById('avisTxt').textContent : '');
     cal(!avis.includes('ha canviat en un altre lloc'), 'ha sortit l\'avís: ' + avis);
     igual(consulta("SELECT COUNT(*) AS n FROM scrobble WHERE recording_msid = 'msid-banc-dosmobils'")[0].n, 1, 'la pista nova, al Drive');
-    igual(await pagina.evaluate(async () => (await import('./js/arxiu.js?v=14')).estat.base), drive.per('la-meva-discoteca.sqlite').modifiedTime, 'la versió del Drive sobre la qual treballa');
+    igual(await pagina.evaluate(async () => (await import('./js/arxiu.js?v=15')).estat.base), drive.per('la-meva-discoteca.sqlite').modifiedTime, 'la versió del Drive sobre la qual treballa');
   } },
 
   // ───────── la sessió acabada i els discos contestats diferent (3-11, Savall) ─────────
@@ -446,6 +446,128 @@ export const COMPROVACIONS = [
       await oberta().locator('[data-sfctx$="|Llegir"]').first().click(); await pagina.waitForTimeout(400); await esperaDesat();
     }
     igual(await oberta().count(), 0, 'sessions obertes amb Structures, tot contestat i res sonant');
+  } },
+
+  // ───────── 4-11: portades, trossos sumats, «a mitges», el mosaic del grup i l'arrencada sense connexió ─────────
+  { nom: 'portada: una pista llegida abans del lligam amb MusicBrainz l\'agafa en rellegir-la, i el disc pren la portada de l\'escolta', sintetic: true, async fes({ pagina, lb, consulta, esperaDesat }) {
+    // Infinitati (msid-banc-sav2) va arribar sense mbid_mapping; ara ListenBrainz ja l'ha lligada (cas de l'avió, 4-11)
+    const caa = '256d5e0c-09f4-4a36-a44c-b272b894cd64';
+    const x = lb.escoltes.find(e => e.recording_msid === 'msid-banc-sav2');
+    x.track_metadata.mbid_mapping = { release_mbid: caa, caa_release_mbid: caa };
+    igual(consulta("SELECT caa_release_mbid FROM scrobble WHERE recording_msid = 'msid-banc-sav2'")[0].caa_release_mbid, null, 'Scrobble.caa_release_mbid abans de rellegir');
+    await pagina.click('#btSafata'); await pagina.waitForTimeout(1500); await esperaDesat();
+    igual(consulta("SELECT caa_release_mbid FROM scrobble WHERE recording_msid = 'msid-banc-sav2'")[0].caa_release_mbid, caa, 'Scrobble.caa_release_mbid després de rellegir');
+    igual(JSON.stringify(consulta('SELECT portada, portada_origen FROM edicio WHERE id = 6')[0]), JSON.stringify({ portada: 'release/' + caa, portada_origen: 'escolta' }), 'Edició.Portada d\'Infinitati');
+    igual(consulta("SELECT context FROM scrobble WHERE recording_msid = 'msid-banc-sav2'")[0].context, 'Amor', 'la resposta de Ricard (no s\'ha de tocar)');
+    await pagina.click('[data-tornasafata]').catch(() => {});
+  } },
+  { nom: 'trossos sumats: Savall en dos contextos compta com una escolta; la pista repetida compta un sol cop; repetir quan ja compta n\'obre una altra', sintetic: true, async fes({ pagina, lb, consulta }) {
+    const r0 = await pagina.evaluate(async () => {
+      const A = await import('./js/arxiu.js?v=15');
+      return A.canvia(db => {
+        db.run("INSERT INTO artista (id, nom_canonic) VALUES (7, 'Jordi Savall')");
+        db.run("INSERT INTO album (id, titol, artista_id) VALUES (8, 'Das Paradies und die Peri', 7)");
+        db.run(`INSERT INTO edicio (id, album_id, durada_total, rotacio_actual, app_escolta, emparellaments) VALUES (9, 8, 99, 0, 'amazon', '["Das Paradies und die Peri"]')`);
+      });
+    });
+    cal(r0.desat, 'no s\'ha desat el disc de Savall: ' + r0.motiu);
+    const t0 = Date.now() - 10.5 * 3600e3, m = 60e3, H = 3600e3;
+    // a la compte de feina: a la personal hi ha Careful Now a la mateixa hora, i un disc no sona damunt d'un altre
+    const pista = (t, msid, nom, min) => ({ compte: 'crimsonnnnfeina', listened_at: Math.floor(t / 1000), recording_msid: msid,
+      track_metadata: { artist_name: 'Jordi Savall', track_name: nom, release_name: 'Das Paradies und die Peri', additional_info: { duration_ms: min * m } } });
+    lb.escoltes.push(pista(t0, 'msid-banc-svT1', 'Part I', 20), pista(t0 + 20 * m, 'msid-banc-svT2', 'Part II', 20), pista(t0 + 40 * m, 'msid-banc-svT3', 'Part III', 20),
+      pista(t0 + 4 * H, 'msid-banc-svT3', 'Part III', 20), pista(t0 + 4 * H + 20 * m, 'msid-banc-svT4', 'Part IV', 35),
+      pista(t0 + 6 * H, 'msid-banc-svT1', 'Part I', 20));
+    await pagina.click('#btSafata');
+    // que hagin arribat les sis pistes abans de contestar
+    await pagina.waitForFunction(async () => { const A = await import('./js/arxiu.js?v=15');
+      return A.estat.db.exec("SELECT COUNT(*) FROM scrobble WHERE album = 'Das Paradies und die Peri'")[0].values[0][0] === 6; }, null, { timeout: 10000, polling: 250 });
+    // la tarda, Amor (les tres primeres); la nit, Dormir (la repetida, la quarta i la primera que torna)
+    const r = await pagina.evaluate(async () => {
+      const A = await import('./js/arxiu.js?v=15'), E = await import('./js/escoltes.js?v=9');
+      const ids = A.estat.db.exec("SELECT id FROM scrobble WHERE album = 'Das Paradies und die Peri' ORDER BY listened_at")[0].values.map(v => v[0]);
+      return A.canvia(db => { E.contesta(ids.slice(0, 3), 'Amor')(db); E.contesta(ids.slice(3), 'Dormir')(db); });
+    });
+    cal(r.desat, 'no s\'ha desat la resposta: ' + r.motiu);
+    const esc = consulta('SELECT id, context, atencio, completitud, unio FROM escolta WHERE edicio_id = 9 ORDER BY data_hora');
+    igual(esc.length, 3, 'trossos (Escolta) de Savall');
+    igual(esc[0].unio, esc[0].id, 'Escolta.unio del primer tros (la unió porta el seu id)');
+    igual(esc[1].unio, esc[0].id, 'Escolta.unio del tros de Dormir (de la mateixa escolta sencera)');
+    cal(esc[2].unio !== esc[0].unio, 'la primera pista que torna quan ja compta no obre una escolta nova (Escolta.unio)');
+    igual(esc[0].completitud, 0.606, 'Escolta.completitud del tros d\'Amor');
+    igual(esc[1].completitud, 0.354, 'Escolta.completitud del tros de Dormir (la Part III repetida compta un sol cop)');
+    igual(JSON.stringify(esc.map(e => e.context)), '["Amor","Dormir","Dormir"]', 'Escolta.context de cada tros');
+    const { SQL_COMPTA } = await import('../js/escoltes.js');
+    igual(consulta(`SELECT COUNT(DISTINCT COALESCE(s.unio, s.id)) AS n FROM escolta s WHERE s.edicio_id = 9 AND ${SQL_COMPTA}`)[0].n, 1, 'escoltes senceres de Savall que compten');
+  } },
+  { nom: 'historial «a mitges»: Savall surt amb una escolta i «a mitges», per sobre de Careful Now', sintetic: true, async fes({ pagina, tornaFaristol }) {
+    await tornaFaristol('hist');
+    await pagina.fill('#cerca', 'a'); await pagina.fill('#cerca', ''); await pagina.waitForTimeout(200);   // es torna a pintar
+    const fila = pagina.locator('#hist .hfila', { hasText: 'Das Paradies' });
+    igual(await fila.count(), 1, 'files de Savall a l\'Historial');
+    const t = (await fila.innerText()).replace(/\s+/g, ' ');
+    cal(/1 escolta · a mitges/.test(t), 'la fila de Savall no diu «1 escolta · a mitges»: ' + t);
+    const ordre = await pagina.locator('#hist .htit').allInnerTexts();
+    const iS = ordre.findIndex(x => x.includes('Das Paradies')), iC = ordre.findIndex(x => x.includes('Careful'));
+    cal(iS >= 0 && iC >= 0 && iS < iC, 'Savall (última pista fa 4 h 30) no és per sobre de Careful Now: ' + ordre.join(' / '));
+  } },
+  { nom: 'mosaic del grup (B): Variant Immersions, sonat a mitges dins la finestra de la tirada, s\'ajunta al mosaic', sintetic: true, async fes({ pagina, lb, consulta, tornaFaristol, esperaDesat }) {
+    const r0 = await pagina.evaluate(async () => {
+      const A = await import('./js/arxiu.js?v=15');
+      return A.canvia(db => {
+        db.run("UPDATE album SET conjunt = 'Infinitati', posicio = 1 WHERE id = 6");
+        db.run("INSERT INTO album (id, titol, artista_id, conjunt, posicio) VALUES (9, 'Intrusion Dubs', 5, 'Infinitati', 2), (10, 'Variant Immersions', 5, 'Infinitati', 3)");
+        db.run(`INSERT INTO edicio (id, album_id, durada_total, rotacio_actual, app_escolta, emparellaments, data_referencia_rotacio)
+                VALUES (10, 9, 73, 1, 'aimp', '["Intrusion Dubs"]', ?), (11, 10, 79, 1, 'aimp', '["Variant Immersions"]', ?)`, [new Date(Date.now() - 864e5).toISOString(), new Date(Date.now() - 864e5).toISOString()]);
+      });
+    });
+    cal(r0.desat, 'no s\'ha desat el grup de Phase90: ' + r0.motiu);
+    const tp = Date.now() - 14 * 3600e3, m = 60e3;   // sense trepitjar cap altra pista de la mateixa compte
+    const pista = (t, msid, nom, album, min) => ({ compte: 'crimsonnnn', listened_at: Math.floor(t / 1000), recording_msid: msid,
+      track_metadata: { artist_name: 'Phase90', track_name: nom, release_name: album, additional_info: { duration_ms: min * m } } });
+    lb.escoltes.push(pista(tp, 'msid-banc-inf', 'Infinitati', 'Infinitati', 41), pista(tp + 41 * m, 'msid-banc-intr', 'Intrusion', 'Intrusion Dubs', 73),
+      pista(tp + 114 * m, 'msid-banc-var', 'Variant', 'Variant Immersions', 40));
+    await pagina.click('#btSafata'); await pagina.waitForTimeout(1500); await esperaDesat();
+    const v = consulta('SELECT completitud FROM escolta WHERE edicio_id = 11');
+    cal(v.length === 1 && v[0].completitud < 0.75, 'Variant Immersions hauria de tenir una escolta que no compta: ' + JSON.stringify(v));
+    await tornaFaristol('rot');
+    const g = pagina.locator('#reixa .disc.grup', { hasText: 'Intrusion' });
+    igual(await g.count(), 1, 'rajoles del grup de Phase90');
+    igual(await g.locator('.tros').count(), 3, 'portades al mosaic del grup (Variant Immersions inclòs)');
+    igual(await pagina.locator('#reixa .disc:not(.grup)', { hasText: 'Variant Immersions' }).count(), 0, 'rajoles soltes de Variant Immersions');
+  } },
+  { nom: 'durada: canviar-la torna a calcular les escoltes (Variant Immersions a 52′ passa a comptar)', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    await pagina.locator('#reixa .disc.grup', { hasText: 'Intrusion' }).locator('.coberta[data-grup]').click(); await pagina.waitForSelector('#full.obert');
+    await pagina.locator('#full .membre [data-fitxa="11"]').first().click(); await pagina.waitForTimeout(200);
+    await pagina.locator('#full [data-durada="11"]').click(); await pagina.waitForTimeout(150);
+    await pagina.fill('#inDurada', '52'); await pagina.click('[data-desadurada]'); await esperaDesat();
+    igual(consulta('SELECT durada_total FROM edicio WHERE id = 11')[0].durada_total, 52, 'Edició.Durada total de Variant Immersions');
+    igual(consulta('SELECT completitud FROM escolta WHERE edicio_id = 11')[0].completitud, 0.769, 'Escolta.completitud de Variant Immersions (40′ de 52′)');
+    // i es deixa com era, per a les comprovacions que vénen després
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=15'), E = await import('./js/escoltes.js?v=9');
+      await A.canvia(db => { db.run('UPDATE edicio SET durada_total = 79 WHERE id = 11'); E.recalcula(db); }); });
+  } },
+  { nom: 'sense connexió: sw.js està al dia amb el codi que guarda', sempre: true, async fes() {
+    const { estatSW } = await import('./sw.mjs');
+    const e = estatSW();
+    cal(!e.falten.length, 'falten a FITXERS de sw.js: ' + e.falten.join(', '));
+    igual(e.versio, e.deuria, 'VERSIO de sw.js (passa «node proves/sw.mjs»)');
+  } },
+  { nom: 'sense connexió: la màquina s\'obre amb el codi guardat i la còpia del mòbil', sempre: true, async fes({ pagina, esperaDesat }) {
+    const llest = await pagina.evaluate(() => Promise.race([navigator.serviceWorker.ready.then(() => true), new Promise(r => setTimeout(() => r(false), 8000))]));
+    cal(llest, 'no hi ha cap service worker registrat');
+    await pagina.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 8000 })
+      .catch(async () => { await pagina.reload(); await pagina.waitForSelector('#s-faristol.activa', { timeout: 10000 }); });
+    const ctx = pagina.context();
+    await ctx.setOffline(true);
+    try {
+      await pagina.reload(); await pagina.waitForSelector('#s-faristol.activa', { timeout: 10000 });
+      cal(await pagina.locator('#reixa .disc').count() > 0, 'sense connexió, Discos en Rotació surt buit');
+      cal(await pagina.evaluate(() => document.body.classList.contains('desconnectat')), 'sense connexió, no diu que treballa amb la còpia del mòbil');
+    } finally { await ctx.setOffline(false); }
+    await pagina.reload(); await pagina.waitForSelector('#s-faristol.activa', { timeout: 10000 });
+    await pagina.waitForFunction(() => !document.body.classList.contains('desconnectat'), null, { timeout: 8000 });
+    await esperaDesat();
   } },
 
   // ───────── el que no ha de passar mai ─────────

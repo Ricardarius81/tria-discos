@@ -284,6 +284,7 @@ body[data-estil="galeria"] .coberta:not(.amb-img) ~ .nom-sota{display:none}
 .hmeta b{font-weight:400; color:var(--accent); font-family:var(--serif); font-size:15.5px}
 .hmeta u{text-decoration:none; color:var(--os)}
 .hmeta b.prop{color:var(--os-2)}
+.hmeta .mitges{font-style:italic; color:var(--accent)}
 .hcap:hover .htit{color:var(--accent)}
 .hrot{flex:0 0 auto; background:none; border:1px solid var(--accent-2); color:var(--accent); border-radius:16px;
   font-family:var(--sans); font-size:11.5px; padding:6px 10px; cursor:pointer; white-space:nowrap}

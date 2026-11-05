@@ -7,11 +7,11 @@
 // Blocs 3.3 + 3.4 + 3.5 (v1.44), una sola publicació: les escoltes de ListenBrainz, la safata viva i la bústia.
 // Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 
-import * as A from './arxiu.js?v=14';
-import * as D from './dades.js?v=16';
-import * as E from './escoltes.js?v=8';
+import * as A from './arxiu.js?v=15';
+import * as D from './dades.js?v=17';
+import * as E from './escoltes.js?v=9';
 import * as LB from './listenbrainz.js?v=2';
-import * as I from './imatges.js?v=3';
+import * as I from './imatges.js?v=4';
 import * as T from './tags.js?v=1';
 
 const $ = s => document.querySelector(s);
@@ -163,7 +163,8 @@ function titolAuto(nom, m) {
 function tileGrup(g, prefs) {
   const m = g.membres, arts = [...new Set(m.map(x => x.art))].join(' · ');
   const total = m.every(x => x.min) ? m.reduce((s, x) => s + x.min, 0) : null;
-  const trossos = m.slice(0, 4).map(x => `<span class="tros">${x.portada ? IMG(x.portada) : `<i>${esc(x.titol)}</i>`}</span>`).join('');
+  // El títol sempre hi és, sota la imatge: si la portada no arriba, el tros no es queda buit (4-11, Infinitati).
+  const trossos = m.slice(0, 4).map(x => `<span class="tros"><i>${esc(x.titol)}</i>${x.portada ? IMG(x.portada) : ''}</span>`).join('');
   const pref = m.some(x => prefs.has(x.artista_id)) ? ' pref' : '';
   return `<div class="disc grup${pref}">
       <button class="coberta collage amb-img n${Math.min(m.length, 4)}" data-grup="${esc(g.grup)}" aria-label="Grup ${esc(g.grup)}">
@@ -321,7 +322,8 @@ function pintaHistorial() {
     if (filtre && !norm(f.art + ' ' + f.titol).includes(filtre)) continue;
     const g = tram(f.darrera); if (g !== tr) { tr = g; h += `<div class="hgrup">${g}</div>`; }
     // Un grup sonat d'una tirada compta com una escolta, igual que un disc (3-11, Ricard): el «tirada» de la fila sobrava.
-    const n = f.n + (f.n === 1 ? ' escolta' : ' escoltes');
+    // «a mitges» (ACT-578): l'última escolta del disc encara no compta.
+    const n = f.n + (f.n === 1 ? ' escolta' : ' escoltes') + (f.mitges ? ' · <span class="mitges">a mitges</span>' : '');
     if (f.grup) {
       const cob = f.membres.find(x => x.portada)?.portada;
       const fons = cob && I.adreca(cob) ? `--img:url('${esc(I.adreca(cob))}')` : '';
@@ -347,7 +349,7 @@ function pintaHistorial() {
     </div>`;
   }
   caixa.innerHTML = h || (totes.length ? `<p class="subtitol" style="margin:18px 0 0">Res amb aquest nom.</p>`
-    : `<div class="marcador"><p class="cita">L'Historial encara és buit.</p><p>S'omple amb el que sona${E.arrencada(db()) ? ' des del ' + dia(E.arrencada(db())) : ''}: la màquina només sap el que passa des del dia que arrenca. Un disc hi surt quan ha sonat el 75 %.</p></div>`);
+    : `<div class="marcador"><p class="cita">L'Historial encara és buit.</p><p>S'omple amb el que sona${E.arrencada(db()) ? ' des del ' + dia(E.arrencada(db())) : ''}: la màquina només sap el que passa des del dia que arrenca. Un disc hi surt tan bon punt sona; mentre no arriba al 75 %, porta «a mitges».</p></div>`);
   I.omple(caixa);
 }
 // La fila d'un grup a l'Historial s'obre com la del ▶ d'un grup: els discos de l'última tirada, cadascun amb el seu ▶.
@@ -603,9 +605,11 @@ async function llegeixEscoltes() {
     // Les pistes que arriben tard a una targeta ja contestada n'hereten la resposta (1-11). Es mira cada vegada, encara que
     // no n'arribi cap de nova, perquè una targeta es tanca amb el temps: 30 minuts sense sonar.
     const tard = db_ => E.heretaRespostes()(db_);
-    const cal = !E.arrencada(db()) || noves.length || E.calHeretar(db());
+    // Un arxiu que acaba de passar a l'estructura 6 té les escoltes sense unió: es tornen a calcular un cop (ACT-585).
+    const unio = E.calRecalcular(db());
+    const cal = !E.arrencada(db()) || noves.length || E.calHeretar(db()) || unio;
     if (cal) {
-      const r = await fes(x => { E.fixaArrencada(arr)(x); const n = E.desaScrobbles(noves)(x); E.aplicaIgnoraSempre(x); const h = tard(x); const em = E.emparellaSols(x); return { n, h, em, ...((n || h || em) ? E.recalcula(x) : {}) }; }, null, { desfes: false, auto: true });
+      const r = await fes(x => { E.fixaArrencada(arr)(x); const n = E.desaScrobbles(noves)(x); E.aplicaIgnoraSempre(x); const h = tard(x); const em = E.emparellaSols(x); return { n, h, em, ...((n || h || em || unio) ? E.recalcula(x) : {}) }; }, null, { desfes: false, auto: true });
       // Sense avís de «pistes noves» (2-11): el número de la safata ja ho diu, i l'avís tapava la franja magenta.
     }
     // Només una lectura sencera (les dues comptes) i ja desada al mòbil compta com a bona.
@@ -1108,7 +1112,8 @@ document.addEventListener('click', e => {
   if (d.durada) { const x = rot(d.durada); if (x) fullDurada(x); return; }
   if (d.desadurada) { const x = rot(d.desadurada), m = parseInt($('#inDurada').value, 10);
     if (!x) return; if (!m || m < 1) { avisa('Cap disc es queda sense durada.'); return; }
-    tancaFull(); fes(D.canviaDurada(x.id, m, x.viva?.id), `Durada: ${m}′`); return; }
+    // Les escoltes es calculen amb la durada (Escolta.completitud): en canviar-la, es tornen a calcular (ACT-582, Variant Immersions).
+    tancaFull(); fes(y => { D.canviaDurada(x.id, m, x.viva?.id)(y); E.recalcula(y); }, `Durada: ${m}′`); return; }
   if (d.escoltar) { const x = rot(d.escoltar); if (!x) return; tancaFull();
     fullEscoltar({ id: x.id, art: x.art, tit: x.titol, min: x.min, canal: x.app_escolta, bc: x.bc, fisic: x.fisic }); return; }
   if (d.altrecanal) { fullEscoltar(estat.escoltant, true); return; }

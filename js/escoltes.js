@@ -13,6 +13,8 @@
 // Decisions de construcció que no són al pla, i que van a la v1.45 per ratificar:
 //  (a) el que va sonar una pista no passa mai de la seva duration_ms: una pausa llarga no infla l'escolta;
 //  (b) una mateixa pista que torna a sonar dins la finestra de 15 h obre una escolta nova: és una segona escolta;
+//      des de l'estructura 6 (ACT-585), només quan l'escolta ja compta; mentre no compta, la pista repetida compta un
+//      sol cop (la que més va sonar) i no talla;
 //  (c) un release_name confirmat a dues edicions va a la que és en rotació, i si no, a la més recent (la pregunta 3
 //      no entra en aquesta construcció);
 //  (d) una escolta nova d'una caixa va a la part viva en aquell moment, i ja no es mou.
@@ -59,17 +61,28 @@ export const fixaArrencada = (ara = new Date().toISOString()) => db => {
 // Fins on s'ha llegit una compte no necessita camp: és el listened_at més recent (§3.3).
 export const darrerLlegit = (db, compte) => un(db, 'SELECT MAX(listened_at) AS m FROM scrobble WHERE compte = ?', [compte])?.m || null;
 
-// Rellegir no duplica: la clau única és compte + listened_at + recording_msid. Retorna quants són nous.
+// Rellegir no duplica: la clau única és compte + listened_at + recording_msid. Retorna quants han canviat: els nous i els
+// que ara porten el lligam amb MusicBrainz que abans no tenien.
+// ListenBrainz lliga cada pista amb MusicBrainz (mbid_mapping) una estona després de rebre-la. Una pista llegida abans
+// d'aquest lligam es desava sense release_mbid ni caa_release_mbid, i rellegir-la no l'omplia mai: el disc es quedava
+// sense la portada de l'escolta (4-11, Infinitati, escoltat a l'avió i llegit en aterrar). Ara rellegir l'omple, sense
+// tocar res més de la pista (ni la resposta de Ricard).
 export const desaScrobbles = llistaS => db => {
-  let nous = 0;
+  let canvis = 0;
   const st = db.prepare(`INSERT OR IGNORE INTO scrobble (compte, listened_at, artista, pista, album, duration_ms,
                          recording_msid, release_mbid, caa_release_mbid) VALUES (?,?,?,?,?,?,?,?,?)`);
+  const lliga = db.prepare(`UPDATE scrobble SET release_mbid = COALESCE(release_mbid, ?), caa_release_mbid = COALESCE(caa_release_mbid, ?)
+                            WHERE compte = ? AND listened_at = ? AND recording_msid = ?
+                              AND ((release_mbid IS NULL AND ? IS NOT NULL) OR (caa_release_mbid IS NULL AND ? IS NOT NULL))`);
   for (const s of llistaS) {
     st.run([s.compte, s.listened_at, s.artista, s.pista, s.album, s.duration_ms, s.recording_msid, s.release_mbid, s.caa_release_mbid]);
-    nous += db.getRowsModified();
+    if (db.getRowsModified()) { canvis++; continue; }
+    if (!s.release_mbid && !s.caa_release_mbid) continue;
+    lliga.run([s.release_mbid, s.caa_release_mbid, s.compte, s.listened_at, s.recording_msid, s.release_mbid, s.caa_release_mbid]);
+    canvis += db.getRowsModified();
   }
-  st.free();
-  return nous;
+  st.free(); lliga.free();
+  return canvis;
 };
 
 // ───────── l'emparellament (§8.8) ─────────
@@ -180,7 +193,17 @@ function cronologia(scr) {
 }
 
 // Dormir compta amb el 50 % (§8.5, §4.6). Mentre la targeta és pendent no se sap si dormia: es calcula amb el 75 % (ACT-447).
-export const SQL_COMPTA = `(s.completitud >= ${LLINDAR} OR (s.atencio = 'Dormir' AND s.completitud >= ${LLINDAR_DORMIR}))`;
+// Des de l'estructura 6 (ACT-585), el que compta és l'escolta sencera (la unió), no el tros. Llindar mixt: cada tros pesa
+// la seva completitud dividida pel seu llindar, i la unió compta si la suma arriba a 1. Un tros sol que arriba al seu
+// llindar pesa 1: la regla d'abans és el cas d'un sol tros. Una escolta física (sense unió) es mira sola, com abans.
+const llindarDe = at => at === 'Dormir' ? LLINDAR_DORMIR : LLINDAR;
+const PES = x => `(${x}.completitud / (CASE WHEN ${x}.atencio = 'Dormir' THEN ${LLINDAR_DORMIR} ELSE ${LLINDAR} END))`;
+const PROU = 1 - 1e-9;                     // la suma de quocients pot quedar a una milionèsima d'1 per l'arrodoniment
+export const SQL_COMPTA = `(CASE WHEN s.unio IS NULL THEN (s.completitud >= ${LLINDAR} OR (s.atencio = 'Dormir' AND s.completitud >= ${LLINDAR_DORMIR}))
+  ELSE (SELECT SUM(${PES('x')}) FROM escolta x WHERE x.unio = s.unio) >= ${PROU} END)`;
+// Que falta posar la unió a les escoltes que vénen de scrobbles (un arxiu que acaba de passar a l'estructura 6).
+export const calRecalcular = db => !!un(db, `SELECT 1 AS x FROM escolta s WHERE s.unio IS NULL
+                                            AND EXISTS (SELECT 1 FROM scrobble p WHERE p.escolta_id = s.id) LIMIT 1`);
 
 // ───────── tornar a calcular les escoltes ─────────
 // Les escoltes que vénen de scrobbles es tornen a calcular senceres des dels scrobbles cada vegada que n'arriben
@@ -202,21 +225,34 @@ export const recalcula = db => {
   const parts = new Map();
   for (const p of files(db, 'SELECT id, edicio_id, durada, rotacio_actual FROM part')) (parts.get(p.edicio_id) || parts.set(p.edicio_id, []).get(p.edicio_id)).push(p);
 
-  // Agrupar: mateixa edició (i part), mateix context, dins de 15 hores, sense repetir pista (b).
-  const grups = [], obert = new Map();
+  // Agrupar (ACT-585, opció B de Ricard del 4-11; abans: mateix context o res).
+  // La unió és l'escolta sencera: mateixa edició (i part), dins de 15 hores des del seu primer tros (c).
+  // Dins de la unió, cada context i atenció és un tros, i cada tros és la seva pròpia Escolta.
+  // Pistes repetides (b): mentre la unió no compta, una pista repetida compta un sol cop —la que més va sonar— i no talla;
+  // quan ja compta, repetir-ne una obre una escolta nova (una segona escolta, com abans).
+  const durDe = (ed, part) => part ? (parts.get(ed) || []).find(p => p.id === part)?.durada : eds.get(ed).durada_total;
+  const sonatDe = (u, t) => t.s.reduce((x, s) => x + (u.millor.get(s.recording_msid) === s ? s.sonat : 0), 0);
+  const complDe = (u, t) => u.durada ? Math.round(sonatDe(u, t) / (u.durada * MIN) * 1000) / 1000 : null;
+  const compta = u => [...u.trossos.values()].reduce((x, t) => x + (complDe(u, t) ?? 0) / llindarDe(t.at), 0) >= PROU;
+  const trossos = [], oberta = new Map();
   for (const s of scr) {
     const ed = edicioDe(mapa, s);
     if (!ed || !eds.has(ed)) continue;
     const ctx = s.context ?? null, at = s.atencio ?? null;
     const viva = (parts.get(ed) || []).find(p => p.rotacio_actual);
     const part = s.escolta_id ? (s.part_id ?? null) : (viva?.id ?? null);   // (d)
-    const k = ed + '|' + part + '|' + ctx + '|' + at;
-    let g = obert.get(k);
-    if (!g || s.t - g.t0 >= FINESTRA_ESCOLTA || g.msids.has(s.recording_msid)) {
-      g = { ed, part, ctx, at, t0: s.t, s: [], msids: new Set(), comptes: new Set() };
-      obert.set(k, g); grups.push(g);
+    const ku = ed + '|' + part;
+    let u = oberta.get(ku);
+    if (!u || s.t - u.t0 >= FINESTRA_ESCOLTA || (u.millor.has(s.recording_msid) && compta(u))) {
+      u = { ed, part, t0: s.t, durada: durDe(ed, part), trossos: new Map(), millor: new Map(), id: null };
+      oberta.set(ku, u);
     }
-    g.s.push(s); g.msids.add(s.recording_msid); g.comptes.add(s.compte);
+    const kt = ctx + '|' + at;
+    let t = u.trossos.get(kt);
+    if (!t) { t = { u, ctx, at, t0: s.t, s: [], comptes: new Set() }; u.trossos.set(kt, t); trossos.push(t); }
+    t.s.push(s); t.comptes.add(s.compte);
+    const m = u.millor.get(s.recording_msid);
+    if (!m || s.sonat > m.sonat) u.millor.set(s.recording_msid, s);
   }
 
   // Esborrar les escoltes que vénen de scrobbles i tornar-les a escriure.
@@ -224,18 +260,16 @@ export const recalcula = db => {
   db.run('DELETE FROM escolta WHERE id IN (SELECT DISTINCT escolta_id FROM scrobble WHERE escolta_id IS NOT NULL)');
   db.run('UPDATE scrobble SET escolta_id = NULL WHERE escolta_id IS NOT NULL');
 
-  const ins = db.prepare(`INSERT INTO escolta (edicio_id, part_id, data_hora, canal, context, atencio, completitud, compte)
-                          VALUES (?, ?, ?, 'App', ?, ?, ?, ?)`);
+  const ins = db.prepare(`INSERT INTO escolta (edicio_id, part_id, data_hora, canal, context, atencio, completitud, compte, unio)
+                          VALUES (?, ?, ?, 'App', ?, ?, ?, ?, ?)`);
   const lliga = db.prepare('UPDATE scrobble SET escolta_id = ? WHERE id = ?');
   let n = 0;
-  for (const g of grups) {
-    const ed = eds.get(g.ed);
-    const durada = g.part ? (parts.get(g.ed) || []).find(p => p.id === g.part)?.durada : ed.durada_total;
-    const sonat = g.s.reduce((x, s) => x + s.sonat, 0);
-    const compl = durada ? Math.round(sonat / (durada * MIN) * 1000) / 1000 : null;
-    ins.run([g.ed, g.part, new Date(g.t0).toISOString(), g.ctx, g.at, compl, [...g.comptes].sort().join(',')]);
+  for (const t of trossos) {
+    const u = t.u;
+    ins.run([u.ed, u.part, new Date(t.t0).toISOString(), t.ctx, t.at, complDe(u, t), [...t.comptes].sort().join(','), u.id]);
     const id = un(db, 'SELECT last_insert_rowid() AS id').id;
-    for (const s of g.s) lliga.run([id, s.id]);
+    if (u.id === null) { u.id = id; db.run('UPDATE escolta SET unio = ? WHERE id = ?', [id, id]); }   // la unió porta l'id del seu primer tros
+    for (const s of t.s) lliga.run([id, s.id]);
     n++;
   }
   ins.free(); lliga.free();
@@ -247,8 +281,8 @@ export const recalcula = db => {
   // La portada que arriba amb l'escolta (bloc 3.2): mana sobre la de la sonda i sobre un rebuig, mai sobre la que ha
   // triat o pujat Ricard. Es fa servir la de l'escolta més recent que en porta.
   let portades = 0;
-  const cobs = new Map();
-  for (const g of grups) for (const s of g.s) if (s.caa_release_mbid) cobs.set(g.ed, s.caa_release_mbid);
+  const cobs = new Map(), quan_ = new Map();
+  for (const t of trossos) for (const s of t.s) if (s.caa_release_mbid && !(quan_.get(t.u.ed) > s.t)) { cobs.set(t.u.ed, s.caa_release_mbid); quan_.set(t.u.ed, s.t); }
   for (const [ed, mbid] of cobs) {
     db.run(`UPDATE edicio SET portada = ?, portada_origen = 'escolta'
             WHERE id = ? AND (portada_origen IS NULL OR portada_origen IN ('sonda', 'rebutjada')) `, ['release/' + mbid, ed]);
@@ -258,11 +292,12 @@ export const recalcula = db => {
 };
 
 // ───────── el que la màquina sap de les escoltes ─────────
-// Les escoltes que compten, en ordre de temps, amb l'àlbum i el grup.
+// Les escoltes que compten, en ordre de temps, amb l'àlbum i el grup. Una per escolta sencera (ACT-585): els trossos
+// d'una unió que compta són una sola escolta, amb l'hora del primer tros. u: l'id de la unió (o de l'escolta física).
 export function escoltesQueCompten(db) {
-  return files(db, `SELECT s.id, s.edicio_id, s.data_hora, s.context, s.completitud, e.album_id, a.conjunt
+  return files(db, `SELECT MIN(s.id) AS id, s.edicio_id, MIN(s.data_hora) AS data_hora, e.album_id, a.conjunt, COALESCE(s.unio, s.id) AS u
                     FROM escolta s JOIN edicio e ON e.id = s.edicio_id JOIN album a ON a.id = e.album_id
-                    WHERE ${SQL_COMPTA} ORDER BY s.data_hora, s.id`);
+                    WHERE ${SQL_COMPTA} GROUP BY COALESCE(s.unio, s.id) ORDER BY data_hora, id`);
 }
 
 // Les finestres de 24 hores d'un grup (§7.5, ACT-446). La primera l'obre la primera escolta de qualsevol disc del grup;
@@ -285,6 +320,16 @@ export function grupsAmbEscoltes(db) {
   for (const e of escoltesQueCompten(db)) if (e.conjunt) (per.get(e.conjunt) || per.set(e.conjunt, []).get(e.conjunt)).push(e);
   const out = new Map();
   for (const [g, l] of per) out.set(g, finestres(l));
+  // El mosaic de Discos en Rotació (ACT-583, opció B de Ricard del 4-11): un disc del grup que ha sonat dins la finestra
+  // de 24 hores de l'última tirada s'hi ajunta encara que no arribi al 75 %. Camps: Escolta.data_hora (l'inici de cada
+  // tros) i Escolta.completitud. El que compta com a escoltes (l'Historial) no canvia: per això va a part, a «sonats».
+  const sonats = files(db, `SELECT s.data_hora, e.album_id, a.conjunt FROM escolta s JOIN edicio e ON e.id = s.edicio_id
+                            JOIN album a ON a.id = e.album_id WHERE a.conjunt IS NOT NULL`);
+  for (const [g, fs] of out) {
+    const u = fs[fs.length - 1]; if (!u?.tirada) continue;
+    u.sonats = new Set(u.albums);
+    for (const x of sonats) { const t = ms(x.data_hora); if (x.conjunt === g && t >= u.t0 && t < u.t0 + FINESTRA_TIRADA) u.sonats.add(x.album_id); }
+  }
   return out;
 }
 
@@ -293,14 +338,25 @@ export function grupsAmbEscoltes(db) {
 export function juntsARotacio(finestresGrup) {
   if (!finestresGrup || !finestresGrup.length) return null;     // null = cap escolta: junts tots
   const u = finestresGrup[finestresGrup.length - 1];
-  return u.tirada ? u.albums : new Set();
+  return u.tirada ? (u.sonats || u.albums) : new Set();
 }
 
 // L'Historial (§7.7, v1.34 i ACT-448): una fila per grup amb tirades i una per disc amb escoltes soltes.
 // La fila del grup compta les tirades i porta els àlbums de l'última; la del disc compta només les soltes.
 // Totes s'ordenen per l'última vegada que van sonar.
+// «A mitges» (ACT-578, opció B de Ricard del 4-11): un disc puja a dalt tan bon punt sona, i la fila porta «a mitges»
+// mentre l'última escolta seva no compta; el número d'escoltes compta només les que compten. L'ordre surt de l'últim
+// Scrobble.listened_at lligat a una Escolta de l'edició; «a mitges», de la unió d'aquesta última escolta (completitud).
+// Llegit així per Claude: «a mitges» és l'escolta en curs, no el disc. Un disc amb tres escoltes que tornes a començar
+// surt «3 escoltes · a mitges»; un disc que no has acabat mai, «0 escoltes · a mitges».
 export function historial(db) {
-  const totes = escoltesQueCompten(db);
+  const totes = escoltesQueCompten(db), compten = new Set(totes.map(e => e.u));
+  // L'última pista de cada escolta sencera, i l'última escolta de cada edició.
+  const sons = files(db, `SELECT x.edicio_id, COALESCE(x.unio, x.id) AS u, MAX(p.listened_at) AS darrer
+                          FROM escolta x JOIN scrobble p ON p.escolta_id = x.id GROUP BY x.edicio_id, COALESCE(x.unio, x.id)`);
+  const darrerU = new Map(sons.map(r => [r.u, r.darrer])), darreraEd = new Map();
+  for (const r of sons) { const ja = darreraEd.get(r.edicio_id); if (!ja || r.darrer > ja.darrer) darreraEd.set(r.edicio_id, r); }
+  const quanSona = e => darrerU.get(e.u) || e.data_hora;     // una escolta física no té pistes: la seva hora
   const perGrup = new Map(), soltes = [];
   for (const e of totes) if (e.conjunt) (perGrup.get(e.conjunt) || perGrup.set(e.conjunt, []).get(e.conjunt)).push(e); else soltes.push(e);
   const files_ = [];
@@ -309,14 +365,21 @@ export function historial(db) {
     const tir = fs.filter(f => f.tirada);
     if (tir.length) {
       const u = tir[tir.length - 1];
-      files_.push({ grup: g, n: tir.length, darrera: new Date(u.darrera).toISOString(), albums: [...u.albums],
+      files_.push({ grup: g, n: tir.length, darrera: u.escoltes.map(quanSona).sort().pop(), albums: [...u.albums],
                      edicions: [...new Set(u.escoltes.map(e => e.edicio_id))] });
     }
     for (const f of fs) if (!f.tirada) soltes.push(...f.escoltes);
   }
   const perEd = new Map();
-  for (const e of soltes) { const x = perEd.get(e.edicio_id) || { edicio_id: e.edicio_id, n: 0, darrera: '' };
-    x.n++; if (e.data_hora > x.darrera) x.darrera = e.data_hora; perEd.set(e.edicio_id, x); }
+  for (const e of soltes) { const x = perEd.get(e.edicio_id) || { edicio_id: e.edicio_id, n: 0, darrera: '', mitges: false };
+    x.n++; const d = quanSona(e); if (d > x.darrera) x.darrera = d; perEd.set(e.edicio_id, x); }
+  // L'escolta en curs que encara no compta: fa pujar el disc i el marca. Si l'última compta i és d'una tirada, ja surt
+  // a la fila del grup; si és solta, ja és a perEd.
+  for (const [ed, r] of darreraEd) {
+    if (compten.has(r.u)) continue;
+    const x = perEd.get(ed) || { edicio_id: ed, n: 0, darrera: '', mitges: false };
+    x.mitges = true; if (r.darrer > x.darrera) x.darrera = r.darrer; perEd.set(ed, x);
+  }
   files_.push(...perEd.values());
   return files_.sort((a, b) => b.darrera.localeCompare(a.darrera));
 }
@@ -607,14 +670,18 @@ export function preguntesRotacio(db, ara = Date.now()) {
   const eds = files(db, `SELECT e.id, e.rotacio_actual, e.data_referencia_rotacio AS ref, a.titol, ar.nom_canonic AS art, e.durada_total, e.portada,
                                 (SELECT COUNT(*) FROM part p WHERE p.edicio_id = e.id) AS n_parts
                          FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id`);
-  const esc = files(db, `SELECT s.edicio_id, s.data_hora, s.context, s.atencio FROM escolta s
-                         WHERE s.part_id IS NULL AND s.atencio = 'Efectes plens' AND s.data_hora >= ? AND ${SQL_COMPTA}`, [desDe]);
+  // Una moneda per escolta sencera que compta i que té algun tros d'Efectes plens (ACT-585; decisió de construcció de
+  // Claude, per ratificar). Els contextos de la pregunta 8 són els dels seus trossos d'Efectes plens.
+  const esc = [...files(db, `SELECT s.edicio_id, MIN(s.data_hora) AS data_hora, GROUP_CONCAT(s.context, '|') AS contextos FROM escolta s
+                         WHERE s.part_id IS NULL AND s.atencio = 'Efectes plens' AND s.data_hora >= ? AND ${SQL_COMPTA}
+                         GROUP BY COALESCE(s.unio, s.id)`, [desDe])]
+    .map(x => ({ ...x, contextos: String(x.contextos || '').split('|') }));
   const darrera = new Map(files(db, `SELECT s.edicio_id, MAX(s.data_hora) AS d FROM escolta s WHERE ${SQL_COMPTA} GROUP BY s.edicio_id`).map(r => [r.edicio_id, r.d]));
   const out = [];
   for (const e of eds) {
     const meves = esc.filter(x => x.edicio_id === e.id && (!e.ref || x.data_hora > e.ref));
     if (!e.rotacio_actual && meves.length >= 3) out.push({ q: 7, ...e });
-    else if (e.rotacio_actual && !e.n_parts && meves.length >= 5 && meves.some(x => FORT.has(x.context))) out.push({ q: 8, ...e });
+    else if (e.rotacio_actual && !e.n_parts && meves.length >= 5 && meves.some(x => x.contextos.some(c => FORT.has(c)))) out.push({ q: 8, ...e });
     else if (e.rotacio_actual) {
       const base = [darrera.get(e.id), arr].filter(Boolean).sort().pop();
       if (ara - ms(base) >= UN_MES && (!e.ref || ara - ms(e.ref) >= UN_MES)) out.push({ q: 9, ...e });
