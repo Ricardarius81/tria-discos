@@ -155,7 +155,11 @@ function artistaDe(db, nom) {
 
 // Les edicions candidates per a un release_name (pregunta 2), de la més probable a la menys.
 // La més probable: el títol coincideix; després, l'artista; després, si el nom de l'edició hi surt; i la durada desempata.
-export function candidates(db, { album, artista, minuts }) {
+// perArtista (opció A de Ricard, 5-11, cas Bartók): quan el que ha sonat té cara de disc i el títol no casa amb cap,
+// les edicions del mateix artista també són candidates, per sota de les del títol. Abans, sense títol igual no hi havia
+// pregunta 2 i la safata ho donava per «Disc nou», i desar-lo duplicava l'àlbum. Camps: Artista (nom, persona, variants)
+// i Àlbum.artista_id. Una cançó solta d'un artista conegut no hi entra (no té cara de disc): seguiria preguntant a cada llista.
+export function candidates(db, { album, artista, minuts, perArtista = false }) {
   const nt = norm(album), nb = norm(sensEdicio(album)), aid = artistaDe(db, artista);
   const eds = files(db, `SELECT e.id, e.nom_edicio, e.durada_total, e.rotacio_actual, a.titol, a.artista_id, ar.nom_canonic AS art
                          FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id`);
@@ -163,7 +167,7 @@ export function candidates(db, { album, artista, minuts }) {
   for (const e of eds) {
     const t = norm(e.titol);
     let p = 0;
-    if (nt && t === nt) p += 100; else if (nb && t === nb) p += 80; else if (!nt && aid && e.artista_id === aid) p += 10; else continue;
+    if (nt && t === nt) p += 100; else if (nb && t === nb) p += 80; else if ((!nt || perArtista) && aid && e.artista_id === aid) p += 10; else continue;
     if (aid && e.artista_id === aid) p += 30;
     if (e.nom_edicio && nt.includes(norm(e.nom_edicio))) p += 20;
     if (minuts && e.durada_total) p += 10 - Math.min(10, Math.abs(minuts - e.durada_total) / 3);
@@ -352,21 +356,25 @@ export function juntsARotacio(finestresGrup) {
 export function historial(db) {
   const totes = escoltesQueCompten(db), compten = new Set(totes.map(e => e.u));
   // L'última pista de cada escolta sencera, i l'última escolta de cada edició.
-  const sons = files(db, `SELECT x.edicio_id, COALESCE(x.unio, x.id) AS u, MAX(p.listened_at) AS darrer
-                          FROM escolta x JOIN scrobble p ON p.escolta_id = x.id GROUP BY x.edicio_id, COALESCE(x.unio, x.id)`);
+  const sons = files(db, `SELECT x.edicio_id, COALESCE(x.unio, x.id) AS u, MAX(p.listened_at) AS darrer, MIN(x.data_hora) AS inici,
+                                 a.id AS album_id, a.conjunt
+                          FROM escolta x JOIN scrobble p ON p.escolta_id = x.id JOIN edicio e ON e.id = x.edicio_id
+                          JOIN album a ON a.id = e.album_id GROUP BY x.edicio_id, COALESCE(x.unio, x.id)`);
   const darrerU = new Map(sons.map(r => [r.u, r.darrer])), darreraEd = new Map();
   for (const r of sons) { const ja = darreraEd.get(r.edicio_id); if (!ja || r.darrer > ja.darrer) darreraEd.set(r.edicio_id, r); }
   const quanSona = e => darrerU.get(e.u) || e.data_hora;     // una escolta física no té pistes: la seva hora
   const perGrup = new Map(), soltes = [];
   for (const e of totes) if (e.conjunt) (perGrup.get(e.conjunt) || perGrup.set(e.conjunt, []).get(e.conjunt)).push(e); else soltes.push(e);
-  const files_ = [];
+  const files_ = [], tiradesDe = new Map(), filaDe = new Map();
   for (const [g, l] of perGrup) {
     const fs = finestres(l);
     const tir = fs.filter(f => f.tirada);
+    tiradesDe.set(g, tir);
     if (tir.length) {
       const u = tir[tir.length - 1];
-      files_.push({ grup: g, n: tir.length, darrera: u.escoltes.map(quanSona).sort().pop(), albums: [...u.albums],
-                     edicions: [...new Set(u.escoltes.map(e => e.edicio_id))] });
+      const fila = { grup: g, n: tir.length, darrera: u.escoltes.map(quanSona).sort().pop(), albums: [...u.albums],
+                     edicions: [...new Set(u.escoltes.map(e => e.edicio_id))] };
+      files_.push(fila); filaDe.set(g, { fila, u });
     }
     for (const f of fs) if (!f.tirada) soltes.push(...f.escoltes);
   }
@@ -375,14 +383,36 @@ export function historial(db) {
     x.n++; const d = quanSona(e); if (d > x.darrera) x.darrera = d; perEd.set(e.edicio_id, x); }
   // L'escolta en curs que encara no compta: fa pujar el disc i el marca. Si l'última compta i és d'una tirada, ja surt
   // a la fila del grup; si és solta, ja és a perEd.
+  // ACT-592 (Ricard, 5-11: «el historial también debe absorber»): un disc d'un grup sonat a mitges dins la finestra de
+  // 24 hores d'una tirada s'ajunta a la fila del grup, com al mosaic de la rotació (ACT-583), i no fa fila solta. Si és
+  // la finestra de l'última tirada, la fila del grup el porta i puja amb ell. El número d'escoltes no canvia: compta
+  // tirades. Camps: Escolta.data_hora (l'inici del tros), Escolta.completitud, Àlbum.Conjunt.
+  const dinsTirada = r => {
+    const tir = r.conjunt ? tiradesDe.get(r.conjunt) : null; if (!tir || !tir.length) return null;
+    const t = ms(r.inici);
+    return tir.find(f => t >= f.t0 && t < f.t0 + FINESTRA_TIRADA) || null;
+  };
   for (const [ed, r] of darreraEd) {
     if (compten.has(r.u)) continue;
+    const f = dinsTirada(r);
+    if (f) {
+      const q = filaDe.get(r.conjunt);
+      if (q && q.u === f) {
+        if (!q.fila.edicions.includes(ed)) q.fila.edicions.push(ed);
+        if (!q.fila.albums.includes(r.album_id)) q.fila.albums.push(r.album_id);
+        if (r.darrer > q.fila.darrera) q.fila.darrera = r.darrer;
+      }
+      continue;
+    }
     const x = perEd.get(ed) || { edicio_id: ed, n: 0, darrera: '', mitges: false };
     x.mitges = true; if (r.darrer > x.darrera) x.darrera = r.darrer; perEd.set(ed, x);
   }
   files_.push(...perEd.values());
   return files_.sort((a, b) => b.darrera.localeCompare(a.darrera));
 }
+
+// Té cara de disc (el mateix llindar que fa néixer un disc nou, ACT-461): «És un disc», dues pistes o més, o 15 minuts sonats.
+const caraDeDisc = (x, forcats) => forcats.has(x.clau) || x.pistes.size >= 2 || [...x.pistes.values()].reduce((a, b) => a + b, 0) >= 15 * MIN;
 
 // ───────── la pregunta 2, per a la safata ─────────
 // Els noms d'àlbum que han sonat des de l'Arrencada, no estan confirmats ni rebutjats, i tenen alguna edició candidata.
@@ -401,10 +431,10 @@ export function preguntes2(db) {
     x.pistes.set(s.recording_msid, s.duration_ms || 0); x.darrera = s.listened_at;
     per.set(k, x);
   }
-  const out = [];
+  const out = [], forcats = new Set(esUnDisc(db));
   for (const x of per.values()) {
     const minuts = Math.round([...x.pistes.values()].reduce((a, b) => a + b, 0) / MIN) || null;
-    const c = candidates(db, { album: x.album, artista: x.artista, minuts });
+    const c = candidates(db, { album: x.album, artista: x.artista, minuts, perArtista: caraDeDisc(x, forcats) });
     if (!c.length) continue;
     out.push({ ...x, n: x.pistes.size, minuts, candidates: c.slice(0, 6) });
   }
@@ -615,7 +645,7 @@ export function discosNous(db, infoMB = new Map()) {
   }
   const nous = [], soltes = [];
   for (const x of per.values()) {
-    if (!rebs.has(x.clau) && candidates(db, { album: x.album, artista: x.artista }).length) continue;   // espera la pregunta 2
+    if (!rebs.has(x.clau) && candidates(db, { album: x.album, artista: x.artista, perArtista: caraDeDisc(x, forcats) }).length) continue;   // espera la pregunta 2
     const mbid = [...x.mbids.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
     const mb = mbid ? infoMB.get(mbid) : null;
     // El nombre de pistes de MusicBrainz només es creu si el seu títol és el release_name (ACT-461): si no, el mapeig

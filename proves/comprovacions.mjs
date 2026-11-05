@@ -536,6 +536,17 @@ export const COMPROVACIONS = [
     igual(await g.locator('.tros').count(), 3, 'portades al mosaic del grup (Variant Immersions inclòs)');
     igual(await pagina.locator('#reixa .disc:not(.grup)', { hasText: 'Variant Immersions' }).count(), 0, 'rajoles soltes de Variant Immersions');
   } },
+  { nom: 'historial (ACT-592): Variant Immersions, a mitges dins la tirada, no fa fila solta; la fila del grup el porta', sintetic: true, async fes({ pagina, tornaFaristol }) {
+    await tornaFaristol('hist');
+    await pagina.fill('#cerca', 'a'); await pagina.fill('#cerca', ''); await pagina.waitForTimeout(200);
+    const files = await pagina.locator('#hist .hfila').allInnerTexts();
+    const soltes = files.filter(x => x.includes('Variant Immersions') && !x.includes('Intrusion'));
+    igual(soltes.length, 0, 'files soltes de Variant Immersions a l\'Historial');
+    const g = files.filter(x => x.includes('Intrusion'));
+    igual(g.length, 1, 'files del grup de Phase90 a l\'Historial');
+    cal(g[0].includes('Variant'), 'la fila del grup no porta Variant Immersions: ' + g[0].replace(/\s+/g, ' '));
+    await tornaFaristol('rot');
+  } },
   { nom: 'durada: canviar-la torna a calcular les escoltes (Variant Immersions a 52′ passa a comptar)', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
     await pagina.locator('#reixa .disc.grup', { hasText: 'Intrusion' }).locator('.coberta[data-grup]').click(); await pagina.waitForSelector('#full.obert');
     await pagina.locator('#full .membre [data-fitxa="11"]').first().click(); await pagina.waitForTimeout(200);
@@ -546,6 +557,40 @@ export const COMPROVACIONS = [
     // i es deixa com era, per a les comprovacions que vénen després
     await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=15'), E = await import('./js/escoltes.js?v=9');
       await A.canvia(db => { db.run('UPDATE edicio SET durada_total = 79 WHERE id = 11'); E.recalcula(db); }); });
+  } },
+  { nom: 'pregunta 2 (A): un disc en rotació amb un títol diferent (Bartók) es pregunta per l\'artista, no surt com a disc nou', sintetic: true, async fes({ pagina, lb, consulta, esperaDesat, obreSafata }) {
+    const r0 = await pagina.evaluate(async () => {
+      const A = await import('./js/arxiu.js?v=15');
+      return A.canvia(db => {
+        db.run(`INSERT INTO artista (id, nom_canonic, variants) VALUES (907, 'Keller Quartet', '["Bartók"]')`);
+        db.run(`INSERT INTO album (id, titol, artista_id) VALUES (911, 'Bartók: The 6 String Quartets', 907)`);
+        db.run(`INSERT INTO edicio (id, album_id, durada_total, rotacio_actual, app_escolta, data_referencia_rotacio) VALUES (912, 911, 149, 1, 'amazon', ?)`,
+               [new Date(Date.now() - 2 * 864e5).toISOString()]);
+      });
+    });
+    cal(r0.desat, 'no s\'ha desat el Bartók: ' + r0.motiu);
+    const t = Date.now() - 20 * 3600e3, m = 60e3;   // compte de feina, sense trepitjar cap altra pista
+    const pista = (t, msid, nom, album, min) => ({ compte: 'crimsonnnnfeina', listened_at: Math.floor(t / 1000), recording_msid: msid,
+      track_metadata: { artist_name: 'Keller Quartet', track_name: nom, release_name: album, additional_info: { duration_ms: min * m } } });
+    lb.escoltes.push(pista(t, 'msid-banc-bk5', 'String Quartet No. 5', 'Bartók: String Quartets Nos. 1 - 6', 30),
+      pista(t + 30 * m, 'msid-banc-bk6', 'String Quartet No. 6', 'Bartók: String Quartets Nos. 1 - 6', 27),
+      // una cançó solta del mateix artista, d'una llista: no té cara de disc i no ha de preguntar
+      pista(t - 6 * 3600e3, 'msid-banc-bach', 'Contrapunctus I', 'Bach: The Art of Fugue', 4));
+    await obreSafata(); await pagina.waitForTimeout(1500); await esperaDesat();
+    igual(await pagina.locator('#safataCos [data-q2si="bartokstringquartetsnos16|912"]').count(), 1, 'botons «Sí: Bartók» de la pregunta 2');
+    igual(await pagina.locator('#safataCos [data-q2si^="bachtheartoffugue|"]').count(), 0, 'pregunta 2 per a la cançó solta');
+    await pagina.click('#safataCos [data-q2si="bartokstringquartetsnos16|912"]'); await pagina.waitForTimeout(500); await esperaDesat();
+    igual(consulta('SELECT COUNT(*) AS n FROM album WHERE artista_id = 907')[0].n, 1, 'àlbums del Keller Quartet (cap de duplicat)');
+    igual(consulta('SELECT emparellaments FROM edicio WHERE id = 912')[0].emparellaments, '["Bartók: String Quartets Nos. 1 - 6"]', 'Edició.Emparellaments del Bartók');
+    const e = consulta('SELECT completitud FROM escolta WHERE edicio_id = 912');
+    cal(e.length >= 1 && e.every(x => x.completitud < 0.75), 'el Bartók hauria de tenir escoltes que no compten (57′ de 149′): ' + JSON.stringify(e));
+  } },
+  { nom: 'pregunta 2 (A): el Bartók emparellat surt a l\'Historial amb «0 escoltes · a mitges»', sintetic: true, async fes({ pagina, tornaFaristol }) {
+    await tornaFaristol('hist');
+    await pagina.fill('#cerca', 'a'); await pagina.fill('#cerca', ''); await pagina.waitForTimeout(200);
+    const f = pagina.locator('#hist .hfila', { hasText: 'String Quartets' });
+    igual(await f.count(), 1, 'files del Bartók a l\'Historial');
+    cal(/0 escoltes · a mitges/.test((await f.innerText()).replace(/\s+/g, ' ')), 'la fila del Bartók no diu «0 escoltes · a mitges»');
   } },
   { nom: 'sense connexió: sw.js està al dia amb el codi que guarda', sempre: true, async fes() {
     const { estatSW } = await import('./sw.mjs');
