@@ -7,20 +7,21 @@
 export class DriveFals {
   constructor() { this.fitxers = new Map(); this.n = 0; this.rellotge = Date.now() - 3600e3; this.peticions = []; }
   hora() { this.rellotge += 1000; return new Date(this.rellotge).toISOString(); }
-  afegeix({ name, mimeType, parents = [], bytes = new Uint8Array(), trashed = false }) {
+  afegeix({ name, mimeType, parents = [], bytes = new Uint8Array(), trashed = false, appProperties = null }) {
     const id = 'f' + (++this.n);
-    this.fitxers.set(id, { id, name, mimeType, parents, bytes: Buffer.from(bytes), trashed, modifiedTime: this.hora() });
+    this.fitxers.set(id, { id, name, mimeType, parents, bytes: Buffer.from(bytes), trashed, modifiedTime: this.hora(), ...(appProperties ? { appProperties } : {}) });
     return this.fitxers.get(id);
   }
   per(nom) { return [...this.fitxers.values()].filter(f => f.name === nom && !f.trashed).sort((a, b) => b.modifiedTime.localeCompare(a.modifiedTime))[0] || null; }
-  meta(f) { return { id: f.id, name: f.name, mimeType: f.mimeType, modifiedTime: f.modifiedTime, size: String(f.bytes.length), parents: f.parents, trashed: f.trashed }; }
-  // La consulta «name = '…' and trashed = … [and '…' in parents] [and mimeType = '…']»
+  meta(f) { return { id: f.id, name: f.name, mimeType: f.mimeType, modifiedTime: f.modifiedTime, size: String(f.bytes.length), parents: f.parents, trashed: f.trashed, ...(f.appProperties ? { appProperties: f.appProperties } : {}) }; }
+  // La consulta «name = '…' | name contains '…' and trashed = … [and '…' in parents] [and mimeType = '…']»
   cerca(q) {
     const nom = /name = '((?:[^'\\]|\\.)*)'/.exec(q)?.[1]?.replace(/\\(.)/g, '$1');
+    const conte = /name contains '((?:[^'\\]|\\.)*)'/.exec(q)?.[1]?.replace(/\\(.)/g, '$1');
     const pap = /trashed = (true|false)/.exec(q)?.[1] === 'true';
     const pare = /'([^']+)' in parents/.exec(q)?.[1];
     const mime = /mimeType = '([^']+)'/.exec(q)?.[1];
-    return [...this.fitxers.values()].filter(f => (!nom || f.name === nom) && f.trashed === pap && (!pare || f.parents.includes(pare)) && (!mime || f.mimeType === mime))
+    return [...this.fitxers.values()].filter(f => (!nom || f.name === nom) && (!conte || f.name.includes(conte)) && f.trashed === pap && (!pare || f.parents.includes(pare)) && (!mime || f.mimeType === mime))
       .sort((a, b) => b.modifiedTime.localeCompare(a.modifiedTime)).map(f => this.meta(f));
   }
   async atén(route) {
@@ -46,7 +47,7 @@ export class DriveFals {
       const cap = p => { const j = p.indexOf('\r\n\r\n'); return j < 0 ? Buffer.alloc(0) : p.subarray(j + 4); };
       const meta = JSON.parse(cap(parts[0]).toString('utf8'));
       const dades = parts[1] ? cap(parts[1]) : Buffer.alloc(0);
-      const f = this.afegeix({ name: meta.name, mimeType: meta.mimeType, parents: meta.parents || [], bytes: dades.subarray(0, Math.max(0, dades.length - 2)) });
+      const f = this.afegeix({ name: meta.name, mimeType: meta.mimeType, parents: meta.parents || [], bytes: dades.subarray(0, Math.max(0, dades.length - 2)), appProperties: meta.appProperties || null });
       return json(this.meta(f));
     }
     mt = /^\/upload\/drive\/v3\/files\/([^/]+)$/.exec(u.pathname);

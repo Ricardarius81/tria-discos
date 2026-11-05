@@ -7,12 +7,14 @@
 // Blocs 3.3 + 3.4 + 3.5 (v1.44), una sola publicació: les escoltes de ListenBrainz, la safata viva i la bústia.
 // Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 
-import * as A from './arxiu.js?v=15';
+import * as A from './arxiu.js?v=16';
 import * as D from './dades.js?v=17';
 import * as E from './escoltes.js?v=9';
 import * as LB from './listenbrainz.js?v=2';
 import * as I from './imatges.js?v=4';
 import * as T from './tags.js?v=1';
+import * as C from './copies.js?v=1';
+import * as X from './excel.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -123,7 +125,7 @@ async function fes(fn, text, { desfes = true, abans = null, auto = false } = {})
 function pinta() {
   if (!A.estat.db) return;
   sincroCanals();
-  pintaReixa(); pintaFiles(); pintaHistorial(); pintaSafata();
+  pintaReixa(); pintaFiles(); pintaHistorial(); pintaSafata(); alertaCopia();
   if (estat.superficie === 'artista' && estat.artista) pintaArtista(estat.artista);
   I.omple();
 }
@@ -491,7 +493,8 @@ function pintaSafata() {
   const q2Sols = cua.q2.filter(q => !dins.has(q.clau)), nousSols = cua.nous.filter(x => !dins.has(x.clau));
   // El número compta també cada disc llest d'una sessió que sona (ACT-530).
   const llestos = obertes.reduce((a, c) => a + c.discos.filter(d => d.llest && perFer(d)).length, 0);
-  const n = q2Sols.length + nousSols.length + cua.rot.length + cuaTg.length + llestos;
+  const nt = C.nota(db());
+  const n = q2Sols.length + nousSols.length + cua.rot.length + cuaTg.length + llestos + (nt ? 1 : 0);
   const p = $('#safataNum'); if (p) { p.textContent = n; p.classList.toggle('zero', !n); }
   const caixa = $('#safataCos'); if (!caixa) return;
   let h = '';
@@ -508,6 +511,11 @@ function pintaSafata() {
       + (d.edicio_id ? `<button class="sf-link sf-canal" data-sfcanaldisc="${d.edicio_id}">Canal: ${esc(nomCanal(d.app_escolta))} · canvia'l</button>` : '') + bloc;
   };
   const jaContestat = d => `<p class="sf-pre" style="padding-left:54px">On: <b>${esc(d.context || '')}</b>, ja contestat.</p>`;
+  // La nota de la còpia de seguretat (§3.5, ACT-569): han baixat les edicions, els àlbums o els artistes. Es confirma amb un toc.
+  if (nt) h += `<div class="sf-card sf-copia"><span class="sf-tipus">Còpia de seguretat</span>
+    <p class="sf-pre">A la còpia del ${diaD(nt.data)} hi ha ${textBaixades(nt.baixades)} que a la del ${diaD(nt.anterior)}. La màquina sap quants, no quins.</p>
+    <p class="sf-pre">Si ho has fet tu (has ajuntat duplicats o has tret un disc), toca «Entesos». Si no, no toquis res i digues-ho a Claude: la còpia anterior és al Drive.</p>
+    <div class="sf-chips" style="margin-top:10px"><button class="principal" data-notaok="1">Entesos</button></div></div>`;
   // La sessió que encara sona (ACT-528): els discos acabats es contesten ara, un per un; el que sona, en gris.
   h += obertes.map(c => `<div class="sf-card sf-oberta${c.discos.some(d => d.llest && perFer(d)) ? ' amb-llestos' : ''}"><span class="sf-tipus">Sonant ara</span>
       <div class="sf-cap"><b>${esc(quan(c.inici).replace(/ · .*/, ''))} · des de les ${hm(c.inici)}</b><span>${nomCompte(c.comptes)}</span></div>
@@ -975,9 +983,67 @@ function fullCabina() {
           : `el resultat surt el ${dia(v.dataLlesta)}, quan faci un mes`}</small></span></li>`; })()}
       <li><button data-ignorats="1">Artistes que s'ignoren sempre <small>${(n => n ? (n === 1 ? 'un' : n) + ' · obre la llista' : 'cap')(E.ignoraSempre(db()).length)}</small></button></li>
       <li><span class="ll-info">ListenBrainz <small>${E.arrencada(db()) ? 'les dues comptes, des del ' + dia(E.arrencada(db())) + ' · ' + r.scrobble + ' pistes' : 'encara no s\'ha llegit'}${estat.lbError ? ' · ' + esc(estat.lbError) : ''}</small></span></li>
-      <li><button disabled style="opacity:.6">Còpia de seguretat i Excel <small>tram 4</small></button></li>
+      ${liniesCopia()}
       <li><a href="privadesa.html" target="_blank" rel="noopener">Política de privadesa <small>què surt d'aquest mòbil, i cap a on</small></a></li>
     </ul></div>`, true);
+}
+
+// ───────── la còpia de seguretat (tram 4, §3.5) ─────────
+const diaD = d => d ? dia(d + 'T12:00:00Z') : '—';
+const textBaixades = l => l.map(b => `${b.abans - b.ara} ${C.NOMS[b.taula]} menys`).join(' i ');
+// L'exclamació vermella a La Cabina: més de 8 dies sense còpia (sense connexió, amb l'última data que ha vist aquest
+// dispositiu, ACT-568), dades que han desaparegut, o una còpia que no s'ha pogut fer perquè l'arxiu no està sencer.
+function alertaCopia() {
+  if (!A.estat.db) return;
+  document.body.classList.toggle('sense-copia', C.caducada() || !!C.alarma(db()) || !!estat.copiaError);
+}
+function liniesCopia() {
+  const dv = C.darreraVista(), al = C.alarma(db());
+  const propera = dv ? new Date(Date.parse(dv + 'T12:00:00Z') + C.CADA * 864e5).toISOString().slice(0, 10) : null;
+  return `<li><span class="ll-info">Còpia de seguretat <small>${dv ? `la darrera, del ${diaD(dv)} · la propera, sola, a partir del ${diaD(propera)}` : 'encara no n\'hi ha cap'}${C.caducada() ? ' · <b class="mal">fa més de 8 dies</b>' : ''} · se'n guarden ${C.MANTENIR}</small></span></li>
+    ${al ? `<li><span class="ll-info"><b class="mal">Han desaparegut dades</b><small>A la còpia del ${diaD(al.data)} hi ha ${textBaixades(al.baixades)} que a la del ${diaD(al.anterior)}. Això no hauria de baixar mai. La rotació s'ha aturat: les còpies d'abans són al Drive. Si no ho has fet tu, no toquis res i digues-ho a Claude.</small></span></li>
+      <li><button data-alarmaok="1">D'acord, ho he vist <small>la propera còpia torna a rotar</small></button></li>` : ''}
+    ${estat.copiaError ? `<li><span class="ll-info"><b class="mal">La darrera còpia no s'ha pogut fer</b><small>${esc(estat.copiaError)}</small></span></li>` : ''}
+    <li><button data-copiaara="1">Fes-ne una ara <small>l'arxiu i l'Excel, al Drive</small></button></li>
+    <li><button data-excel="1">Descarrega l'Excel <small>a aquest dispositiu</small></button></li>`;
+}
+async function despresDeCopia(r, manual) {
+  if (!r) return;
+  if (!r.feta) {
+    if (r.integritat) estat.copiaError = r.motiu;
+    if (manual && r.motiu) avisa('No s\'ha fet la còpia: ' + r.motiu + '.');
+    alertaCopia(); return;
+  }
+  estat.copiaError = null;
+  if (r.vermelles.length) await fes(C.posaAlarma({ data: r.data, anterior: r.anterior, baixades: r.vermelles }), null, { desfes: false, auto: true });
+  if (r.nota.length) await fes(C.posaNota({ data: r.data, anterior: r.anterior, baixades: r.nota }), null, { desfes: false, auto: true });
+  if (manual) avisa(r.vermelles.length ? 'Còpia feta, però han desaparegut dades: mira La Cabina.' : `Còpia de seguretat feta: l'arxiu i l'Excel, al Drive${r.paperera ? ` (${r.paperera === 1 ? 'una de vella' : r.paperera + ' fitxers vells'} a la paperera)` : ''}.`);
+  alertaCopia();
+}
+// La còpia automàtica (ACT-566): en obrir i en tornar a primer pla, una consulta petita al Drive com a molt cada 15 minuts.
+let copiant = false, copiaMirada = 0;
+async function copiaAuto() {
+  if (copiant || Date.now() - copiaMirada < 15 * 60e3) return;
+  copiaMirada = Date.now(); copiant = true;
+  try { await despresDeCopia(await C.siToca(), false); }
+  catch (e) { estat.copiaError = 'no s\'ha pogut fer: ' + e.message; alertaCopia(); }
+  finally { copiant = false; }
+}
+async function copiaAra() {
+  if (copiant) { avisa('Ja s\'està fent una còpia.'); return; }
+  copiant = true; avisa('Fent la còpia…');
+  try { await despresDeCopia(await C.fes(), true); }
+  catch (e) { estat.copiaError = 'no s\'ha pogut fer: ' + e.message; alertaCopia(); avisa('No s\'ha pogut fer la còpia: ' + e.message); }
+  finally { copiant = false; if ($('#full').classList.contains('obert') && $('#full .menu-net')) fullCabina(); }
+}
+async function descarregaExcel() {
+  try {
+    const b = await X.xlsx(db());
+    const url = URL.createObjectURL(new Blob([b], { type: A.XLSX_MIME }));
+    const a = document.createElement('a'); a.href = url; a.download = `la-meva-discoteca ${new Date().toISOString().slice(0, 10)}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60e3);
+    avisa('Excel descarregat.');
+  } catch (e) { avisa('No s\'ha pogut fer l\'Excel: ' + e.message); }
 }
 
 // La llista d'«Ignora sempre» (2-11): un botó a La Cabina que l'obre, i cada nom amb el seu «Treu-lo».
@@ -1174,6 +1240,10 @@ document.addEventListener('click', e => {
   if (d.treuignora) { const nom = d.treuignora; fes(E.treuIgnoraSempre(nom), `«${nom}» ja no s'ignora sol. El que ja estava ignorat, s'hi queda.`); fullIgnorats(); return; }
   if (d.ignorats) { fullIgnorats(); return; }
   if (d.cabina) { fullCabina(); return; }
+  if (d.copiaara) { copiaAra(); return; }
+  if (d.excel) { descarregaExcel(); return; }
+  if (d.alarmaok) { fes(C.treuAlarma, 'D\'acord. La propera còpia torna a rotar.', { desfes: false }).then(() => fullCabina()); return; }
+  if (d.notaok) { fes(C.treuNota, 'Entesos.', { desfes: false }); return; }
   if (d.sfresolta) { const c = E.targetes(db(), { estat: 'resolt' }).find(x => x.clau === +d.sfresolta); if (!c) return;
     obreFull(`<h3>${esc(franja(c))}</h3><p>${ctxPerDisc(c)}</p><div class="canals">
       <button data-sfreobre="${c.scr.map(x => x.id).join(',')}">On ho escoltaves${c.discos.length > 1 ? ', tota la sessió' : ''} <small>torna la targeta a la safata</small></button>
@@ -1398,6 +1468,7 @@ async function despresDeConnectar() {
   }
   sondes();
   bustia();
+  copiaAuto();
 }
 
 // La bústia de Bandcamp (bloc 3.5): primer es recullen els codis que ha deixat la tasca de nit, després s'escriu el que
@@ -1451,6 +1522,7 @@ document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState !== 'visible' || !A.estat.db || !navigator.onLine) return;
   if (await A.haCanviat()) { connecta(false); return; }
   llegeixEscoltes();
+  copiaAuto();
 });
 
 // Primer, la còpia d'aquest mòbil: el Faristol surt de seguida, sense esperar el Drive.

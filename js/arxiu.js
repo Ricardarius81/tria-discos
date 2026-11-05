@@ -14,7 +14,8 @@ const ABAST = 'https://www.googleapis.com/auth/drive.file';
 // sense perdre de vista l'arxiu, perquè la màquina el troba pel nom (H-04).
 export const NOM_CARPETA = 'La Meva Discoteca';
 export const NOM_ARXIU = 'la-meva-discoteca.sqlite';
-const SQLITE_MIME = 'application/x-sqlite3';
+export const SQLITE_MIME = 'application/x-sqlite3';
+export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const DRIVE = 'https://www.googleapis.com/drive/v3/files';
 const PUJADA = 'https://www.googleapis.com/upload/drive/v3/files';
 
@@ -78,9 +79,9 @@ async function metadades(id) {
 async function baixa(id) {
   return new Uint8Array(await (await g(`${DRIVE}/${id}?alt=media`)).arrayBuffer());
 }
-async function creaFitxer(nom, mime, pares, cos) {
+async function creaFitxer(nom, mime, pares, cos, propietats = null) {
   const V = 'tria-discos-' + Math.random().toString(36).slice(2);
-  const meta = { name: nom, mimeType: mime, ...(pares ? { parents: pares } : {}) };
+  const meta = { name: nom, mimeType: mime, ...(pares ? { parents: pares } : {}), ...(propietats ? { appProperties: propietats } : {}) };
   const parts = ['\r\n--' + V + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(meta)];
   if (cos) parts.push('\r\n--' + V + '\r\nContent-Type: ' + mime + '\r\n\r\n', cos);
   parts.push('\r\n--' + V + '--');
@@ -426,4 +427,23 @@ export async function escriuPendentsBustia(text) {
   const id = await fitxerBustia(BUSTIA_PENDENTS, 'text/plain', 'text/plain', '');
   const r = await g(`${PUJADA}/${id}?uploadType=media&fields=id,modifiedTime`, { method: 'PATCH', headers: { 'Content-Type': 'text/plain; charset=UTF-8' }, body: text });
   return r.json();
+}
+
+// ───────── les còpies de seguretat (tram 4, §3.5) ─────────
+// Una còpia és la parella «· còpia de seguretat AAAA-MM-DD» (.sqlite + .xlsx). Es troben pel nom, sempre sense la paperera
+// (H-04). Els recomptes de files de cada còpia viuen a les propietats internes del seu fitxer (appProperties, ACT-569):
+// es comparen sense baixar res.
+export async function llistaCopies() {
+  if (!tePermis()) throw new Error('cal connectar amb el Drive');
+  const q = `name contains '${esc('còpia de seguretat')}' and trashed = false`;
+  const r = await g(`${DRIVE}?q=${encodeURIComponent(q)}&orderBy=modifiedTime desc&fields=files(id,name,modifiedTime,appProperties)&pageSize=100`);
+  return (await r.json()).files || [];
+}
+export async function creaCopia(nom, mime, bytes, propietats) {
+  if (!tePermis()) throw new Error('cal connectar amb el Drive');
+  return creaFitxer(nom, mime, estat.carpetaId ? [estat.carpetaId] : null, new Blob([bytes], { type: mime }), propietats);
+}
+// A la paperera del Drive, on es pot recuperar durant trenta dies (ACT-571): no s'esborra mai del tot.
+export async function aLaPaperera(id) {
+  await g(`${DRIVE}/${id}?fields=id`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ trashed: true }) });
 }
