@@ -18,6 +18,9 @@
 //  (c) un release_name confirmat a dues edicions va a la que és en rotació, i si no, a la més recent (la pregunta 3
 //      no entra en aquesta construcció);
 //  (d) una escolta nova d'una caixa va a la part viva en aquell moment, i ja no es mou.
+//      Des de l'ACT-625 (6-11): si el nom de l'àlbum diu el número de la part («vol / volume / CD / disc» + número),
+//      la pista va a aquella part, i en tornar a calcular hi torna sola encara que abans hagués anat a la viva;
+//      si no el diu, (d) com abans. Camps: Scrobble.album, Part.numero.
 
 const files = (db, sql, p = []) => {
   const st = db.prepare(sql); st.bind(p);
@@ -26,6 +29,16 @@ const files = (db, sql, p = []) => {
 };
 const un = (db, sql, p = []) => files(db, sql, p)[0] || null;
 const llista = s => { try { return s ? JSON.parse(s) : []; } catch { return []; } };
+// ACT-625: el número de part que porta el nom de l'àlbum: «The Italian Chronicles volume 1» → 1, «… (CD 2)» → 2.
+// Els números que ja porta el títol de l'àlbum de l'arxiu no compten («Jazz Masters Vol. 3», caixa de dos CD:
+// «Jazz Masters Vol. 3 CD 2» → 2; «Jazz Masters Vol. 3» sol → cap, i va a la viva). Si n'hi queda més d'un, mana l'últim.
+const RE_PART = /\b(?:vol(?:ume)?|cd|dis[ck])\.?\s*(\d{1,2})\b/gi;
+const numeros = t => [...String(t ?? '').matchAll(RE_PART)].map(m => Number(m[1]));
+export const numeroDePart = (album, titol = '') => {
+  const ns = numeros(album);
+  for (const n of numeros(titol)) { const i = ns.indexOf(n); if (i >= 0) ns.splice(i, 1); }
+  return ns.length ? ns[ns.length - 1] : null;
+};
 export const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
 
 // ACT-619 (opció B de Ricard, 5-11): el «proper» d'un preferent només s'esborra quan entra en rotació el disc que diu,
@@ -240,9 +253,9 @@ export const recalcula = db => {
   scr.sort((a, b) => a.t - b.t || a.id - b.id);
 
   // Les edicions amb les seves durades i parts.
-  const eds = new Map(files(db, 'SELECT id, durada_total, app_escolta FROM edicio').map(e => [e.id, e]));
+  const eds = new Map(files(db, 'SELECT e.id, e.durada_total, e.app_escolta, a.titol FROM edicio e JOIN album a ON a.id = e.album_id').map(e => [e.id, e]));
   const parts = new Map();
-  for (const p of files(db, 'SELECT id, edicio_id, durada, rotacio_actual FROM part')) (parts.get(p.edicio_id) || parts.set(p.edicio_id, []).get(p.edicio_id)).push(p);
+  for (const p of files(db, 'SELECT id, edicio_id, numero, durada, rotacio_actual FROM part')) (parts.get(p.edicio_id) || parts.set(p.edicio_id, []).get(p.edicio_id)).push(p);
 
   // Agrupar (ACT-585, opció B de Ricard del 4-11; abans: mateix context o res).
   // La unió és l'escolta sencera: mateixa edició (i part), dins de 15 hores des del seu primer tros (c).
@@ -258,8 +271,11 @@ export const recalcula = db => {
     const ed = edicioDe(mapa, s);
     if (!ed || !eds.has(ed)) continue;
     const ctx = s.context ?? null, at = s.atencio ?? null;
-    const viva = (parts.get(ed) || []).find(p => p.rotacio_actual);
-    const part = s.escolta_id ? (s.part_id ?? null) : (viva?.id ?? null);   // (d)
+    const ps = parts.get(ed) || [];
+    const viva = ps.find(p => p.rotacio_actual);
+    const nPart = ps.length ? numeroDePart(s.album, eds.get(ed).titol) : null;
+    const perNom = nPart !== null ? ps.find(p => p.numero === nPart) : null;                     // ACT-625
+    const part = perNom ? perNom.id : (s.escolta_id ? (s.part_id ?? null) : (viva?.id ?? null));   // (d)
     const ku = ed + '|' + part;
     let u = oberta.get(ku);
     if (!u || s.t - u.t0 >= FINESTRA_ESCOLTA || (u.millor.has(s.recording_msid) && compta(u))) {

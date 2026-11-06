@@ -490,9 +490,14 @@ export const COMPROVACIONS = [
       pista(t0 + 4 * H, 'msid-banc-svT3', 'Part III', 20), pista(t0 + 4 * H + 20 * m, 'msid-banc-svT4', 'Part IV', 35),
       pista(t0 + 6 * H, 'msid-banc-svT1', 'Part I', 20));
     await pagina.click('#btSafata');
-    // que hagin arribat les sis pistes abans de contestar
-    await pagina.waitForFunction(async () => { const A = await import('./js/arxiu.js?v=16');
-      return A.estat.db.exec("SELECT COUNT(*) FROM scrobble WHERE album = 'Das Paradies und die Peri'")[0].values[0][0] === 6; }, null, { timeout: 10000, polling: 250 });
+    // que hagin arribat les sis pistes abans de contestar, i que s'hi quedin: si la lectura xoca amb el Drive es torna
+    // a fer en silenci (la comprovació «dos mòbils») i durant un instant l'arxiu del mòbil torna a ser el d'abans de llegir
+    for (let quietes = 0, t = Date.now(); quietes < 4; ) {
+      cal(Date.now() - t < 12000, 'les sis pistes de Savall no es queden a l\'arxiu del mòbil');
+      const n = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=16');
+        return A.estat.db.exec("SELECT COUNT(*) FROM scrobble WHERE album = 'Das Paradies und die Peri'")[0].values[0][0]; });
+      quietes = n === 6 ? quietes + 1 : 0; await pagina.waitForTimeout(250);
+    }
     // la tarda, Amor (les tres primeres); la nit, Dormir (la repetida, la quarta i la primera que torna)
     const r = await pagina.evaluate(async () => {
       const A = await import('./js/arxiu.js?v=16'), E = await import('./js/escoltes.js?v=10');
@@ -604,6 +609,43 @@ export const COMPROVACIONS = [
     cal(/0 escoltes · a mitges/.test((await f.innerText()).replace(/\s+/g, ' ')), 'la fila del Bartók no diu «0 escoltes · a mitges»');
   } },
   // ───────── el tram 4: la còpia de seguretat i l'Excel (§3.5, ACT-566 a ACT-571, ACT-603, ACT-604) ─────────
+  { nom: 'caixa (ACT-625): la pista va a la part que diu el nom de l\'àlbum; sense número, a la viva; en tornar a calcular, el vol. 1 torna sol a la part 1', sintetic: true, async fes({ pagina, lb, consulta, esperaDesat, obreSafata }) {
+    const r0 = await pagina.evaluate(async () => {
+      const A = await import('./js/arxiu.js?v=16');
+      return A.canvia(db => {
+        db.run("INSERT INTO artista (id, nom_canonic) VALUES (920, 'D York')");
+        db.run("INSERT INTO album (id, titol, artista_id) VALUES (921, 'The Italian Chronicles', 920)");
+        db.run(`INSERT INTO edicio (id, album_id, durada_total, rotacio_actual, app_escolta, emparellaments, data_referencia_rotacio) VALUES (922, 921, 90, 1, 'amazon', ?, ?)`,
+               [JSON.stringify(['The Italian Chronicles volume 1', 'The Italian Chronicles']), new Date(Date.now() - 3 * 864e5).toISOString()]);
+        db.run(`INSERT INTO part (id, edicio_id, numero, nom, durada, rotacio_actual) VALUES (931, 922, 1, 'Vol. 1', 30, 0), (932, 922, 2, 'Vol. 2', 30, 1), (933, 922, 3, 'Vol. 3', 30, 0)`);
+      });
+    });
+    cal(r0.desat, 'no s\'ha desat la caixa: ' + r0.motiu);
+    const t = Date.now() - 16 * 3600e3, m = 60e3;   // compte de feina, entre el Bartók (−20 h) i Savall (−10 h 30); la lectura només mira 24 h enrere
+    const pista = (t, msid, album, min) => ({ compte: 'crimsonnnnfeina', listened_at: Math.floor(t / 1000), recording_msid: msid,
+      track_metadata: { artist_name: 'D York', track_name: msid, release_name: album, additional_info: { duration_ms: min * m } } });
+    // el vol. 1 sona amb la part 2 viva; després, una pista amb el nom sense número
+    lb.escoltes.push(pista(t, 'msid-banc-ic1', 'The Italian Chronicles volume 1', 25), pista(t + 60 * m, 'msid-banc-ic2', 'The Italian Chronicles', 10));
+    await obreSafata();
+    await pagina.waitForFunction(async () => { const A = await import('./js/arxiu.js?v=16');
+      return A.estat.db.exec("SELECT COUNT(*) FROM scrobble WHERE recording_msid LIKE 'msid-banc-ic%' AND escolta_id IS NOT NULL")[0].values[0][0] === 2; }, null, { timeout: 10000, polling: 250 });
+    await pagina.waitForTimeout(1500); await esperaDesat();
+    const partDe = msid => consulta(`SELECT e.part_id FROM scrobble s JOIN escolta e ON e.id = s.escolta_id WHERE s.recording_msid = '${msid}'`)[0]?.part_id;
+    igual(partDe('msid-banc-ic1'), 931, 'Escolta.part_id del «volume 1» (la part 1, no la viva)');
+    igual(partDe('msid-banc-ic2'), 932, 'Escolta.part_id de la pista sense número (la part viva)');
+    // el cas d'abans de l'ACT-625: l'escolta del vol. 1 havia quedat a la part 2; en tornar a calcular hi torna sola
+    const r = await pagina.evaluate(async () => {
+      const A = await import('./js/arxiu.js?v=16'), E = await import('./js/escoltes.js?v=10');
+      return A.canvia(db => {
+        db.run("UPDATE escolta SET part_id = 932 WHERE id = (SELECT escolta_id FROM scrobble WHERE recording_msid = 'msid-banc-ic1')");
+        E.recalcula(db);
+      });
+    });
+    cal(r.desat, 'no s\'ha desat el recàlcul: ' + r.motiu);
+    igual(partDe('msid-banc-ic1'), 931, 'Escolta.part_id del «volume 1» després de tornar a calcular');
+    igual(partDe('msid-banc-ic2'), 932, 'Escolta.part_id de la pista sense número després de tornar a calcular (no es mou)');
+    await pagina.click('[data-tornasafata]').catch(() => {});
+  } },
   { nom: 'còpia: la primera obertura n\'ha fet una, la parella .sqlite + .xlsx amb els recomptes a les propietats', async fes({ drive, pagina }) {
     const avui = new Date().toISOString().slice(0, 10);
     await pagina.waitForFunction(() => !document.body.classList.contains('sense-copia'), null, { timeout: 10000 }).catch(() => {});
