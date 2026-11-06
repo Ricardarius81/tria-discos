@@ -646,6 +646,20 @@ export const COMPROVACIONS = [
     igual(partDe('msid-banc-ic2'), 932, 'Escolta.part_id de la pista sense número després de tornar a calcular (no es mou)');
     await pagina.click('[data-tornasafata]').catch(() => {});
   } },
+  { nom: 'safata: la targeta d\'una caixa diu la part que ha sonat i la seva durada, no la de la caixa', sintetic: true, async fes({ pagina, obreSafata }) {
+    const r = await pagina.evaluate(async () => {
+      const A = await import('./js/arxiu.js?v=16'), E = await import('./js/escoltes.js?v=10');
+      return E.targetes(A.estat.db, { estat: 'totes' }).flatMap(c => c.discos).filter(d => d.edicio_id === 922)
+        .map(d => ({ nom: d.partNom, min: d.min, total: d.durada_total }));
+    });
+    igual(JSON.stringify(r.map(x => x.nom).sort()), '["Vol. 1","Vol. 2"]', 'Part.nom de cada targeta de la caixa (per Escolta.part_id)');
+    cal(r.every(x => x.min === 30 && x.total === null), 'la durada de cada targeta hauria de ser la de la part (30′), no la de la caixa (90′): ' + JSON.stringify(r));
+    await obreSafata(); await pagina.waitForTimeout(300);
+    const t = (await pagina.locator('#s-safata').innerText()).replace(/\s+/g, ' ');
+    cal(/D York · Vol\. 1/.test(t) && /D York · Vol\. 2/.test(t), 'la safata no diu «D York · Vol. 1» i «D York · Vol. 2»');
+    cal(!/The Italian Chronicles D York[^·]*90′/.test(t), 'la safata encara ensenya els 90′ de la caixa');
+    await pagina.click('[data-tornasafata]').catch(() => {});
+  } },
   { nom: 'còpia: la primera obertura n\'ha fet una, la parella .sqlite + .xlsx amb els recomptes a les propietats', async fes({ drive, pagina }) {
     const avui = new Date().toISOString().slice(0, 10);
     await pagina.waitForFunction(() => !document.body.classList.contains('sense-copia'), null, { timeout: 10000 }).catch(() => {});

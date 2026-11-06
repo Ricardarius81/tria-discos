@@ -517,6 +517,8 @@ export function targetes(db, { estat = 'pendent', limit = null, ara = Date.now()
   }
   const eds = new Map(files(db, `SELECT e.id, a.titol, a.conjunt, ar.nom_canonic AS art, e.durada_total, e.portada, e.app_escolta
                                  FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id`).map(e => [e.id, e]));
+  const partDe = new Map(files(db, `SELECT e.id AS escolta, p.id, p.numero, p.nom, p.durada FROM escolta e JOIN part p ON p.id = e.part_id`)
+    .map(x => [x.escolta, x]));
   for (const c of out) {
     c.clau = c.scr[0].id;                         // la targeta es reconeix per la seva primera pista
     c.inici = c.scr[0].listened_at;
@@ -534,6 +536,18 @@ export function targetes(db, { estat = 'pendent', limit = null, ara = Date.now()
       d.scr.push(s); discos.set(k, d);
     }
     c.discos = [...discos.values()];
+    // La part que ha sonat d'una caixa (6-11, The Italian Chronicles): el nom i la durada de la part, no els de la caixa
+    // sencera. Dos volums seguits a la mateixa targeta fan una sola línia, «Vol. 1 + Vol. 2», amb la suma de durades.
+    // Camps: Escolta.part_id → Part.nom, Part.numero, Part.durada. Sense durada en alguna part, no se n'ensenya cap.
+    for (const d of c.discos) {
+      if (!d.edicio_id) continue;
+      const ps = [...new Map(d.scr.map(s => partDe.get(s.escolta_id)).filter(Boolean).map(p => [p.id, p])).values()].sort((a, b) => a.numero - b.numero);
+      if (!ps.length) continue;
+      d.parts = ps;
+      d.partNom = ps.map(p => p.nom || 'Part ' + p.numero).join(' + ');
+      d.min = ps.every(p => p.durada) ? ps.reduce((x, p) => x + p.durada, 0) : null;
+      d.durada_total = null;
+    }
     // Cada disc, el seu estat (ACT-528). Dins d'una sessió que encara sona, un disc es pot contestar quan fa 5 minuts que
     // ha acabat la seva última pista (listened_at + duration_ms) o quan ja ha començat una pista d'un altre disc.
     // Pano envia cada pista al 50 % o als 4 minuts (ACT-529): la següent sempre arriba abans dels 5 minuts.

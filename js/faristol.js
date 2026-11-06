@@ -376,7 +376,7 @@ const franja = c => quan(c.inici).replace(/ · .*/, '') + ' · ' + hm(c.inici) +
 const mbCache = (() => { try { return new Map(Object.entries(JSON.parse(localStorage.getItem('tria-mb') || '{}'))); } catch { return new Map(); } })();
 function minDisc(d, extra = '') {
   return `<span class="sf-disc"><span class="hcob">${esc(inicials(d.art))}${d.portada ? IMG(d.portada) : ''}</span>
-    <span><span class="t">${esc(d.titol || '')}</span><span class="a">${esc(d.art || '')}${extra}</span></span><span class="m">${d.min || d.durada_total ? (d.min || d.durada_total) + '′' : ''}</span></span>`;
+    <span><span class="t">${esc(d.titol || '')}</span><span class="a">${esc(d.art || '')}${d.partNom ? ' · ' + esc(d.partNom) : ''}${extra}</span></span><span class="m">${d.min || d.durada_total ? (d.min || d.durada_total) + '′' : ''}</span></span>`;
 }
 function cuaSafata() {
   if (!A.estat.db) return { q2: [], nous: [], soltes: [], rot: [], tg: [] };
@@ -467,7 +467,7 @@ const clauDisc = d => d.clau[0] === 'n' ? d.clau.slice(1) : d.clau[0] === 'm' ? 
 // ensenyar només el de la primera pista contestada va fer veure «Treballant» on Ricard havia posat «Amor».
 const ctxDisc = d => d.scr.find(s => s.estat === 'resolt')?.context || '';
 function ctxPerDisc(c) {
-  const v = c.discos.map(d => [d.titol, ctxDisc(d)]), unics = [...new Set(v.map(x => x[1]))];
+  const v = c.discos.map(d => [d.titol + (d.partNom ? ' · ' + d.partNom : ''), ctxDisc(d)]), unics = [...new Set(v.map(x => x[1]))];
   return unics.length <= 1 ? esc(v.map(x => x[0]).join(', ')) + ' · ' + esc(unics[0] || '')
     : v.map(([t, x]) => `${esc(t)} · <b>${esc(x)}</b>`).join('; ');
 }
