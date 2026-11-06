@@ -27,6 +27,21 @@ const files = (db, sql, p = []) => {
 const un = (db, sql, p = []) => files(db, sql, p)[0] || null;
 const llista = s => { try { return s ? JSON.parse(s) : []; } catch { return []; } };
 export const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
+
+// ACT-619 (opció B de Ricard, 5-11): el «proper» d'un preferent només s'esborra quan entra en rotació el disc que diu,
+// amb el mateix títol (la normalització de la ACT-557) i d'aquest artista o d'un altre nom seu (Persona). Si entra un altre
+// disc seu, el proper es queda: no es pinta mentre l'artista té disc en rotació, i torna quan se'n queda sense.
+// Camps: preferent.proper_titol, album.titol, artista.persona.
+export function esborraProperSiEsAquest(db, edicioId) {
+  const e = un(db, `SELECT a.titol, COALESCE(ar.persona, ar.nom_canonic) AS p FROM edicio e JOIN album a ON a.id = e.album_id
+                    JOIN artista ar ON ar.id = a.artista_id WHERE e.id = ?`, [edicioId]);
+  if (!e || !norm(e.titol)) return 0;
+  const ps = files(db, `SELECT pr.id, pr.proper_titol, COALESCE(ar.persona, ar.nom_canonic) AS p FROM preferent pr
+                        JOIN artista ar ON ar.id = pr.artista_id WHERE pr.proper_titol IS NOT NULL`)
+    .filter(x => norm(x.p) === norm(e.p) && norm(x.proper_titol) === norm(e.titol));
+  for (const x of ps) db.run('UPDATE preferent SET proper_titol = NULL WHERE id = ?', [x.id]);
+  return ps.length;
+}
 const ms = iso => Date.parse(iso);
 const H = 3600e3, MIN = 60e3;
 
@@ -685,7 +700,7 @@ export const creaDiscNou = ({ album, artista, recording_msid, minuts, canal, rot
   db.run(`INSERT INTO edicio (album_id, durada_total, rotacio_actual, app_escolta, emparellaments, data_referencia_rotacio, lot_carrega)
           VALUES (?, ?, ?, ?, ?, ?, 'SAFATA')`, [albumId, minuts, rotacio ? 1 : 0, canal, JSON.stringify([album ? album : clauMsid(recording_msid)]), rotacio ? ara : null]);
   const id = un(db, 'SELECT last_insert_rowid() AS id').id;
-  if (rotacio) db.run('UPDATE preferent SET proper_titol = NULL WHERE artista_id = ?', [a.id]);
+  if (rotacio) esborraProperSiEsAquest(db, id);
   recalcula(db);
   return { id, artista_id: a.id };
 };
@@ -720,7 +735,7 @@ export function preguntesRotacio(db, ara = Date.now()) {
   return out;
 }
 // Les respostes. Només el «no» de la 7 reescriu la data; a la 8 i a la 9, qualsevol resposta (§8.10).
-export const respon7 = (id, si) => db => si ? db.run('UPDATE edicio SET rotacio_actual = 1 WHERE id = ?', [id])
+export const respon7 = (id, si) => db => si ? (db.run('UPDATE edicio SET rotacio_actual = 1 WHERE id = ?', [id]), esborraProperSiEsAquest(db, id))
                                           : db.run('UPDATE edicio SET data_referencia_rotacio = ? WHERE id = ?', [new Date().toISOString(), id]);
 export const tocaReferencia = id => db => db.run('UPDATE edicio SET data_referencia_rotacio = ? WHERE id = ?', [new Date().toISOString(), id]);
 

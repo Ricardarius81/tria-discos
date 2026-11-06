@@ -116,7 +116,7 @@ export const COMPROVACIONS = [
       track_metadata: { artist_name: 'Biosphere', track_name: 'Angel\'s Flight (bonus)', release_name: 'Angel\'s Flight', additional_info: { duration_ms: 60e3 } } });
     await pagina.click('#btSafata'); await pagina.waitForTimeout(900); await esperaDesat();
     const r = await pagina.evaluate(async () => {
-      const E = await import('./js/escoltes.js?v=9'); const A = await import('./js/arxiu.js?v=16');
+      const E = await import('./js/escoltes.js?v=10'); const A = await import('./js/arxiu.js?v=16');
       const SQL = await initSqlJs({ locateFile: f => 'vendor/sqljs/' + f });
       const c = new SQL.Database(A.estat.db.export()), despres = Date.now() + 2 * 3600e3;
       const n = E.heretaRespostes(despres)(c);
@@ -230,7 +230,7 @@ export const COMPROVACIONS = [
   } },
   { nom: 'ignora sempre: no compta al veredicte de la safata', sintetic: true, async fes({ pagina }) {
     // El veredicte és una funció pura sobre l'arxiu: es crida dins la pàgina, amb el mòdul de la màquina.
-    const v = await pagina.evaluate(async () => { const E = await import('./js/escoltes.js?v=9'); const A = await import('./js/arxiu.js?v=16'); return E.veredicte(A.estat.db); });
+    const v = await pagina.evaluate(async () => { const E = await import('./js/escoltes.js?v=10'); const A = await import('./js/arxiu.js?v=16'); return E.veredicte(A.estat.db); });
     igual(v.ignorades, 0, 'targetes ignorades al veredicte');
   } },
   { nom: 'ignora sempre: un botó de La Cabina obre la llista, i «Treu-lo» la buida', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
@@ -374,7 +374,7 @@ export const COMPROVACIONS = [
   // ───────── la darrera lectura (3-11, Porgy and Bess) ─────────
   { nom: 'lectura: un disc que sona no es dona per acabat fins que una lectura ho sap, encara que el rellotge digui que sí', sintetic: true, async fes({ pagina }) {
     const r = await pagina.evaluate(async () => {
-      const E = await import('./js/escoltes.js?v=9'); const A = await import('./js/arxiu.js?v=16');
+      const E = await import('./js/escoltes.js?v=10'); const A = await import('./js/arxiu.js?v=16');
       const ara = Date.now(), despres = ara + 40 * 60e3;          // Structures from Silence acaba d'aquí 22 minuts
       const d = (llegit, a = despres) => { const c = E.targetes(A.estat.db, { estat: 'totes', ara: a, llegit }).find(t => t.discos.some(x => x.titol === 'Structures from Silence'));
         return { targeta: c.estat, llest: c.discos.find(x => x.titol === 'Structures from Silence').llest }; };
@@ -495,7 +495,7 @@ export const COMPROVACIONS = [
       return A.estat.db.exec("SELECT COUNT(*) FROM scrobble WHERE album = 'Das Paradies und die Peri'")[0].values[0][0] === 6; }, null, { timeout: 10000, polling: 250 });
     // la tarda, Amor (les tres primeres); la nit, Dormir (la repetida, la quarta i la primera que torna)
     const r = await pagina.evaluate(async () => {
-      const A = await import('./js/arxiu.js?v=16'), E = await import('./js/escoltes.js?v=9');
+      const A = await import('./js/arxiu.js?v=16'), E = await import('./js/escoltes.js?v=10');
       const ids = A.estat.db.exec("SELECT id FROM scrobble WHERE album = 'Das Paradies und die Peri' ORDER BY listened_at")[0].values.map(v => v[0]);
       return A.canvia(db => { E.contesta(ids.slice(0, 3), 'Amor')(db); E.contesta(ids.slice(3), 'Dormir')(db); });
     });
@@ -566,7 +566,7 @@ export const COMPROVACIONS = [
     igual(consulta('SELECT durada_total FROM edicio WHERE id = 11')[0].durada_total, 52, 'Edició.Durada total de Variant Immersions');
     igual(consulta('SELECT completitud FROM escolta WHERE edicio_id = 11')[0].completitud, 0.769, 'Escolta.completitud de Variant Immersions (40′ de 52′)');
     // i es deixa com era, per a les comprovacions que vénen després
-    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=16'), E = await import('./js/escoltes.js?v=9');
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=16'), E = await import('./js/escoltes.js?v=10');
       await A.canvia(db => { db.run('UPDATE edicio SET durada_total = 79 WHERE id = 11'); E.recalcula(db); }); });
   } },
   { nom: 'pregunta 2 (A): un disc en rotació amb un títol diferent (Bartók) es pregunta per l\'artista, no surt com a disc nou', sintetic: true, async fes({ pagina, lb, consulta, esperaDesat, obreSafata }) {
@@ -675,6 +675,26 @@ export const COMPROVACIONS = [
     await pagina.click('#safataCos [data-notaok]'); await esperaDesat();
     igual(consulta(`SELECT COUNT(*) AS n FROM meta WHERE clau = 'copia-nota'`)[0].n, 0, 'nota després d\'«Entesos»');
     await pagina.click('[data-tornasafata]').catch(() => {});
+  } },
+  // ───────── el proper d'un preferent (ACT-619) ─────────
+  { nom: 'proper: si entra un altre disc de l\'artista es queda amagat i torna; només l\'esborra el mateix títol', sintetic: true, async fes({ pagina, consulta, esperaDesat, tornaFaristol }) {
+    const proper = () => consulta(`SELECT proper_titol AS t FROM preferent WHERE artista_id = 4`)[0].t;
+    igual(proper(), 'Kind of Blue', 'proper de Miles Davis abans de res');
+    const id = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=16'), D = await import('./js/dades.js?v=18');
+      let r; await A.canvia(db => { r = D.posaEnRotacio({ art: 'Miles Davis', tit: 'Sketches of Spain', min: 41, canal: 'youtube' })(db); }); return r.id; });
+    await esperaDesat();
+    igual(proper(), 'Kind of Blue', 'preferent.proper_titol després d\'entrar un altre disc seu');
+    await reobre(pagina); await tornaFaristol('pref');   // A.canvia no repinta: es torna a obrir
+    let t = await pagina.locator('#files').innerText();
+    cal(/Ara estudies\s+Sketches of Spain/.test(t) && !t.includes('El proper: Kind of Blue'), 'amb disc en rotació el proper no s\'ha de pintar: ' + JSON.stringify(t));
+    await pagina.evaluate(async id => { const A = await import('./js/arxiu.js?v=16'), D = await import('./js/dades.js?v=18'); await A.canvia(D.treu(id)); }, id);
+    await esperaDesat(); await reobre(pagina); await tornaFaristol('pref');
+    t = await pagina.locator('#files').innerText();
+    cal(t.includes('El proper: Kind of Blue'), 'sense disc en rotació el proper havia de tornar: ' + t.slice(0, 200));
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=16'), D = await import('./js/dades.js?v=18');
+      await A.canvia(D.posaEnRotacio({ art: 'Miles Davis', tit: 'kind of blue', min: 46, canal: 'youtube' })); });
+    await esperaDesat();
+    igual(proper(), null, 'preferent.proper_titol després d\'entrar el mateix disc (amb majúscules diferents)');
   } },
   { nom: 'excel: anada i tornada idèntica fila a fila, amb les nou pestanyes i les columnes de càrrega del §3.2', async fes({ pagina, consulta }) {
     const r = await pagina.evaluate(async () => {

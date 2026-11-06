@@ -8,8 +8,8 @@
 // Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 
 import * as A from './arxiu.js?v=16';
-import * as D from './dades.js?v=17';
-import * as E from './escoltes.js?v=9';
+import * as D from './dades.js?v=18';
+import * as E from './escoltes.js?v=10';
 import * as LB from './listenbrainz.js?v=2';
 import * as I from './imatges.js?v=4';
 import * as T from './tags.js?v=1';
@@ -280,7 +280,7 @@ function pintaArtista(id) {
       <div><h1>${esc(p.nom)}</h1><div class="estat" style="font-size:12.5px">${r ? 'Amb disc en rotació' : 'Preferent'}</div></div>
     </div>
     ${r ? `<div class="marcador ${r.portada ? 'amb-cob' : ''}">${r.portada ? `<span class="cob-fila">${IMG(r.portada)}</span>` : ''}<div><p class="cita">Ara estudies ${esc(r.titol)}.</p><p>És a Discos en Rotació.</p></div></div>`
-      : p.proper_titol ? `<div class="marcador"><p class="cita">El proper: ${esc(p.proper_titol)}.</p><p>Quan un disc seu entri en rotació, aquesta nota s'esborra.</p>
+      : p.proper_titol ? `<div class="marcador"><p class="cita">El proper: ${esc(p.proper_titol)}.</p><p>Quan aquest disc entri en rotació, aquesta nota s'esborra. Si n'entra un altre seu, la nota s'espera.</p>
           <div class="barra-accions" style="position:static;padding:4px 0 0"><button class="bt principal" data-escproper="${p.id}">Escoltar ara</button>
           <button class="bt" data-triaproper="${p.id}">Canvia'l</button><button class="bt discret" data-treuproper="${p.id}">Treu-lo</button></div></div>`
       : `<div class="marcador"><p class="cita">Encara no ha sonat res seu.</p><p>La màquina només sap el que passa des del dia que arrenca. Quan arribin les escoltes, sortirà aquí.</p></div>`}

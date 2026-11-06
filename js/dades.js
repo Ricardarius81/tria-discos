@@ -12,7 +12,7 @@ const llista = s => { try { return s ? JSON.parse(s) : []; } catch { return []; 
 const json = v => (v && v.length ? JSON.stringify(v) : null);
 const ara = () => new Date().toISOString();
 import * as T from './tags.js?v=1';
-import { SQL_COMPTA } from './escoltes.js?v=9';
+import { SQL_COMPTA, esborraProperSiEsAquest } from './escoltes.js?v=10';
 
 const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
 
@@ -62,8 +62,7 @@ function carrega(db, on, params = []) {
 // Posar en rotació una edició que ja és a l'arxiu (des de l'Historial): té durada per força (ACT-188).
 export const posaIdEnRotacio = id => db => {
   db.run('UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ? WHERE id = ?', [ara(), id]);
-  const a = un(db, 'SELECT a.artista_id FROM edicio e JOIN album a ON a.id = e.album_id WHERE e.id = ?', [id]);
-  if (a) db.run('UPDATE preferent SET proper_titol = NULL WHERE artista_id = ?', [a.artista_id]);
+  esborraProperSiEsAquest(db, id); // ACT-619
 };
 
 export function edicio(db, id) {
@@ -171,6 +170,7 @@ export const posaPart = (id, numero) => db => {
   db.run('UPDATE part SET rotacio_actual = 0 WHERE edicio_id = ?', [id]);
   db.run('UPDATE part SET rotacio_actual = 1 WHERE edicio_id = ? AND numero = ?', [id, numero]);
   db.run('UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ? WHERE id = ?', [ara(), id]);
+  esborraProperSiEsAquest(db, id); // ACT-619
 };
 
 export const puntua = (id, valor) => db => {
@@ -229,8 +229,8 @@ export const posaEnRotacio = ({ art, tit, min, canal }) => db => {
             VALUES (?, ?, 1, ?, ?, ?, 'FARISTOL')`, [albumId, min, fisic ? null : canal, fisic ? json([canal]) : null, ara()]);
     res.id = un(db, 'SELECT last_insert_rowid() AS id').id;
   }
-  // Quan un disc d'un preferent entra a la rotació, la nota del «proper» s'esborra (maqueta v13, A.49).
-  db.run('UPDATE preferent SET proper_titol = NULL WHERE artista_id = ?', [a.id]);
+  // El «proper» només s'esborra si el disc que entra és el mateix (ACT-619; abans, qualsevol disc seu).
+  esborraProperSiEsAquest(db, res.id);
   return res;
 };
 
