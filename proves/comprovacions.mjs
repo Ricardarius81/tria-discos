@@ -458,6 +458,14 @@ export const COMPROVACIONS = [
     }
     igual(await oberta().count(), 0, 'sessions obertes amb Structures, tot contestat i res sonant');
   } },
+  { nom: 'sessió oberta: la que s\'amaga surt ja a «Resoltes», «sonant fa poc», i el seu «Canvia» s\'obre', sintetic: true, async fes({ pagina }) {
+    const fila = pagina.locator('#safataCos .sf-resolta', { hasText: 'Structures from Silence' });
+    igual(await fila.count(), 1, 'files de «Resoltes» amb Structures from Silence');
+    cal(/sonant fa poc/.test(await fila.innerText()), 'la fila no diu «sonant fa poc»: ' + await fila.innerText());
+    await fila.locator('[data-sfresolta]').click(); await pagina.waitForTimeout(300);
+    cal(await pagina.locator('#full.obert [data-sfreobre]').count() > 0, '«Canvia» d\'una sessió oberta no obre la fulla');
+    await pagina.click('[data-tornafull]').catch(() => {}); await pagina.waitForTimeout(300);
+  } },
 
   // ───────── 4-11: portades, trossos sumats, «a mitges», el mosaic del grup i l'arrencada sense connexió ─────────
   { nom: 'portada: una pista llegida abans del lligam amb MusicBrainz l\'agafa en rellegir-la, i el disc pren la portada de l\'escolta', sintetic: true, async fes({ pagina, lb, consulta, esperaDesat }) {

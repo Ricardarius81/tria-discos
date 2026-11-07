@@ -558,8 +558,10 @@ function pintaSafata() {
   }).join('');
   if (!n) h += `<div class="sf-buit"><b>Res per resoldre</b>${E.arrencada(db()) ? 'La màquina llegeix les dues comptes de ListenBrainz des del ' + dia(E.arrencada(db())) + ' cada vegada que obres l\'app i quan toques la safata.' : 'Quan hi hagi connexió, la màquina començarà a llegir ListenBrainz.'}${estat.lbError ? '<br><small>' + esc(estat.lbError) + '</small>' : ''}</div>`;
   // les resoltes, amb «Canvia» (tot el que es contesta aquí és editable sempre, §8.7)
-  const res = tg.filter(c => c.estat === 'resolta' && !cuaTg.includes(c)).slice(0, 8);
-  if (res.length) h += `<h2 style="margin-top:22px">Resoltes</h2>` + res.map(c => `<div class="sf-resolta"><span><b>${esc(franja(c))}</b> · ${ctxPerDisc(c)}</span>
+  // També la sessió oberta amagada (tot contestat i res sonant): surt ja aquí, «sonant fa poc» (6-11, Ricard), perquè el que
+  // s'acaba de contestar es pugui veure i canviar. Si comença un altre disc dins els 30 minuts, torna a «Sonant ara».
+  const res = tg.filter(c => (c.estat === 'resolta' && !cuaTg.includes(c)) || (c.estat === 'oberta' && !obertes.includes(c))).slice(0, 8);
+  if (res.length) h += `<h2 style="margin-top:22px">Resoltes</h2>` + res.map(c => `<div class="sf-resolta"><span><b>${esc(franja(c))}</b>${c.estat === 'oberta' ? ' · <i>sonant fa poc</i>' : ''} · ${ctxPerDisc(c)}</span>
       <button data-sfresolta="${c.clau}">Canvia</button></div>`).join('');
   caixa.innerHTML = h;
   I.omple(caixa);
@@ -1244,7 +1246,7 @@ document.addEventListener('click', e => {
   if (d.excel) { descarregaExcel(); return; }
   if (d.alarmaok) { fes(C.treuAlarma, 'D\'acord. La propera còpia torna a rotar.', { desfes: false }).then(() => fullCabina()); return; }
   if (d.notaok) { fes(C.treuNota, 'Entesos.', { desfes: false }); return; }
-  if (d.sfresolta) { const c = E.targetes(db(), { estat: 'resolt' }).find(x => x.clau === +d.sfresolta); if (!c) return;
+  if (d.sfresolta) { const c = E.targetes(db(), { estat: 'totes' }).find(x => x.clau === +d.sfresolta); if (!c) return;
     obreFull(`<h3>${esc(franja(c))}</h3><p>${ctxPerDisc(c)}</p><div class="canals">
       <button data-sfreobre="${c.scr.map(x => x.id).join(',')}">On ho escoltaves${c.discos.length > 1 ? ', tota la sessió' : ''} <small>torna la targeta a la safata</small></button>
       ${c.discos.length > 1 ? c.discos.map(x => `<button data-sfreobre="${x.scr.map(s => s.id).join(',')}">On escoltaves ${esc(x.titol)} <small>ara: ${esc(ctxDisc(x))} · només aquest disc torna a la safata</small></button>`).join('') : ''}
