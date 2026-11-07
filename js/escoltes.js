@@ -443,7 +443,13 @@ export function historial(db) {
 }
 
 // Té cara de disc (el mateix llindar que fa néixer un disc nou, ACT-461): «És un disc», dues pistes o més, o 15 minuts sonats.
-const caraDeDisc = (x, forcats) => forcats.has(x.clau) || x.pistes.size >= 2 || [...x.pistes.values()].reduce((a, b) => a + b, 0) >= 15 * MIN;
+// Les cançons d'una Llista de reproducció no compten per fer néixer un disc (opció C de Ricard, 7-11): el que sona amb una
+// llista no és escoltar un disc. Es calcula amb llista_canco.recording_msid: si una pista és a alguna llista, no compta ni
+// pel nombre de pistes ni pel temps sonat. Si totes les pistes del nom són de llistes, queden com a cançons soltes.
+const pistesDeLlista = db => new Set(files(db, 'SELECT DISTINCT recording_msid FROM llista_canco').map(r => r.recording_msid));
+const propies = (x, enLlista) => [...x.pistes.entries()].filter(([m]) => !enLlista.has(m)).map(([, d]) => d);
+const caraDeDisc = (x, forcats, enLlista = new Set()) => { const p = propies(x, enLlista);
+  return forcats.has(x.clau) || p.length >= 2 || p.reduce((a, b) => a + b, 0) >= 15 * MIN; };
 
 // ───────── la pregunta 2, per a la safata ─────────
 // Els noms d'àlbum que han sonat des de l'Arrencada, no estan confirmats ni rebutjats, i tenen alguna edició candidata.
@@ -462,10 +468,10 @@ export function preguntes2(db) {
     x.pistes.set(s.recording_msid, s.duration_ms || 0); x.darrera = s.listened_at;
     per.set(k, x);
   }
-  const out = [], forcats = new Set(esUnDisc(db));
+  const out = [], forcats = new Set(esUnDisc(db)), enLlista = pistesDeLlista(db);
   for (const x of per.values()) {
     const minuts = Math.round([...x.pistes.values()].reduce((a, b) => a + b, 0) / MIN) || null;
-    const c = candidates(db, { album: x.album, artista: x.artista, minuts, perArtista: caraDeDisc(x, forcats) });
+    const c = candidates(db, { album: x.album, artista: x.artista, minuts, perArtista: caraDeDisc(x, forcats, enLlista) });
     if (!c.length) continue;
     out.push({ ...x, n: x.pistes.size, minuts, candidates: c.slice(0, 6) });
   }
@@ -675,7 +681,7 @@ export const ignora = ids => db => {
 // Els noms d'àlbum que han sonat i no casen amb res: sense cap edició candidata, o amb «No és cap d'aquestes».
 // infoMB: Map de release_mbid → { titol, pistes, minuts } que porta qui crida (es consulta, no es desa).
 export function discosNous(db, infoMB = new Map()) {
-  const mapa = mapaEmparellaments(db), rebs = new Set(rebutjats(db)), forcats = new Set(esUnDisc(db));
+  const mapa = mapaEmparellaments(db), rebs = new Set(rebutjats(db)), forcats = new Set(esUnDisc(db)), enLlista = pistesDeLlista(db);
   const scr = files(db, `SELECT id, listened_at, artista, pista, album, duration_ms, recording_msid, release_mbid FROM scrobble
                          WHERE estat != 'ignorat' ORDER BY listened_at`);
   const per = new Map();
@@ -690,7 +696,7 @@ export function discosNous(db, infoMB = new Map()) {
   }
   const nous = [], soltes = [];
   for (const x of per.values()) {
-    if (!rebs.has(x.clau) && candidates(db, { album: x.album, artista: x.artista, perArtista: caraDeDisc(x, forcats) }).length) continue;   // espera la pregunta 2
+    if (!rebs.has(x.clau) && candidates(db, { album: x.album, artista: x.artista, perArtista: caraDeDisc(x, forcats, enLlista) }).length) continue;   // espera la pregunta 2
     const mbid = [...x.mbids.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
     const mb = mbid ? infoMB.get(mbid) : null;
     // El nombre de pistes de MusicBrainz només es creu si el seu títol és el release_name (ACT-461): si no, el mapeig
@@ -699,7 +705,7 @@ export function discosNous(db, infoMB = new Map()) {
     const durs = [...x.pistes.values()];
     const totes = mbBo && mb.pistes && x.pistes.size >= mb.pistes;
     const sonat = durs.reduce((a, b) => a + b, 0);
-    const neix = forcats.has(x.clau) || totes || x.pistes.size >= 2 || sonat >= 15 * MIN;
+    const neix = totes || caraDeDisc(x, forcats, enLlista);
     // La durada proposada (ACT-457): la de MusicBrainz si l'escolta ve identificada; si no, la suma del que ha sonat,
     // sense la pista que dura com totes les altres juntes (l'alarma de resolucio-durades).
     let suma = sonat;

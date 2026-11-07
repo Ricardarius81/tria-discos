@@ -8,8 +8,8 @@
 // Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 
 import * as A from './arxiu.js?v=17';
-import * as D from './dades.js?v=19';
-import * as E from './escoltes.js?v=10';
+import * as D from './dades.js?v=20';
+import * as E from './escoltes.js?v=11';
 import * as LB from './listenbrainz.js?v=2';
 import * as I from './imatges.js?v=4';
 import * as T from './tags.js?v=1';
@@ -805,6 +805,8 @@ async function cercaPortada() {
       || '<p class="subtitol">Res. Prova un altre títol, o buida l\'artista.</p>';
   } catch (e) { caixa.innerHTML = `<p class="subtitol">MusicBrainz no respon (${esc(e.message)}). Torna-hi d'aquí a una estona.</p>`; }
 }
+// Després de canviar una portada (de l'edició o d'una part), es torna a la fitxa del disc, no a la pantalla de sota.
+function tornaFitxa(id) { const y = id && (D.edicio(db(), +id) || D.fitxa(db(), +id)); if (y) fullFitxa(y); else tancaFull(); }
 async function pujaPortada(d, fitxer) {
   if (!A.tePermis()) { avisa('Per pujar una portada cal estar connectat amb el Drive.'); return; }
   avisa('Pujant la portada…');
@@ -812,7 +814,7 @@ async function pujaPortada(d, fitxer) {
     const blob = await I.redueix(fitxer);
     const ref = 'drive:' + await A.pujaPortada(d.art + ' - ' + d.titol, blob);
     await I.guardaJa(ref, blob);
-    tancaFull(); fes(d.partId ? D.posaPortadaPart(d.partId, ref) : D.posaPortada(d.id, ref, 'pujada'), 'Portada desada');
+    fes(d.partId ? D.posaPortadaPart(d.partId, ref) : D.posaPortada(d.id, ref, 'pujada'), 'Portada desada'); tornaFitxa(d.id);
   } catch (e) { avisa('No s\'ha pogut pujar la portada: ' + e.message); }
 }
 
@@ -1504,11 +1506,11 @@ document.addEventListener('click', e => {
   if (d.portadapart) { const [id, pid] = d.portadapart.split(':').map(Number), x = rot(id), p = x?.parts.find(y => y.id === pid); if (!p) return;
     fullPortada({ ...x, titol: x.titol + (p.nom ? ' ' + p.nom : ' ' + p.numero), portada: p.portada, partId: pid }); return; }
   if (d.cercaportada) { cercaPortada(); return; }
-  if (d.triaportada) { const x = estat.portadaDe; if (!x) return; tancaFull();
-    fes(x.partId ? D.posaPortadaPart(x.partId, d.triaportada) : D.posaPortada(x.id, d.triaportada, 'triada'), x.partId ? 'Portada de la part triada' : 'Portada triada'); return; }
+  if (d.triaportada) { const x = estat.portadaDe; if (!x) return;
+    fes(x.partId ? D.posaPortadaPart(x.partId, d.triaportada) : D.posaPortada(x.id, d.triaportada, 'triada'), x.partId ? 'Portada de la part triada' : 'Portada triada'); tornaFitxa(x.id); return; }
   if (d.pujaportada) { $('#inPortada')?.click(); return; }
-  if (d.noportada?.startsWith('p')) { tancaFull(); fes(D.posaPortadaPart(+d.noportada.slice(1), null), 'Portada de la part fora: fa servir la de la caixa.'); return; }
-  if (d.noportada) { const id = +d.noportada; tancaFull(); fes(D.rebutjaPortada(id), 'Portada fora. Arribarà amb les escoltes, o la tries tu.'); return; }
+  if (d.noportada?.startsWith('p')) { const id = estat.portadaDe?.id; fes(D.posaPortadaPart(+d.noportada.slice(1), null), 'Portada de la part fora: fa servir la de la caixa.'); tornaFitxa(id); return; }
+  if (d.noportada) { const id = +d.noportada; fes(D.rebutjaPortada(id), 'Portada fora. Arribarà amb les escoltes, o la tries tu.'); tornaFitxa(id); return; }
   if (d.canviafoto) { const p = D.preferents(db()).find(x => x.id === +d.canviafoto); if (p) fullFoto(p); return; }
   if (d.cercafoto) { cercaFoto(); return; }
   if (d.triafoto) { const p = estat.fotoDe; if (!p) return; tancaFull(); cercaFotoN++;
