@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { ARREL, arxiu, escoltesLB, motor } from './fixture.mjs';
-import { DriveFals, ListenBrainzFals, GSI_FALS } from './falsos.mjs';
+import { DriveFals, ListenBrainzFals, GSI_FALS, FontsFalses } from './falsos.mjs';
 import { COMPROVACIONS } from './comprovacions.mjs';
 
 const require = createRequire(import.meta.url);
@@ -37,6 +37,7 @@ const carpeta = drive.afegeix({ name: 'La Meva Discoteca', mimeType: 'applicatio
 const bytes = ARXIU ? fs.readFileSync(ARXIU) : await arxiu(ara);
 drive.afegeix({ name: 'la-meva-discoteca.sqlite', mimeType: 'application/x-sqlite3', parents: [carpeta.id], bytes });
 const lb = new ListenBrainzFals(ARXIU ? [] : escoltesLB(ara));
+const fonts = new FontsFalses();
 const fugides = [], errors = [];
 
 const navegador = await chromium.launch();
@@ -47,6 +48,7 @@ await context.route('**/*', async route => {
   if (u.host === 'accounts.google.com' && u.pathname.startsWith('/gsi/client')) return route.fulfill({ status: 200, contentType: 'text/javascript', body: GSI_FALS });
   if (u.host === 'www.googleapis.com') return drive.atén(route);
   if (u.host === 'api.listenbrainz.org') return lb.atén(route);
+  if (await fonts.atén(route)) return;
   fugides.push(u.host + u.pathname);
   return route.abort('blockedbyclient');
 });
@@ -59,7 +61,7 @@ const S = await motor();
 const versioInicial = (() => { const d = new S.Database(bytes); const v = d.exec('PRAGMA user_version')[0].values[0][0]; d.close(); return v; })();
 const ctx = {
   versioInicial,
-  pagina, drive, lb, ara, ORIGEN, fugides, errors, real: !!ARXIU,
+  pagina, drive, lb, fonts, ara, ORIGEN, fugides, errors, real: !!ARXIU,
   $: s => pagina.locator(s),
   espera: ms => pagina.waitForTimeout(ms),
   // L'arxiu tal com és ara al Drive fals, obert amb sql.js. Qui el demana el tanca.

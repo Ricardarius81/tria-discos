@@ -8,7 +8,7 @@
 // Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 
 import * as A from './arxiu.js?v=17';
-import * as D from './dades.js?v=21';
+import * as D from './dades.js?v=22';
 import * as E from './escoltes.js?v=11';
 import * as LB from './listenbrainz.js?v=2';
 import * as I from './imatges.js?v=4';
@@ -16,6 +16,7 @@ import * as T from './tags.js?v=1';
 import * as C from './copies.js?v=2';
 import * as X from './excel.js?v=2';
 import * as L from './llistes.js?v=1';
+import * as V from './discografia.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -276,23 +277,82 @@ function pintaFiles() {
 function pintaArtista(id) {
   const p = D.preferents(db()).find(x => x.id === id);
   if (!p) { vesA('faristol'); sub('pref'); return; }
-  const r = p.rot, foto = p.retrat || r?.portada || null;
+  const r = p.rot, foto = p.retrat || r?.portada || null, pv = D.partidesVei(db(), p.id);
+  // El proper (ACT-627): a la pantalla de l'artista es veu també quan té disc en rotació, sota «Ara estudies».
+  // A la fila de preferents continua amagat (ACT-619).
+  const blocProper = p.proper_titol ? `<div class="marcador"><p class="cita">El proper: ${esc(p.proper_titol)}.</p><p>Quan aquest disc entri en rotació, aquesta nota s'esborra. Si n'entra un altre seu, la nota s'espera.</p>
+          <div class="barra-accions" style="position:static;padding:4px 0 0"><button class="bt principal" data-escproper="${p.id}">Escoltar ara</button>
+          <button class="bt" data-triaproper="${p.id}">Canvia'l</button><button class="bt discret" data-treuproper="${p.id}">Treu-lo</button></div></div>` : '';
+  // El disc anterior i el següent (ACT-626, ACT-646): aquí, al costat del proper. Sense partida, la discografia (ACT-650).
+  const desDe = pv.discos.length > 1 ? `des de quin? ${pv.discos.length} en rotació` : pv.discos.length ? `des de «${esc(pv.discos[0].titol)}»` : '';
+  const botonsVei = pv.discos.length
+    ? `<button data-vei="${p.id}:ant">◀ Disc anterior <small>${desDe}</small></button><button data-vei="${p.id}:seg">Disc següent ▶ <small>${desDe}</small></button>`
+    : `<button data-discografia="${p.id}">Tria de la discografia <small>segons MusicBrainz</small></button>`;
   $('#s-artista').innerHTML = `<button class="enrere" data-tornar="1">← Tornar</button>
     <div class="cap-artista">
       <span class="retrat-gran">${esc(inicials(p.nom))}${foto ? IMG(foto) : ''}</span>
       <div><h1>${esc(p.nom)}</h1><div class="estat" style="font-size:12.5px">${r ? 'Amb disc en rotació' : 'Preferent'}</div></div>
     </div>
-    ${r ? `<div class="marcador ${r.portada ? 'amb-cob' : ''}">${r.portada ? `<span class="cob-fila">${IMG(r.portada)}</span>` : ''}<div><p class="cita">Ara estudies ${esc(r.titol)}.</p><p>És a Discos en Rotació.</p></div></div>`
-      : p.proper_titol ? `<div class="marcador"><p class="cita">El proper: ${esc(p.proper_titol)}.</p><p>Quan aquest disc entri en rotació, aquesta nota s'esborra. Si n'entra un altre seu, la nota s'espera.</p>
-          <div class="barra-accions" style="position:static;padding:4px 0 0"><button class="bt principal" data-escproper="${p.id}">Escoltar ara</button>
-          <button class="bt" data-triaproper="${p.id}">Canvia'l</button><button class="bt discret" data-treuproper="${p.id}">Treu-lo</button></div></div>`
+    ${r ? `<div class="marcador ${r.portada ? 'amb-cob' : ''}">${r.portada ? `<span class="cob-fila">${IMG(r.portada)}</span>` : ''}<div><p class="cita">Ara estudies ${esc(r.titol)}.</p><p>És a Discos en Rotació.</p></div></div>${blocProper}`
+      : p.proper_titol ? blocProper
+      : pv.de === 'escolta' ? `<div class="marcador"><p class="cita">L'últim que ha sonat: ${esc(pv.discos[0].titol)}.</p><p>D'aquí compten el disc anterior i el següent.</p></div>`
       : `<div class="marcador"><p class="cita">Encara no ha sonat res seu.</p><p>La màquina només sap el que passa des del dia que arrenca. Quan arribin les escoltes, sortirà aquí.</p></div>`}
     <div class="canals" style="margin-top:14px">
+      ${botonsVei}
       ${(!r && !p.proper_titol) ? `<button data-triaproper="${p.id}">Tria el proper disc <small>el primer que vols escoltar</small></button>` : ''}
       <button data-canviafoto="${p.id}">Canvia la foto <small>${{ ma: 'la vas pujar tu', triat: 'la vas triar tu', sonda: 'la va trobar la màquina', rebutjat: 'la de la màquina no era' }[p.retrat_origen] || 'no n\'ha arribat cap de sola'}</small></button>
     </div>
     <div class="barra-accions" style="position:static;padding:14px 0 0"><button class="bt discret" data-desprefer="${p.id}">Treu-lo de preferents</button></div>`;
   I.omple($('#s-artista'));
+}
+
+// ───────── el disc anterior i el següent (ACT-626, ACT-646 a ACT-652) ─────────
+// Un selector com el de les portades: es cerca quan es toca, es tria i va al proper. Si ja n'hi ha, ho diu abans
+// (ACT-647), i després de triar surt «Desfés».
+const substitueix = pv => pv.proper
+  ? `<p class="substitueix">Substitueix «${esc(pv.proper)}»: el que triïs passa a ser el proper.</p>`
+  : `<p>El que triïs passa a ser el proper.</p>`;
+function fullVei(pid, dir, idx = null) {
+  const pv = D.partidesVei(db(), pid); if (!pv || !pv.discos.length) return;
+  const quin = dir === 'seg' ? 'següent' : 'anterior';
+  if (pv.discos.length > 1 && idx === null) {        // ACT-648
+    obreFull(`<h3>Des de quin?</h3><p>${esc(pv.art)} té ${pv.discos.length} discos en rotació. El disc ${quin} es compta des del que triïs.</p>
+      <div class="canals">${pv.discos.map((x, i) => `<button data-veides="${pid}:${dir}:${i}">${esc(x.titol)} <small>${esc(x.art)}</small></button>`).join('')}</div>`);
+    return;
+  }
+  const partida = pv.discos[idx ?? 0];
+  estat.vei = { pid, dir, partida, candidats: [] };
+  obreFull(`<h3>El disc ${quin}</h3><p>${esc(partida.art)} · des de «${esc(partida.titol)}»</p>${substitueix(pv)}
+    <div class="canals" id="veins"><p class="subtitol">Cercant…</p></div>`, true);
+  cercaVei();
+}
+function fullDiscografia(pid) {
+  const pv = D.partidesVei(db(), pid); if (!pv) return;
+  estat.vei = { pid, llista: true, art: pv.art, noms: pv.noms, candidats: [] };
+  obreFull(`<h3>Tria de la discografia</h3><p>${esc(pv.art)} · segons MusicBrainz, per data</p>${substitueix(pv)}
+    <div class="canals" id="veins"><p class="subtitol">Cercant…</p></div>`, true);
+  cercaVei();
+}
+let cercaVeiN = 0;
+async function cercaVei(mbid = null) {
+  const v = estat.vei; if (!v) return;
+  const n = ++cercaVeiN;
+  const r = v.llista ? await V.discografia({ art: v.art, noms: v.noms, mbid }) : await V.vei(v.partida, v.dir, { mbid });
+  if (n !== cercaVeiN || !$('#veins')) return;
+  const caixa = $('#veins');
+  if (r.sense) { caixa.innerHTML = '<p class="subtitol">Sense connexió: la cerca necessita xarxa.</p>'; return; }
+  if (r.error) { caixa.innerHTML = `<p class="subtitol">No respon (${esc(r.error)}). Torna-hi d'aquí a una estona.</p>`; return; }
+  if (r.homonims) {
+    caixa.innerHTML = (r.motiu ? `<p class="subtitol">A la Wikipedia, ${esc(r.motiu)}.</p>` : '') + `<p class="subtitol">A MusicBrainz hi ha més d'un artista amb aquest nom. Quin és?</p>`
+      + r.homonims.map(a => `<button data-veimb="${esc(a.id)}">${esc(a.nom)} <small>${esc(a.desamb || 'sense més dades')}</small></button>`).join('');
+    return;
+  }
+  v.candidats = r.candidats || [];
+  const font = x => x.font === 'Wikipedia' ? 'Segons la Wikipedia' : 'Segons MusicBrainz';
+  caixa.innerHTML = (r.avis ? `<p class="subtitol">${esc(r.avis)}</p>` : '')
+    + (!v.candidats.length && r.motiu ? `<p class="subtitol">No he trobat res: ${esc(r.motiu)}.</p>` : '')
+    + v.candidats.map((x, i) => `<button data-triavei="${i}">${esc(x.titol)} <small>${font(x)} · ${esc([x.tipus, x.any].filter(Boolean).join(' · '))}${x.cronologia ? ` · cronologia «${esc(x.cronologia)}»` : ''}</small></button>`).join('')
+    + (!v.candidats.length && !r.avis && !r.motiu ? '<p class="subtitol">Res.</p>' : '');
 }
 
 // ───────── l'Historial (§7.7, v1.34 i ACT-448) ─────────
@@ -1546,6 +1606,12 @@ document.addEventListener('click', e => {
   if (d.mou) { const [i, dir] = d.mou.split(':').map(Number), j = i + dir, o = estat.ordreTmp;
     if (!o || j < 0 || j >= o.length) return; const [a] = o.splice(i, 1); o.splice(j, 0, a); pintaFiles(); return; }
   if (d.artista) { estat.artista = +d.artista; pintaArtista(estat.artista); vesA('artista'); return; }
+  if (d.vei) { const [pid, dir] = d.vei.split(':'); fullVei(+pid, dir); return; }
+  if (d.veides) { const [pid, dir, i] = d.veides.split(':'); fullVei(+pid, dir, +i); return; }
+  if (d.discografia) { fullDiscografia(+d.discografia); return; }
+  if (d.veimb) { const c = $('#veins'); if (c) c.innerHTML = '<p class="subtitol">Cercant…</p>'; cercaVei(d.veimb); return; }
+  if (d.triavei) { const v = estat.vei, x = v?.candidats[+d.triavei]; if (!x) return;
+    tancaFull(); fes(D.posaProper(v.pid, x.titol), 'El proper: ' + x.titol); return; }
   if (d.triaproper) { fullProper(+d.triaproper); return; }
   if (d.desaproper) { const t2 = $('#inProper').value.trim(); if (!t2) { avisa('Cal un títol.'); return; }
     tancaFull(); fes(D.posaProper(estat.properDe, t2), 'El proper: ' + t2); return; }

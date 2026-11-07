@@ -82,3 +82,37 @@ export const GSI_FALS = `window.google = { accounts: { oauth2: { initTokenClient
     window.__permisos = (window.__permisos || 0) + 1;
     setTimeout(() => c.callback({ access_token: 'testimoni-fals', expires_in: 3600 }), 10); } };
   return c; } } } };`;
+
+// ───────── la Wikipedia i MusicBrainz, falsos, per al disc anterior i el següent (ACT-626) ─────────
+// Només contesten quan una comprovació els encén (actiu) i només el que porten carregat: la resta continua avortant-se
+// com sempre, perquè la sonda de portades i fotos no canviï de comportament.
+export class FontsFalses {
+  constructor() { this.actiu = false; this.wp = { cerques: {}, pagines: {} }; this.mb = { artistes: {}, grups: {} }; this.crides = []; }
+  async atén(route) {
+    if (!this.actiu) return false;
+    const u = new URL(route.request().url()), q = u.searchParams;
+    const json = o => route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(o) });
+    if (u.host === 'en.wikipedia.org' && u.pathname === '/w/api.php') {
+      if (q.get('list') === 'search') {
+        const s = (q.get('srsearch') || '').toLowerCase(), k = Object.keys(this.wp.cerques).find(k => s.includes(k.toLowerCase()));
+        this.crides.push('wp cerca ' + s); await json({ query: { search: (this.wp.cerques[k] || []).map(title => ({ title })) } }); return true;
+      }
+      if (q.get('action') === 'parse') {
+        const p = q.get('page'), w = this.wp.pagines[p]; this.crides.push('wp pàgina ' + p);
+        await json(w ? { parse: { title: p, wikitext: w } } : { error: { code: 'missingtitle' } }); return true;
+      }
+    }
+    if (u.host === 'musicbrainz.org') {
+      if (u.pathname === '/ws/2/artist/') {
+        const s = q.get('query') || '', k = Object.keys(this.mb.artistes).find(k => s.includes('"' + k + '"'));
+        if (!k) return false;
+        this.crides.push('mb artista ' + k); await json({ artists: this.mb.artistes[k] }); return true;
+      }
+      if (u.pathname === '/ws/2/release-group' && this.mb.grups[q.get('artist')]) {
+        const l = this.mb.grups[q.get('artist')]; this.crides.push('mb grups ' + q.get('artist'));
+        await json({ 'release-group-count': l.length, 'release-groups': l }); return true;
+      }
+    }
+    return false;
+  }
+}

@@ -660,3 +660,6 @@ body[data-estil="ricard"] .full.complet{border-radius:0}
 .sf-chips.sf-llistes{margin:8px 0 0 54px}
 .sf-nova-llista{margin:8px 0 0 54px}
 .hcob.collage.buit{display:grid; place-items:center; font:700 13px var(--sans); color:var(--os-3)}
+
+/* El disc anterior i el següent (ACT-647): el proper que es substituiria, dit abans de triar. */
+.substitueix { color: var(--accent); font-weight: 600; }

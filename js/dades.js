@@ -83,6 +83,31 @@ export function preferents(db) {
   return ps;
 }
 
+// D'on compten el disc anterior i el següent d'un preferent (ACT-626, ACT-648, ACT-649). L'abast és el de la F4-22:
+// l'artista i les fitxes que comparteixen Persona amb ell. Per ordre: els discos en rotació (si n'hi ha més d'un, la
+// pantalla pregunta «Des de quin?»), si no el proper, si no l'última Escolta d'una edició seva que no espera a la safata
+// (una escolta amb alguna pista pendent encara no està resolta; les cançons de les llistes no fan escolta, ACT-640).
+// Cada disc porta els noms de l'artista (nom canònic i variants, normalitzats) per reconèixer-lo a fora.
+export function partidesVei(db, preferentId) {
+  const p = un(db, `SELECT pr.id, pr.proper_titol, ar.id AS artista_id, ar.nom_canonic AS nom, COALESCE(ar.persona, ar.nom_canonic) AS pers
+                    FROM preferent pr JOIN artista ar ON ar.id = pr.artista_id WHERE pr.id = ?`, [preferentId]);
+  if (!p) return null;
+  const abast = files(db, 'SELECT id, nom_canonic, variants, COALESCE(persona, nom_canonic) AS pers FROM artista').filter(a => norm(a.pers) === norm(p.pers));
+  const nomsDe = id => { const a = abast.find(x => x.id === id); return new Set([a?.nom_canonic, ...llista(a?.variants)].map(norm).filter(Boolean)); };
+  const ids = new Set(abast.map(a => a.id));
+  const base = { preferent: p.id, art: p.nom, noms: nomsDe(p.artista_id), proper: p.proper_titol || null };
+  const rot = rotacio(db).filter(e => ids.has(e.artista_id)).map(e => ({ titol: e.titol, art: e.art, noms: nomsDe(e.artista_id) }));
+  if (rot.length) return { ...base, de: 'rotacio', discos: rot };
+  if (p.proper_titol) return { ...base, de: 'proper', discos: [{ titol: p.proper_titol, art: p.nom, noms: base.noms }] };
+  const e = un(db, `SELECT a.titol, ar.id AS artista_id, ar.nom_canonic AS art FROM escolta s
+                    JOIN edicio e ON e.id = s.edicio_id JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id
+                    WHERE ar.id IN (${[...ids].map(Number).join(',')})
+                      AND NOT EXISTS (SELECT 1 FROM scrobble x WHERE x.escolta_id = s.id AND x.estat = 'pendent')
+                    ORDER BY s.data_hora DESC, s.id DESC LIMIT 1`);
+  if (e) return { ...base, de: 'escolta', discos: [{ titol: e.titol, art: e.art, noms: nomsDe(e.artista_id) }] };
+  return { ...base, de: null, discos: [] };
+}
+
 // Els artistes que compten com a preferents: els de la llista i les fitxes que comparteixen Persona amb algun d'ells
 // (l'abast del §7.7, F4-22). Així The Inward Circles compta com a Richard Skelton. Per al marc daurat de la rotació (31-10).
 export function artistesPreferents(db) {

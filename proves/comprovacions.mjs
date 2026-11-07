@@ -694,7 +694,7 @@ export const COMPROVACIONS = [
   } },
   { nom: 'caixa (ACT-624): la fitxa ensenya totes les parts amb el seu estat, i la portada de la part viva mana a la reixa i a Tots els discos', sintetic: true, async fes({ pagina, consulta, esperaDesat, tornaFaristol }) {
     // The Italian Chronicles (edició 922): la part 1 escoltada, la 2 viva, la 3 pendent. Part.Portada només a la 2.
-    const r = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=21');
+    const r = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=22');
       return A.canvia(D.posaPortadaPart(932, 'release/banc-vol-2')); });
     cal(r.desat, 'no s\'ha desat la portada de la part: ' + r.motiu);
     await esperaDesat(); await reobre(pagina);   // A.canvia no repinta
@@ -702,7 +702,7 @@ export const COMPROVACIONS = [
     igual(consulta('SELECT portada FROM edicio WHERE id = 922')[0].portada, null, 'Edició.Portada de la caixa (no s\'ha de tocar)');
     cal(consulta('SELECT data_darrera_escolta AS d FROM part WHERE id = 931')[0].d, 'la part 1 hauria de tenir Part.Data darrera escolta');
     // La imatge inventada no carrega i la pàgina la treu (onerror): es mira la portada que la pantalla rep per pintar.
-    const pint = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=21');
+    const pint = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=22');
       return { reixa: D.rotacio(A.estat.db).find(e => e.id === 922)?.portada, edicio: D.fitxa(A.estat.db, 922)?.portada_edicio,
                tots: D.totsElsDiscos(A.estat.db).find(e => e.id === 922)?.portada }; });
     igual(pint.reixa, 'release/banc-vol-2', 'portada que pinta la reixa (la de la part viva)');
@@ -945,21 +945,135 @@ export const COMPROVACIONS = [
   { nom: 'proper: si entra un altre disc de l\'artista es queda amagat i torna; només l\'esborra el mateix títol', sintetic: true, async fes({ pagina, consulta, esperaDesat, tornaFaristol }) {
     const proper = () => consulta(`SELECT proper_titol AS t FROM preferent WHERE artista_id = 4`)[0].t;
     igual(proper(), 'Kind of Blue', 'proper de Miles Davis abans de res');
-    const id = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=21');
+    const id = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=22');
       let r; await A.canvia(db => { r = D.posaEnRotacio({ art: 'Miles Davis', tit: 'Sketches of Spain', min: 41, canal: 'youtube' })(db); }); return r.id; });
     await esperaDesat();
     igual(proper(), 'Kind of Blue', 'preferent.proper_titol després d\'entrar un altre disc seu');
     await reobre(pagina); await tornaFaristol('pref');   // A.canvia no repinta: es torna a obrir
     let t = await pagina.locator('#files').innerText();
     cal(/Ara estudies\s+Sketches of Spain/.test(t) && !t.includes('El proper: Kind of Blue'), 'amb disc en rotació el proper no s\'ha de pintar: ' + JSON.stringify(t));
-    await pagina.evaluate(async id => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=21'); await A.canvia(D.treu(id)); }, id);
+    await pagina.evaluate(async id => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=22'); await A.canvia(D.treu(id)); }, id);
     await esperaDesat(); await reobre(pagina); await tornaFaristol('pref');
     t = await pagina.locator('#files').innerText();
     cal(t.includes('El proper: Kind of Blue'), 'sense disc en rotació el proper havia de tornar: ' + t.slice(0, 200));
-    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=21');
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=22');
       await A.canvia(D.posaEnRotacio({ art: 'Miles Davis', tit: 'kind of blue', min: 46, canal: 'youtube' })); });
     await esperaDesat();
     igual(proper(), null, 'preferent.proper_titol després d\'entrar el mateix disc (amb majúscules diferents)');
+  } },
+  // ───────── el disc anterior i el següent d'un preferent (ACT-626, ACT-627, ACT-646 a ACT-652) ─────────
+  { nom: 'veïns (ACT-627): a la pantalla de l\'artista el proper surt sota «Ara estudies» i a la fila continua amagat; hi ha anterior i següent (ACT-646)', sintetic: true, async fes({ pagina, consulta, esperaDesat, tornaFaristol }) {
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=22'); await A.canvia(D.posaProper(2, 'Bitches Brew')); });
+    await esperaDesat(); await reobre(pagina); await tornaFaristol('pref');
+    igual(consulta('SELECT proper_titol AS t FROM preferent WHERE id = 2')[0].t, 'Bitches Brew', 'preferent.proper_titol de Miles Davis');
+    const fila = await pagina.locator('#files').innerText();
+    cal(!fila.includes('Bitches Brew'), 'a la fila, amb disc en rotació, el proper ha de seguir amagat: ' + JSON.stringify(fila.slice(0, 200)));
+    await pagina.click('[data-artista="2"]'); await pagina.waitForSelector('#s-artista.activa');
+    const t = await pagina.locator('#s-artista').innerText();
+    cal(/Ara estudies kind of blue/i.test(t) && t.includes('El proper: Bitches Brew'), 'a la pantalla de l\'artista falten «Ara estudies» i el proper: ' + JSON.stringify(t.slice(0, 300)));
+    cal(t.includes('Disc anterior') && t.includes('Disc següent') && !t.includes('Tria de la discografia'), 'amb partida han de sortir anterior i següent, no la discografia: ' + JSON.stringify(t.slice(0, 400)));
+  } },
+  { nom: 'veïns (ACT-647, 651, 652): següent des de la Wikipedia salta el recopilatori, avisa del proper que substitueix i el desa amb «Desfés»; anterior, un directe', sintetic: true, async fes({ pagina, consulta, esperaDesat, fonts }) {
+    const ib = (name, type, prev, next) => `{{Infobox album\n| name = ${name}\n| type = ${type}\n| artist = [[Miles Davis]]\n| chronology = [[Miles Davis discography|Miles Davis]]\n${prev ? `| prev_title = ''[[${prev}]]''\n| prev_year = 1958\n` : ''}${next ? `| next_title = ''[[${next}]]''\n| next_year = 1960\n` : ''}}}`;
+    fonts.actiu = true;
+    fonts.wp.cerques['kind of blue'] = ['Kind of Blue (disambiguation)', 'Kind of Blue'];
+    fonts.wp.pagines['Kind of Blue'] = ib('Kind of Blue', 'studio', 'Jazz at the Plaza', "Miles Davis' Greatest Hits");
+    fonts.wp.pagines["Miles Davis' Greatest Hits"] = ib("Miles Davis' Greatest Hits", 'compilation', 'Kind of Blue', 'Sketches of Spain (album)');
+    fonts.wp.pagines['Sketches of Spain (album)'] = ib('Sketches of Spain', 'studio', "Miles Davis' Greatest Hits", null);
+    fonts.wp.pagines['Jazz at the Plaza'] = ib('Jazz at the Plaza', 'live', null, 'Kind of Blue');
+    try {
+      await pagina.click('[data-vei="2:seg"]'); await pagina.waitForSelector('#veins [data-triavei]', { timeout: 15000 });
+      let t = await pagina.locator('#full').innerText();
+      cal(t.includes('Sketches of Spain') && t.includes('Segons la Wikipedia') && !t.includes('Greatest Hits'), 'el següent havia de ser Sketches of Spain, segons la Wikipedia, sense el recopilatori: ' + JSON.stringify(t));
+      cal(/Substitueix «Bitches Brew»/.test(await pagina.locator('#full .substitueix').innerText()), 'falta l\'avís «Substitueix «Bitches Brew»» abans de triar');
+      await pagina.click('#veins [data-triavei="0"]'); await esperaDesat();
+      igual(consulta('SELECT proper_titol AS t FROM preferent WHERE id = 2')[0].t, 'Sketches of Spain', 'preferent.proper_titol després de triar el següent');
+      cal(await pagina.isVisible('#avisBt'), 'després de triar, l\'avís ha de portar «Desfés»');
+      await pagina.click('#avisBt'); await esperaDesat();
+      igual(consulta('SELECT proper_titol AS t FROM preferent WHERE id = 2')[0].t, 'Bitches Brew', 'preferent.proper_titol després de «Desfés»');
+      await pagina.click('[data-vei="2:ant"]'); await pagina.waitForSelector('#veins [data-triavei]', { timeout: 15000 });
+      t = await pagina.locator('#veins').innerText();
+      cal(t.includes('Jazz at the Plaza') && t.includes('directe'), 'l\'anterior havia de ser el directe Jazz at the Plaza: ' + JSON.stringify(t));
+      await pagina.click('[data-tornafull]');
+    } finally { fonts.actiu = false; }
+  } },
+  { nom: 'veïns (ACT-648, 651, 652): dos discos en rotació pregunten «Des de quin?»; una fitxa d\'un altre artista passa a MusicBrainz, que deixa fora remescles i recopilatoris', sintetic: true, async fes({ pagina, consulta, esperaDesat, tornaFaristol, fonts }) {
+    fonts.actiu = true;
+    fonts.wp.cerques['careful now'] = ['Careful Now'];
+    fonts.wp.pagines['Careful Now'] = `{{Infobox album\n| name = Careful Now\n| type = studio\n| artist = [[Someone Else]]\n| prev_title = [[Something]]\n| next_title = [[Other]]\n}}`;
+    fonts.mb.artistes['James Murray'] = [{ id: 'mb-jm', name: 'James Murray', disambiguation: 'UK ambient' }];
+    const g = (id, title, d, p, s = []) => ({ id, title, 'first-release-date': d, 'primary-type': p, 'secondary-types': s });
+    fonts.mb.grups['mb-jm'] = [g('g6', 'Killing Ground', '2015-03-01', 'Album', ['Live']), g('g1', 'Floods', '2010-01-01', 'Album'), g('g2', 'Collected', '2011-01-01', 'Album', ['Compilation']),
+      g('g3', 'Careful Now', '2012-05-01', 'Album'), g('g4', 'Careful Now Remixed', '2013-01-01', 'Album', ['Remix']), g('g5', 'Mount Ida Lights', '2014-02-01', 'EP'), g('g7', 'Single', '2014-06-01', 'Single')];
+    try {
+      await tornaFaristol('pref'); await pagina.click('[data-artista="3"]'); await pagina.waitForSelector('#s-artista.activa');
+      await pagina.click('[data-vei="3:seg"]'); await pagina.waitForSelector('[data-veides]');
+      igual(await pagina.locator('[data-veides]').count(), 2, 'files de «Des de quin?» (Careful Now i Careful Now (Unmasked), tots dos en rotació)');
+      await pagina.evaluate(() => [...document.querySelectorAll('[data-veides]')].find(b => b.firstChild.textContent.trim() === 'Careful Now').click());
+      await pagina.waitForSelector('#veins [data-triavei]', { timeout: 20000 });
+      let t = await pagina.locator('#full').innerText();
+      cal(t.includes('Mount Ida Lights') && t.includes('Killing Ground') && t.includes('Segons MusicBrainz'), 'el següent havia de sortir de MusicBrainz amb l\'EP i el directe: ' + JSON.stringify(t));
+      cal(!t.includes('Remixed') && !t.includes('Collected') && !/\bSingle\b/.test(t), 'les remescles, els recopilatoris i els senzills no hi han de ser: ' + JSON.stringify(t));
+      cal(t.includes('d\'un altre artista'), 'havia de dir per què no ha servit la Wikipedia (cas 3): ' + JSON.stringify(t));
+      cal(!(await pagina.locator('#full .substitueix').count()), 'James Murray no té proper: no hi ha res a substituir');
+      await pagina.click('#veins [data-triavei="0"]'); await esperaDesat();
+      igual(consulta('SELECT proper_titol AS t FROM preferent WHERE id = 3')[0].t, 'Mount Ida Lights', 'preferent.proper_titol de James Murray');
+      await pagina.click('[data-vei="3:ant"]'); await pagina.waitForSelector('[data-veides]');
+      await pagina.evaluate(() => [...document.querySelectorAll('[data-veides]')].find(b => b.firstChild.textContent.trim() === 'Careful Now').click());
+      await pagina.waitForSelector('#veins [data-triavei]', { timeout: 20000 });
+      t = await pagina.locator('#veins').innerText();
+      cal(t.includes('Floods') && !t.includes('Collected'), 'l\'anterior havia de ser Floods, sense el recopilatori: ' + JSON.stringify(t));
+      cal(/Substitueix «Mount Ida Lights»/.test(await pagina.locator('#full .substitueix').innerText()), 'ara sí que hi ha un proper a substituir');
+      await pagina.click('[data-tornafull]');
+      await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=22'); await A.canvia(D.posaProper(3, null)); });
+      await esperaDesat();
+    } finally { fonts.actiu = false; }
+  } },
+  { nom: 'veïns (ACT-649, 650): sense partida, «Tria de la discografia» amb els homònims a triar; sense connexió, «Sense connexió»; l\'última escolta resolta fa de partida', sintetic: true, async fes({ pagina, consulta, esperaDesat, tornaFaristol, fonts }) {
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17');
+      await A.canvia(db => { db.run("INSERT INTO artista (id, nom_canonic) VALUES (930, 'Federico Durand')"); db.run('INSERT INTO preferent (id, artista_id, ordre) VALUES (930, 930, 99)'); }); });
+    await esperaDesat(); await reobre(pagina); await tornaFaristol('pref');
+    await pagina.click('[data-artista="930"]'); await pagina.waitForSelector('#s-artista.activa');
+    let t = await pagina.locator('#s-artista').innerText();
+    cal(t.includes('Tria de la discografia') && !t.includes('Disc anterior'), 'sense partida, només «Tria de la discografia»: ' + JSON.stringify(t.slice(0, 400)));
+    fonts.actiu = true;
+    fonts.mb.artistes['Federico Durand'] = [{ id: 'mb-fd1', name: 'Federico Durand', disambiguation: 'Argentine ambient' }, { id: 'mb-fd2', name: 'Federico Durand', disambiguation: 'footballer' }];
+    fonts.mb.grups['mb-fd1'] = [{ id: 'f2', title: 'Pequeñas melodías', 'first-release-date': '2015', 'primary-type': 'Album', 'secondary-types': [] },
+      { id: 'f1', title: 'El idioma de las luciérnagas', 'first-release-date': '2011', 'primary-type': 'Album', 'secondary-types': [] },
+      { id: 'f3', title: 'Lo mejor', 'first-release-date': '2019', 'primary-type': 'Album', 'secondary-types': ['Compilation'] }];
+    try {
+      await pagina.click('[data-discografia="930"]'); await pagina.waitForSelector('#veins [data-veimb]', { timeout: 15000 });
+      igual(await pagina.locator('#veins [data-veimb]').count(), 2, 'homònims de MusicBrainz per triar');
+      await pagina.click('#veins [data-veimb="mb-fd1"]'); await pagina.waitForSelector('#veins [data-triavei]', { timeout: 15000 });
+      t = await pagina.locator('#veins').innerText();
+      cal(t.indexOf('El idioma de las luciérnagas') >= 0 && t.indexOf('El idioma') < t.indexOf('Pequeñas melodías') && !t.includes('Lo mejor'), 'la discografia, per data i sense el recopilatori: ' + JSON.stringify(t));
+      await pagina.click('[data-tornafull]');
+      const ctx = pagina.context(); await ctx.setOffline(true);
+      try {
+        await pagina.click('[data-discografia="930"]'); await pagina.waitForSelector('#veins');
+        await pagina.waitForFunction(() => /Sense connexió/.test(document.getElementById('veins')?.textContent || ''), null, { timeout: 5000 });
+      } finally { await ctx.setOffline(false); }
+      await pagina.click('[data-tornafull]');
+    } finally { fonts.actiu = false; }
+    // L'última escolta resolta (ACT-649): la de fa 40 dies compta; la de fa 39, amb una pista pendent a la safata, no.
+    const pv = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=22');
+      const fa = d => new Date(Date.now() - d * 864e5).toISOString();
+      await A.canvia(db => {
+        db.run("INSERT INTO album (id, titol, artista_id) VALUES (930, 'La niña dormida', 930), (931, 'Jardín de invierno', 930)");
+        db.run('INSERT INTO edicio (id, album_id, durada_total, rotacio_actual) VALUES (930, 930, 40, 0), (931, 931, 42, 0)');
+        db.run('INSERT INTO escolta (id, edicio_id, data_hora, completitud) VALUES (930, 930, ?, 1), (931, 931, ?, 1)', [fa(40), fa(39)]);
+        db.run("INSERT INTO scrobble (id, compte, listened_at, artista, pista, album, recording_msid, estat, escolta_id) VALUES (930, 'crimsonnnn', ?, 'Federico Durand', 'Pista', 'Jardín de invierno', 'msid-banc-930', 'pendent', 931)", [fa(39)]);
+      });
+      const r = D.partidesVei(A.estat.db, 930); return { de: r.de, titol: r.discos[0]?.titol };
+    });
+    await esperaDesat();
+    igual(JSON.stringify(pv), JSON.stringify({ de: 'escolta', titol: 'La niña dormida' }), 'partida de Federico Durand (Escolta.data_hora, sense la que espera a la safata)');
+    // Es treu tot el que s'ha posat, perquè les comprovacions de després trobin l'arxiu com era.
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17');
+      await A.canvia(db => { db.run('DELETE FROM scrobble WHERE id = 930'); db.run('DELETE FROM escolta WHERE id IN (930, 931)'); db.run('DELETE FROM edicio WHERE id IN (930, 931)');
+        db.run('DELETE FROM album WHERE id IN (930, 931)'); db.run('DELETE FROM preferent WHERE id = 930'); db.run('DELETE FROM artista WHERE id = 930'); }); });
+    await esperaDesat(); await reobre(pagina);
+    igual(consulta('SELECT COUNT(*) AS n FROM artista WHERE id = 930')[0].n, 0, 'Federico Durand, tret després de la prova');
   } },
   { nom: 'excel: anada i tornada idèntica fila a fila, amb les onze pestanyes (les dues de les llistes, des de l\'estructura 7) i les columnes de càrrega del §3.2', async fes({ pagina, consulta, real }) {
     const r = await pagina.evaluate(async () => {
