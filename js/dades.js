@@ -286,6 +286,33 @@ export const posaPortada = (id, ref, origen) => db => db.run('UPDATE edicio SET 
 // La portada d'una part (ACT-624). Només a mà: triada, pujada o treta.
 export const posaPortadaPart = (partId, ref) => db => db.run('UPDATE part SET portada = ? WHERE id = ?', [ref || null, partId]);
 
+// ───────── «Esborra aquest disc» (7-11, cas Savall) ─────────
+// Només es pot esborrar un disc que no ha deixat cap rastre. Torna els motius que ho impedeixen (buit: es pot):
+// Edició.Rotació actual, una part viva, Escolta.edicio_id (i amb ella els scrobbles), Puntuació, Preferent.proper_edicio_id
+// o edicio_actual_id, i Àlbum.Conjunt. Els tags no ho impedeixen.
+export function rastre(db, id) {
+  const n = (sql, p = [id]) => un(db, sql, p)?.n || 0, m = [];
+  const e = un(db, 'SELECT e.rotacio_actual, a.conjunt FROM edicio e JOIN album a ON a.id = e.album_id WHERE e.id = ?', [id]);
+  if (!e) return ['no existeix'];
+  if (e.rotacio_actual || n('SELECT COUNT(*) AS n FROM part WHERE edicio_id = ? AND rotacio_actual = 1')) m.push('és en rotació');
+  const esc = n('SELECT COUNT(*) AS n FROM escolta WHERE edicio_id = ?');
+  if (esc) m.push(esc === 1 ? 'té una escolta' : `té ${esc} escoltes`);
+  if (n('SELECT COUNT(*) AS n FROM puntuacio WHERE edicio_id = ?')) m.push('té nota');
+  if (n('SELECT COUNT(*) AS n FROM preferent WHERE proper_edicio_id = ? OR edicio_actual_id = ?', [id, id])) m.push('és el proper d\'un preferent');
+  if (e.conjunt) m.push('és d\'un grup');
+  return m;
+}
+// Esborra l'edició i les seves parts (i amb ella els seus Edició.emparellaments), i l'àlbum si no li queden edicions.
+// L'artista es queda: pot ser preferent o tenir altres discos.
+export const esborraEdicio = id => db => {
+  const motius = rastre(db, id);
+  if (motius.length) throw new Error('No es pot esborrar: ' + motius.join(', ') + '.');
+  const a = un(db, 'SELECT album_id FROM edicio WHERE id = ?', [id]).album_id;
+  db.run('DELETE FROM part WHERE edicio_id = ?', [id]);
+  db.run('DELETE FROM edicio WHERE id = ?', [id]);
+  if (!un(db, 'SELECT COUNT(*) AS n FROM edicio WHERE album_id = ?', [a]).n) db.run('DELETE FROM album WHERE id = ?', [a]);
+};
+
 // ───────── La Prestatgeria · Tots els discos (ACT-622, ACT-636 i ACT-637) ─────────
 // Una fila per edició (ACT-637, opció A), amb la seva portada i la seva durada, ordenades per artista (Artista.nom_canonic),
 // títol i edició. Sense filtres (ACT-636). La portada és la mateixa que a la reixa: la de la part viva si en té (ACT-624).

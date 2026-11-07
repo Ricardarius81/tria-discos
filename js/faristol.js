@@ -8,7 +8,7 @@
 // Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 
 import * as A from './arxiu.js?v=17';
-import * as D from './dades.js?v=20';
+import * as D from './dades.js?v=21';
 import * as E from './escoltes.js?v=11';
 import * as LB from './listenbrainz.js?v=2';
 import * as I from './imatges.js?v=4';
@@ -889,7 +889,16 @@ function fullFitxa(d) {
       ${d.esperant ? `<button class="bt principal" data-repren="${d.id}">Reprèn</button>` : `<button class="bt principal" data-escoltar="${d.id}">Escoltar ara</button>`}
       ${jaPref ? '' : `<button class="bt" data-fespref="${d.artista_id}">Afegir a Artistes Preferents</button>`}
       ${d.rotacio_actual ? `<button class="bt" data-treure="${d.id}">Treu de rotació</button>` : `<button class="bt" data-hrot="${d.id}">Posa'l en rotació</button>`}
-    </div>`, true);
+    </div>
+    ${blocEsborra(d)}`, true);
+}
+// «Esborra aquest disc» (7-11): només quan el disc no ha deixat rastre (D.rastre). Si en té i no és en rotació, es diu
+// què l'impedeix: llavors no s'ha d'esborrar sinó ajuntar, i això és la pregunta d'identitat de L'Afinació.
+function blocEsborra(d) {
+  const m = D.rastre(db(), d.id);
+  if (!m.length) return `<div class="barra-accions" style="position:static;padding:18px 0 0"><button class="bt discret" data-esborradisc="${d.id}">Esborra aquest disc</button></div>`;
+  if (d.rotacio_actual || m.includes('és en rotació')) return '';
+  return `<p class="gris" style="font-size:12px;margin-top:16px">No es pot esborrar: ${esc(m.join(', '))}.</p>`;
 }
 
 // La caixa sencera a la fitxa (ACT-624): totes les parts, amb número, títol, durada i estat, i la portada de cada una.
@@ -1381,6 +1390,13 @@ document.addEventListener('click', e => {
     fes(L.confirma(id, ids), r => `És ${nom}${r.noves ? ': ' + (r.noves === 1 ? 'una cançó afegida' : r.noves + ' cançons afegides') + ' al final' : ''}`);
     refrescaLlista(); return; }
 
+  if (d.esborradisc) { const x = rot(d.esborradisc); if (!x) return;
+    obreFull(`<h3>Esborrar «${esc(x.titol)}»?</h3><p>${esc(x.art)}${x.nom_edicio ? ' · ' + esc(x.nom_edicio) : ''} · ${x.durada_total}′</p>
+      <p>No té escoltes, ni nota, ni és en rotació, ni en cap grup. S'esborra la fitxa${x.parts.length ? ' amb les seves parts' : ''}; l'artista es queda. Tens «Desfés», i la còpia del Drive.</p>
+      <div class="barra-accions" style="position:static;padding:4px 0 0"><button class="bt principal" data-esborradiscsi="${x.id}">Sí, esborra'l</button><button class="bt discret" data-tornafull="1">No</button></div>`);
+    return; }
+  if (d.esborradiscsi) { const x = rot(d.esborradiscsi); if (!x) return; tancaFull();
+    fes(D.esborraEdicio(x.id), `«${x.titol}» esborrat`); return; }
   if (d.grup) { fullGrup(d.grup); return; }
   if (d.grupplay) { fullGrupEscolta(d.grupplay); return; }
   if (d.fitxagrup) { fullGrup(d.fitxagrup); return; }
