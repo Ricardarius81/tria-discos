@@ -8,7 +8,7 @@
 <link rel="icon" href="icones/icona-192.png">
 <link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
 <title>La Meva Discoteca</title>
-<link rel="stylesheet" href="css/faristol.css?v=14">
+<link rel="stylesheet" href="css/faristol.css?v=15">
 </head>
 <body data-lloc="Fora" data-estil="ricard">
 <div id="telefon">
@@ -31,8 +31,23 @@
     </section>
 
     <section class="superficie" id="s-prestatgeria">
-      <div class="cap"><h1 style="font-size:46px">La Prestatgeria</h1></div>
-      <div class="marcador"><p class="cita">Encara no construïda.</p><p>Tots els discos, Agrupacions i L'Afinació arriben més endavant a la seqüència (§9.2).</p></div>
+      <div class="cap">
+        <h1 style="font-size:46px">La Prestatgeria</h1>
+        <div class="subpestanyes" role="tablist">
+          <button id="ptab-tots" role="tab" aria-selected="true" data-psub="tots">Tots<br>els discos</button>
+          <button id="ptab-agr" role="tab" aria-selected="false" data-psub="agr">Agrupacions</button>
+          <button id="ptab-afi" role="tab" aria-selected="false" data-psub="afi">L'Afinació</button>
+        </div>
+      </div>
+      <div class="panell activa" id="q-tots">
+        <input class="cerca" id="cercaArxiu" type="search" placeholder="Cerca a tot l'arxiu" autocomplete="off">
+        <p class="subtitol" id="arxiuCompte" style="margin:8px 0 0"></p>
+        <div id="arxiu"></div>
+      </div>
+      <div class="panell" id="q-agr"><div id="agrupacions"></div></div>
+      <div class="panell" id="q-afi">
+        <div class="marcador"><p class="cita">Encara no construïda.</p><p>Per catalogar i Feina de fons arriben després d'aquest bloc (ACT-622). Abans cal separar la seva pregunta d'identitat de la pregunta 2 de la safata.</p></div>
+      </div>
     </section>
 
     <section class="superficie" id="s-safata">
@@ -94,7 +109,7 @@
   setTimeout(() => { const m = document.getElementById('entradaTxt'); if (m && m.textContent === 'Obrint…') { m.className = 'mal'; m.textContent = 'La màquina no ha arrencat. Tanca la pestanya, espera un minut i torna-la a obrir.'; } }, 10000);
 </script>
 <script src="vendor/sqljs/sql-wasm.js?v=1"></script>
-<script type="module" src="js/faristol.js?v=23"></script>
+<script type="module" src="js/faristol.js?v=24"></script>
 <script>
   // El codi de l'app es guarda al mòbil perquè s'obri sense connexió (ACT-581). Si el navegador no en sap, tot va com abans.
   if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

@@ -116,7 +116,7 @@ export const COMPROVACIONS = [
       track_metadata: { artist_name: 'Biosphere', track_name: 'Angel\'s Flight (bonus)', release_name: 'Angel\'s Flight', additional_info: { duration_ms: 60e3 } } });
     await pagina.click('#btSafata'); await pagina.waitForTimeout(900); await esperaDesat();
     const r = await pagina.evaluate(async () => {
-      const E = await import('./js/escoltes.js?v=10'); const A = await import('./js/arxiu.js?v=16');
+      const E = await import('./js/escoltes.js?v=10'); const A = await import('./js/arxiu.js?v=17');
       const SQL = await initSqlJs({ locateFile: f => 'vendor/sqljs/' + f });
       const c = new SQL.Database(A.estat.db.export()), despres = Date.now() + 2 * 3600e3;
       const n = E.heretaRespostes(despres)(c);
@@ -230,7 +230,7 @@ export const COMPROVACIONS = [
   } },
   { nom: 'ignora sempre: no compta al veredicte de la safata', sintetic: true, async fes({ pagina }) {
     // El veredicte és una funció pura sobre l'arxiu: es crida dins la pàgina, amb el mòdul de la màquina.
-    const v = await pagina.evaluate(async () => { const E = await import('./js/escoltes.js?v=10'); const A = await import('./js/arxiu.js?v=16'); return E.veredicte(A.estat.db); });
+    const v = await pagina.evaluate(async () => { const E = await import('./js/escoltes.js?v=10'); const A = await import('./js/arxiu.js?v=17'); return E.veredicte(A.estat.db); });
     igual(v.ignorades, 0, 'targetes ignorades al veredicte');
   } },
   { nom: 'ignora sempre: un botó de La Cabina obre la llista, i «Treu-lo» la buida', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
@@ -374,7 +374,7 @@ export const COMPROVACIONS = [
   // ───────── la darrera lectura (3-11, Porgy and Bess) ─────────
   { nom: 'lectura: un disc que sona no es dona per acabat fins que una lectura ho sap, encara que el rellotge digui que sí', sintetic: true, async fes({ pagina }) {
     const r = await pagina.evaluate(async () => {
-      const E = await import('./js/escoltes.js?v=10'); const A = await import('./js/arxiu.js?v=16');
+      const E = await import('./js/escoltes.js?v=10'); const A = await import('./js/arxiu.js?v=17');
       const ara = Date.now(), despres = ara + 40 * 60e3;          // Structures from Silence acaba d'aquí 22 minuts
       const d = (llegit, a = despres) => { const c = E.targetes(A.estat.db, { estat: 'totes', ara: a, llegit }).find(t => t.discos.some(x => x.titol === 'Structures from Silence'));
         return { targeta: c.estat, llest: c.discos.find(x => x.titol === 'Structures from Silence').llest }; };
@@ -394,7 +394,7 @@ export const COMPROVACIONS = [
     await pagina.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await pagina.waitForTimeout(1500); await esperaDesat();
     cal(baixades() > abans, 'no ha tornat a baixar l\'arxiu del Drive');
-    igual(await pagina.evaluate(async () => (await import('./js/arxiu.js?v=16')).estat.base), f.modifiedTime, 'la versió del Drive sobre la qual treballa');
+    igual(await pagina.evaluate(async () => (await import('./js/arxiu.js?v=17')).estat.base), f.modifiedTime, 'la versió del Drive sobre la qual treballa');
     const n = baixades();
     await pagina.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await pagina.waitForTimeout(800);
@@ -411,7 +411,7 @@ export const COMPROVACIONS = [
     const avis = await pagina.evaluate(() => document.getElementById('avis').classList.contains('obert') ? document.getElementById('avisTxt').textContent : '');
     cal(!avis.includes('ha canviat en un altre lloc'), 'ha sortit l\'avís: ' + avis);
     igual(consulta("SELECT COUNT(*) AS n FROM scrobble WHERE recording_msid = 'msid-banc-dosmobils'")[0].n, 1, 'la pista nova, al Drive');
-    igual(await pagina.evaluate(async () => (await import('./js/arxiu.js?v=16')).estat.base), drive.per('la-meva-discoteca.sqlite').modifiedTime, 'la versió del Drive sobre la qual treballa');
+    igual(await pagina.evaluate(async () => (await import('./js/arxiu.js?v=17')).estat.base), drive.per('la-meva-discoteca.sqlite').modifiedTime, 'la versió del Drive sobre la qual treballa');
   } },
 
   // ───────── la sessió acabada i els discos contestats diferent (3-11, Savall) ─────────
@@ -482,7 +482,7 @@ export const COMPROVACIONS = [
   } },
   { nom: 'trossos sumats: Savall en dos contextos compta com una escolta; la pista repetida compta un sol cop; repetir quan ja compta n\'obre una altra', sintetic: true, async fes({ pagina, lb, consulta }) {
     const r0 = await pagina.evaluate(async () => {
-      const A = await import('./js/arxiu.js?v=16');
+      const A = await import('./js/arxiu.js?v=17');
       return A.canvia(db => {
         db.run("INSERT INTO artista (id, nom_canonic) VALUES (7, 'Jordi Savall')");
         db.run("INSERT INTO album (id, titol, artista_id) VALUES (8, 'Das Paradies und die Peri', 7)");
@@ -502,13 +502,13 @@ export const COMPROVACIONS = [
     // a fer en silenci (la comprovació «dos mòbils») i durant un instant l'arxiu del mòbil torna a ser el d'abans de llegir
     for (let quietes = 0, t = Date.now(); quietes < 4; ) {
       cal(Date.now() - t < 12000, 'les sis pistes de Savall no es queden a l\'arxiu del mòbil');
-      const n = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=16');
+      const n = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17');
         return A.estat.db.exec("SELECT COUNT(*) FROM scrobble WHERE album = 'Das Paradies und die Peri'")[0].values[0][0]; });
       quietes = n === 6 ? quietes + 1 : 0; await pagina.waitForTimeout(250);
     }
     // la tarda, Amor (les tres primeres); la nit, Dormir (la repetida, la quarta i la primera que torna)
     const r = await pagina.evaluate(async () => {
-      const A = await import('./js/arxiu.js?v=16'), E = await import('./js/escoltes.js?v=10');
+      const A = await import('./js/arxiu.js?v=17'), E = await import('./js/escoltes.js?v=10');
       const ids = A.estat.db.exec("SELECT id FROM scrobble WHERE album = 'Das Paradies und die Peri' ORDER BY listened_at")[0].values.map(v => v[0]);
       return A.canvia(db => { E.contesta(ids.slice(0, 3), 'Amor')(db); E.contesta(ids.slice(3), 'Dormir')(db); });
     });
@@ -537,7 +537,7 @@ export const COMPROVACIONS = [
   } },
   { nom: 'mosaic del grup (B): Variant Immersions, sonat a mitges dins la finestra de la tirada, s\'ajunta al mosaic', sintetic: true, async fes({ pagina, lb, consulta, tornaFaristol, esperaDesat }) {
     const r0 = await pagina.evaluate(async () => {
-      const A = await import('./js/arxiu.js?v=16');
+      const A = await import('./js/arxiu.js?v=17');
       return A.canvia(db => {
         db.run("UPDATE album SET conjunt = 'Infinitati', posicio = 1 WHERE id = 6");
         db.run("INSERT INTO album (id, titol, artista_id, conjunt, posicio) VALUES (9, 'Intrusion Dubs', 5, 'Infinitati', 2), (10, 'Variant Immersions', 5, 'Infinitati', 3)");
@@ -579,12 +579,12 @@ export const COMPROVACIONS = [
     igual(consulta('SELECT durada_total FROM edicio WHERE id = 11')[0].durada_total, 52, 'Edició.Durada total de Variant Immersions');
     igual(consulta('SELECT completitud FROM escolta WHERE edicio_id = 11')[0].completitud, 0.769, 'Escolta.completitud de Variant Immersions (40′ de 52′)');
     // i es deixa com era, per a les comprovacions que vénen després
-    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=16'), E = await import('./js/escoltes.js?v=10');
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17'), E = await import('./js/escoltes.js?v=10');
       await A.canvia(db => { db.run('UPDATE edicio SET durada_total = 79 WHERE id = 11'); E.recalcula(db); }); });
   } },
   { nom: 'pregunta 2 (A): un disc en rotació amb un títol diferent (Bartók) es pregunta per l\'artista, no surt com a disc nou', sintetic: true, async fes({ pagina, lb, consulta, esperaDesat, obreSafata }) {
     const r0 = await pagina.evaluate(async () => {
-      const A = await import('./js/arxiu.js?v=16');
+      const A = await import('./js/arxiu.js?v=17');
       return A.canvia(db => {
         db.run(`INSERT INTO artista (id, nom_canonic, variants) VALUES (907, 'Keller Quartet', '["Bartók"]')`);
         db.run(`INSERT INTO album (id, titol, artista_id) VALUES (911, 'Bartók: The 6 String Quartets', 907)`);
@@ -619,7 +619,7 @@ export const COMPROVACIONS = [
   // ───────── el tram 4: la còpia de seguretat i l'Excel (§3.5, ACT-566 a ACT-571, ACT-603, ACT-604) ─────────
   { nom: 'caixa (ACT-625): la pista va a la part que diu el nom de l\'àlbum; sense número, a la viva; en tornar a calcular, el vol. 1 torna sol a la part 1', sintetic: true, async fes({ pagina, lb, consulta, esperaDesat, obreSafata }) {
     const r0 = await pagina.evaluate(async () => {
-      const A = await import('./js/arxiu.js?v=16');
+      const A = await import('./js/arxiu.js?v=17');
       return A.canvia(db => {
         db.run("INSERT INTO artista (id, nom_canonic) VALUES (920, 'D York')");
         db.run("INSERT INTO album (id, titol, artista_id) VALUES (921, 'The Italian Chronicles', 920)");
@@ -635,7 +635,7 @@ export const COMPROVACIONS = [
     // el vol. 1 sona amb la part 2 viva; després, una pista amb el nom sense número
     lb.escoltes.push(pista(t, 'msid-banc-ic1', 'The Italian Chronicles volume 1', 25), pista(t + 60 * m, 'msid-banc-ic2', 'The Italian Chronicles', 10));
     await obreSafata();
-    await pagina.waitForFunction(async () => { const A = await import('./js/arxiu.js?v=16');
+    await pagina.waitForFunction(async () => { const A = await import('./js/arxiu.js?v=17');
       return A.estat.db.exec("SELECT COUNT(*) FROM scrobble WHERE recording_msid LIKE 'msid-banc-ic%' AND escolta_id IS NOT NULL")[0].values[0][0] === 2; }, null, { timeout: 10000, polling: 250 });
     await pagina.waitForTimeout(1500); await esperaDesat();
     const partDe = msid => consulta(`SELECT e.part_id FROM scrobble s JOIN escolta e ON e.id = s.escolta_id WHERE s.recording_msid = '${msid}'`)[0]?.part_id;
@@ -643,7 +643,7 @@ export const COMPROVACIONS = [
     igual(partDe('msid-banc-ic2'), 932, 'Escolta.part_id de la pista sense número (la part viva)');
     // el cas d'abans de l'ACT-625: l'escolta del vol. 1 havia quedat a la part 2; en tornar a calcular hi torna sola
     const r = await pagina.evaluate(async () => {
-      const A = await import('./js/arxiu.js?v=16'), E = await import('./js/escoltes.js?v=10');
+      const A = await import('./js/arxiu.js?v=17'), E = await import('./js/escoltes.js?v=10');
       return A.canvia(db => {
         db.run("UPDATE escolta SET part_id = 932 WHERE id = (SELECT escolta_id FROM scrobble WHERE recording_msid = 'msid-banc-ic1')");
         E.recalcula(db);
@@ -656,7 +656,7 @@ export const COMPROVACIONS = [
   } },
   { nom: 'safata: la targeta d\'una caixa diu la part que ha sonat i la seva durada, no la de la caixa', sintetic: true, async fes({ pagina, obreSafata }) {
     const r = await pagina.evaluate(async () => {
-      const A = await import('./js/arxiu.js?v=16'), E = await import('./js/escoltes.js?v=10');
+      const A = await import('./js/arxiu.js?v=17'), E = await import('./js/escoltes.js?v=10');
       return E.targetes(A.estat.db, { estat: 'totes' }).flatMap(c => c.discos).filter(d => d.edicio_id === 922)
         .map(d => ({ nom: d.partNom, min: d.min, total: d.durada_total }));
     });
@@ -667,6 +667,158 @@ export const COMPROVACIONS = [
     cal(/D York · Vol\. 1/.test(t) && /D York · Vol\. 2/.test(t), 'la safata no diu «D York · Vol. 1» i «D York · Vol. 2»');
     cal(!/The Italian Chronicles D York[^·]*90′/.test(t), 'la safata encara ensenya els 90′ de la caixa');
     await pagina.click('[data-tornasafata]').catch(() => {});
+  } },
+  // ───────── La Prestatgeria, primer bloc (ACT-622 a ACT-637) ─────────
+  { nom: 'prestatgeria (ACT-637): Tots els discos, una fila per edició ordenada per artista; Stankonia surt dues vegades, 98′ i 112′', sintetic: true, async fes({ pagina, consulta }) {
+    await pagina.click('[data-anar="prestatgeria"]'); await pagina.waitForSelector('#s-prestatgeria.activa'); await pagina.waitForTimeout(300);
+    const n = consulta('SELECT COUNT(*) AS n FROM edicio')[0].n;
+    igual(await pagina.locator('#arxiu .ar-fila').count(), n, 'files de Tots els discos (una per Edició)');
+    const arts = await pagina.locator('#arxiu .ar-fila .hart').allInnerTexts();
+    const nomArt = arts.map(a => a.split(' · ')[0]);
+    igual(JSON.stringify(nomArt), JSON.stringify([...nomArt].sort((a, b) => a.localeCompare(b, 'ca', { sensitivity: 'base' }))), 'ordre per Artista.nom_canonic');
+    const stk = await pagina.locator('#arxiu .ar-fila', { hasText: 'Stankonia' }).allInnerTexts();
+    igual(stk.length, 2, 'files de Stankonia (dues edicions del mateix àlbum)');
+    cal(stk.some(t => t.includes('98′')) && stk.some(t => t.includes('112′')), 'les dues Stankonia s\'haurien de distingir per Edició.Durada total: ' + JSON.stringify(stk));
+  } },
+  { nom: 'prestatgeria: el cercador troba per artista i per títol, sense filtres; la fila obre la mateixa fitxa del Faristol', sintetic: true, async fes({ pagina }) {
+    cal(!(await pagina.locator('#q-tots select, #q-tots [data-filtre]').count()), 'Tots els discos no ha de portar filtres (ACT-636)');
+    await pagina.fill('#cercaArxiu', 'outkast'); await pagina.waitForTimeout(200);
+    igual(await pagina.locator('#arxiu .ar-fila').count(), 2, 'files en cercar «outkast»');
+    await pagina.fill('#cercaArxiu', 'silent way'); await pagina.waitForTimeout(200);
+    igual(await pagina.locator('#arxiu .ar-fila').count(), 1, 'files en cercar «silent way»');
+    await pagina.locator('#arxiu .ar-fila').first().click(); await pagina.waitForTimeout(300);
+    const t = await pagina.locator('#full').innerText();
+    cal(t.includes('In a Silent Way') && t.includes('Durada') && t.includes('Canal') && t.includes('Nota'), 'la fila no obre la fitxa del disc: ' + t.slice(0, 120));
+    cal(await pagina.locator('#full.complet').count() === 1, 'la fitxa ha de sortir a pantalla completa, com des del Faristol');
+    await pagina.click('[data-tornafull]'); await pagina.fill('#cercaArxiu', ''); await pagina.waitForTimeout(150);
+  } },
+  { nom: 'caixa (ACT-624): la fitxa ensenya totes les parts amb el seu estat, i la portada de la part viva mana a la reixa i a Tots els discos', sintetic: true, async fes({ pagina, consulta, esperaDesat, tornaFaristol }) {
+    // The Italian Chronicles (edició 922): la part 1 escoltada, la 2 viva, la 3 pendent. Part.Portada només a la 2.
+    const r = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=19');
+      return A.canvia(D.posaPortadaPart(932, 'release/banc-vol-2')); });
+    cal(r.desat, 'no s\'ha desat la portada de la part: ' + r.motiu);
+    await esperaDesat(); await reobre(pagina);   // A.canvia no repinta
+    igual(consulta('SELECT portada FROM part WHERE id = 932')[0].portada, 'release/banc-vol-2', 'Part.Portada de la part 2');
+    igual(consulta('SELECT portada FROM edicio WHERE id = 922')[0].portada, null, 'Edició.Portada de la caixa (no s\'ha de tocar)');
+    cal(consulta('SELECT data_darrera_escolta AS d FROM part WHERE id = 931')[0].d, 'la part 1 hauria de tenir Part.Data darrera escolta');
+    // La imatge inventada no carrega i la pàgina la treu (onerror): es mira la portada que la pantalla rep per pintar.
+    const pint = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=19');
+      return { reixa: D.rotacio(A.estat.db).find(e => e.id === 922)?.portada, edicio: D.fitxa(A.estat.db, 922)?.portada_edicio,
+               tots: D.totsElsDiscos(A.estat.db).find(e => e.id === 922)?.portada }; });
+    igual(pint.reixa, 'release/banc-vol-2', 'portada que pinta la reixa (la de la part viva)');
+    igual(pint.tots, 'release/banc-vol-2', 'portada que pinta Tots els discos (la de la part viva)');
+    igual(pint.edicio, null, 'la portada de l\'edició, a part');
+    await tornaFaristol('rot');
+    const tile = pagina.locator('#reixa .disc', { hasText: 'The Italian Chronicles' });
+    await tile.locator('.coberta').click(); await pagina.waitForTimeout(300);
+    igual(await pagina.locator('#full .part-fila').count(), 3, 'parts a la fitxa de la caixa');
+    const est = await pagina.locator('#full .part-fila .estat-part').allInnerTexts();
+    igual(est.join(','), 'escoltada,viva,pendent', 'estat de cada part (Part.Data darrera escolta, Part.Rotació actual)');
+    igual(await pagina.locator('#full [data-portadapart]').count(), 3, '«canvia la portada» per part');
+    await pagina.click('[data-tornafull]');
+  } },
+  { nom: 'caixa: «Treu-la» a la portada d\'una part la buida i torna a la de la caixa; l\'edició no es toca', sintetic: true, async fes({ pagina, consulta, esperaDesat, tornaFaristol }) {
+    await tornaFaristol('rot');
+    await pagina.locator('#reixa .disc', { hasText: 'The Italian Chronicles' }).locator('.coberta').click(); await pagina.waitForTimeout(300);
+    await pagina.click('#full [data-portadapart="922:932"]'); await pagina.waitForTimeout(300);
+    cal((await pagina.locator('#full').innerText()).includes('torna a fer servir la de la caixa'), 'la fulla de la portada de la part no diu que torna a la de la caixa');
+    await pagina.click('#full [data-noportada="p932"]'); await esperaDesat();
+    igual(consulta('SELECT portada FROM part WHERE id = 932')[0].portada, null, 'Part.Portada després de «Treu-la»');
+    igual(consulta('SELECT portada_origen FROM edicio WHERE id = 922')[0].portada_origen, null, 'Edició.portada_origen (no l\'ha de marcar com a rebutjada)');
+  } },
+  { nom: 'llistes (ACT-632): les cançons soltes d\'una sessió es fan llista només amb el nom; llista_canco en ordre amb la durada, i Scrobble.llista_id apuntat', sintetic: true, async fes({ pagina, lb, consulta, esperaDesat, obreSafata }) {
+    // Una sessió de fa 8 h 20 min a la compte personal, lliure a les dues comptes: quatre cançons soltes de 3′, cadascuna d'un àlbum.
+    const t0 = Date.now() - (8 * 60 + 20) * 60e3, m = 60e3;
+    const c = (i, t, nom, album) => ({ compte: 'crimsonnnn', listened_at: Math.floor(t / 1000), recording_msid: 'msid-banc-ll' + i,
+      track_metadata: { artist_name: 'Händel', track_name: nom, release_name: album, additional_info: { duration_ms: 3 * m } } });
+    lb.escoltes.push(c(1, t0, 'Ombra mai fù', 'Serse (Aria)'), c(2, t0 + 3 * m, 'Lascia ch\'io pianga', 'Rinaldo (Aria)'),
+      c(3, t0 + 6 * m, 'Ev\'ry valley', 'Messiah (Aria)'), c(4, t0 + 9 * m, 'Piangerò', 'Giulio Cesare (Aria)'));
+    await obreSafata(); await pagina.waitForTimeout(800); await esperaDesat();
+    const card = pagina.locator('#safataCos .sf-card', { hasText: 'Serse (Aria)' });
+    const bt = card.locator('[data-sfllistaobre]', { hasText: 'Això és una llista' });
+    igual(await bt.count(), 1, 'botó «Això és una llista» a la targeta de les cançons soltes');
+    await bt.click(); await pagina.fill('#inLlista', 'AA Händel'); await pagina.click('[data-sfllistanova]'); await esperaDesat();
+    igual(JSON.stringify(consulta('SELECT nom FROM llista').map(x => x.nom)), '["AA Händel"]', 'Llista.Nom');
+    const cs = consulta('SELECT posicio, recording_msid, pista, durada_ms FROM llista_canco ORDER BY posicio');
+    igual(cs.map(x => x.recording_msid).join(','), 'msid-banc-ll1,msid-banc-ll2,msid-banc-ll3,msid-banc-ll4', 'llista_canco en l\'ordre en què van sonar');
+    cal(cs.every(x => x.durada_ms === 180000), 'llista_canco.durada_ms hauria de ser la Scrobble.duration_ms (180000): ' + JSON.stringify(cs));
+    igual(consulta("SELECT COUNT(*) AS n FROM scrobble WHERE recording_msid LIKE 'msid-banc-ll%' AND llista_id IS NOT NULL")[0].n, 4, 'Scrobble.llista_id apuntat');
+    cal((await card.innerText()).includes('Llista · AA Händel · 4 cançons'), 'la targeta no diu «Llista · AA Händel · 4 cançons»');
+    await pagina.click('[data-tornasafata]').catch(() => {});
+  } },
+  { nom: 'llistes (ACT-633 i ACT-634): una sessió amb 3 cançons de la llista la proposa amb un toc, i la cançó nova s\'hi afegeix sola al final', sintetic: true, async fes({ pagina, lb, consulta, esperaDesat, obreSafata }) {
+    const t0 = Date.now() - (7 * 60 + 30) * 60e3, m = 60e3;   // 38 minuts després de l'altra: una sessió nova
+    const c = (msid, t, nom, album) => ({ compte: 'crimsonnnn', listened_at: Math.floor(t / 1000), recording_msid: msid,
+      track_metadata: { artist_name: 'Händel', track_name: nom, release_name: album, additional_info: { duration_ms: 3 * m } } });
+    lb.escoltes.push(c('msid-banc-ll2', t0, 'Lascia ch\'io pianga', 'Rinaldo (Aria)'), c('msid-banc-ll1', t0 + 3 * m, 'Ombra mai fù', 'Serse (Aria)'),
+      c('msid-banc-ll5', t0 + 6 * m, 'Dopo notte', 'Ariodante (Aria)'), c('msid-banc-ll4', t0 + 9 * m, 'Piangerò', 'Giulio Cesare (Aria)'));
+    await obreSafata(); await pagina.waitForTimeout(800); await esperaDesat();
+    const card = pagina.locator('#safataCos .sf-card', { hasText: 'Ariodante (Aria)' });
+    const si = card.locator('[data-sfllistasi]');
+    igual(await si.count(), 1, 'proposta de la llista reconeguda');
+    igual((await si.innerText()).trim(), 'Sí, és AA Händel · s\'hi afegeix una cançó', 'text del botó');
+    await si.click(); await esperaDesat();
+    const cs = consulta('SELECT posicio, recording_msid FROM llista_canco ORDER BY posicio');
+    igual(cs.map(x => x.posicio + ':' + x.recording_msid).join(','), '1:msid-banc-ll1,2:msid-banc-ll2,3:msid-banc-ll3,4:msid-banc-ll4,5:msid-banc-ll5', 'la cançó nova, al final (llista_canco.posicio)');
+    igual(consulta("SELECT COUNT(*) AS n FROM scrobble WHERE recording_msid LIKE 'msid-banc-ll%' AND llista_id IS NULL")[0].n, 0, 'pistes de les dues sessions sense Scrobble.llista_id');
+    await pagina.click('[data-tornasafata]').catch(() => {});
+  } },
+  { nom: 'llistes (ACT-633): el llindar és 3 cançons, o totes si la sessió en té menys; i «Això és una llista» amb un nom que ja existeix hi afegeix', sintetic: true, async fes({ pagina }) {
+    const r = await pagina.evaluate(async () => {
+      const A = await import('./js/arxiu.js?v=17'), L = await import('./js/llistes.js?v=1');
+      const ids = [];
+      // pistes de fa nou dies, ignorades perquè no surtin a la safata: el llindar no mira l'estat
+      await A.canvia(db => {
+        const t = d => new Date(Date.now() - 9 * 864e5 + d * 60e3).toISOString();
+        const fa = [['ll1', 0, 180000], ['ll2', 3, 180000], ['x1', 6, 180000], ['ll3', 9, 180000], ['x2', 12, null], ['x3', 15, 200000]];
+        for (const [k, d, dur] of fa) { db.run(`INSERT INTO scrobble (compte, listened_at, artista, pista, album, duration_ms, recording_msid, estat) VALUES ('crimsonnnn', ?, 'Banc', ?, ?, ?, ?, 'ignorat')`,
+          [t(d), k, 'Àlbum ' + k, dur, 'msid-banc-' + k]); ids.push(db.exec('SELECT last_insert_rowid()')[0].values[0][0]); }
+      });
+      const db = A.estat.db, [a1, a2, b1, a3, b2, b3] = ids;
+      const p = x => L.deLaSessio(db, x).proposta?.nom || null;
+      const out = { dues: p([a1, a2]), duesIUnaAltra: p([a1, a2, b1]), tres: p([a1, a2, b1, a3]), una: p([a1]) };
+      let c; await A.canvia(d => { c = L.crea('Prova', [b1, b2, b3])(d); });
+      let c2; await A.canvia(d => { c2 = L.crea('  prova ', [a1])(d); });
+      out.crea = c; out.crea2 = c2; out.n = db.exec("SELECT COUNT(*) FROM llista WHERE nom = 'Prova'")[0].values[0][0];
+      return out;
+    });
+    igual(r.dues, 'AA Händel', 'sessió de 2 cançons, totes dues a la llista (menys de 3: totes)');
+    igual(r.una, 'AA Händel', 'sessió d\'una cançó que és a la llista');
+    igual(r.duesIUnaAltra, null, 'sessió de 3 cançons amb només 2 a la llista (no arriba a 3)');
+    igual(r.tres, 'AA Händel', 'sessió de 4 cançons amb 3 a la llista');
+    igual(r.crea.noves, 3, 'cançons de la llista nova «Prova»');
+    cal(r.crea2.existia && r.crea2.noves === 1 && r.n === 1, '«Això és una llista» amb el nom «prova» ha d\'afegir a «Prova», no fer-ne una de bessona: ' + JSON.stringify(r.crea2));
+  } },
+  { nom: 'agrupacions (ACT-635): els grups i les llistes amb mosaic; la llista amb cançons, última escolta i durada total (incompleta amb «+»), la més recent primer', sintetic: true, async fes({ pagina }) {
+    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="agr"]'); await pagina.waitForTimeout(300);
+    const t = await pagina.locator('#agrupacions').innerText();
+    cal(/Grups[\s\S]*Careful Now/.test(t), 'falta el grup Careful Now a Agrupacions');
+    const ls = await pagina.locator('#agrupacions [data-llista]').allInnerTexts();
+    igual(ls.length, 2, 'llistes a Agrupacions');
+    cal(ls[0].includes('AA Händel') && ls[0].includes('5 cançons') && ls[0].includes('15′'), 'la primera ha de ser AA Händel, 5 cançons, 15′: ' + JSON.stringify(ls[0]));
+    cal(ls[1].includes('Prova') && ls[1].includes('+'), 'la segona ha de ser Prova, amb la durada incompleta («+»): ' + JSON.stringify(ls[1]));
+    const files_ = await pagina.locator('#agrupacions .ag-fila').count();
+    cal(files_ >= 3, 'files a Agrupacions (grups i llistes): ' + files_);
+    igual(await pagina.locator('#agrupacions .ag-fila .collage').count(), files_, 'un mosaic a cada fila d\'Agrupacions');
+  } },
+  { nom: 'agrupacions: la fitxa de la llista canvia el nom, treu una cançó tornant a numerar, i «Esborra la llista» deixa les cançons soltes', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    await pagina.locator('#agrupacions [data-llista]', { hasText: 'AA Händel' }).click(); await pagina.waitForTimeout(300);
+    igual(await pagina.locator('#full .canco').count(), 5, 'cançons a la fitxa de la llista');
+    cal(!(await pagina.locator('#full .play, #full a.escoltar').count()), 'la fitxa de la llista no porta ▶ (viu a Amazon o YouTube)');
+    await pagina.click('#full [data-nomllista]'); await pagina.fill('#inNomLlista', 'AA Händel 2026'); await pagina.click('[data-desanomllista]'); await esperaDesat();
+    igual(consulta('SELECT nom FROM llista WHERE id = (SELECT llista_id FROM llista_canco WHERE recording_msid = \'msid-banc-ll5\')')[0].nom, 'AA Händel 2026', 'Llista.Nom després de canviar-lo');
+    await pagina.locator('#full .canco', { hasText: 'Ev\'ry valley' }).locator('[data-treucanco]').click(); await esperaDesat();
+    const cs = consulta('SELECT posicio, recording_msid FROM llista_canco WHERE llista_id = (SELECT id FROM llista WHERE nom = \'AA Händel 2026\') ORDER BY posicio');
+    igual(cs.map(x => x.posicio + ':' + x.recording_msid).join(','), '1:msid-banc-ll1,2:msid-banc-ll2,3:msid-banc-ll4,4:msid-banc-ll5', 'posicions després de treure Ev\'ry valley');
+    await pagina.click('[data-tornafull]');
+    const prova = consulta("SELECT id FROM llista WHERE nom = 'Prova'")[0].id;
+    await pagina.locator('#agrupacions [data-llista]', { hasText: 'Prova' }).click(); await pagina.waitForTimeout(250);
+    await pagina.click('#full [data-esborrallista]'); await esperaDesat();
+    igual(consulta('SELECT COUNT(*) AS n FROM llista WHERE id = ?', [prova])[0].n, 0, 'la llista Prova, esborrada');
+    igual(consulta('SELECT COUNT(*) AS n FROM llista_canco WHERE llista_id = ?', [prova])[0].n, 0, 'les cançons de Prova, esborrades');
+    igual(consulta('SELECT COUNT(*) AS n FROM scrobble WHERE llista_id = ?', [prova])[0].n, 0, 'Scrobble.llista_id de Prova, buidat');
+    igual(await pagina.locator('#agrupacions [data-llista]').count(), 1, 'llistes a Agrupacions després d\'esborrar Prova');
+    await pagina.click('[data-anar="faristol"]');
   } },
   { nom: 'còpia: la primera obertura n\'ha fet una, la parella .sqlite + .xlsx amb els recomptes a les propietats', async fes({ drive, pagina }) {
     const avui = new Date().toISOString().slice(0, 10);
@@ -744,25 +896,25 @@ export const COMPROVACIONS = [
   { nom: 'proper: si entra un altre disc de l\'artista es queda amagat i torna; només l\'esborra el mateix títol', sintetic: true, async fes({ pagina, consulta, esperaDesat, tornaFaristol }) {
     const proper = () => consulta(`SELECT proper_titol AS t FROM preferent WHERE artista_id = 4`)[0].t;
     igual(proper(), 'Kind of Blue', 'proper de Miles Davis abans de res');
-    const id = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=16'), D = await import('./js/dades.js?v=18');
+    const id = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=19');
       let r; await A.canvia(db => { r = D.posaEnRotacio({ art: 'Miles Davis', tit: 'Sketches of Spain', min: 41, canal: 'youtube' })(db); }); return r.id; });
     await esperaDesat();
     igual(proper(), 'Kind of Blue', 'preferent.proper_titol després d\'entrar un altre disc seu');
     await reobre(pagina); await tornaFaristol('pref');   // A.canvia no repinta: es torna a obrir
     let t = await pagina.locator('#files').innerText();
     cal(/Ara estudies\s+Sketches of Spain/.test(t) && !t.includes('El proper: Kind of Blue'), 'amb disc en rotació el proper no s\'ha de pintar: ' + JSON.stringify(t));
-    await pagina.evaluate(async id => { const A = await import('./js/arxiu.js?v=16'), D = await import('./js/dades.js?v=18'); await A.canvia(D.treu(id)); }, id);
+    await pagina.evaluate(async id => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=19'); await A.canvia(D.treu(id)); }, id);
     await esperaDesat(); await reobre(pagina); await tornaFaristol('pref');
     t = await pagina.locator('#files').innerText();
     cal(t.includes('El proper: Kind of Blue'), 'sense disc en rotació el proper havia de tornar: ' + t.slice(0, 200));
-    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=16'), D = await import('./js/dades.js?v=18');
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=17'), D = await import('./js/dades.js?v=19');
       await A.canvia(D.posaEnRotacio({ art: 'Miles Davis', tit: 'kind of blue', min: 46, canal: 'youtube' })); });
     await esperaDesat();
     igual(proper(), null, 'preferent.proper_titol després d\'entrar el mateix disc (amb majúscules diferents)');
   } },
-  { nom: 'excel: anada i tornada idèntica fila a fila, amb les nou pestanyes i les columnes de càrrega del §3.2', async fes({ pagina, consulta }) {
+  { nom: 'excel: anada i tornada idèntica fila a fila, amb les onze pestanyes (les dues de les llistes, des de l\'estructura 7) i les columnes de càrrega del §3.2', async fes({ pagina, consulta, real }) {
     const r = await pagina.evaluate(async () => {
-      const A = await import('./js/arxiu.js?v=16'), X = await import('./js/excel.js?v=1'), { MIGRACIONS } = await import('./js/esquema.js?v=5');
+      const A = await import('./js/arxiu.js?v=17'), X = await import('./js/excel.js?v=2'), { MIGRACIONS } = await import('./js/esquema.js?v=6');
       const l = await X.llegeix(await X.xlsx(A.estat.db));
       const SQL = await initSqlJs({ locateFile: f => 'vendor/sqljs/' + f });
       const buida = () => { const d = new SQL.Database(); MIGRACIONS.forEach((m, i) => { d.exec(m); d.exec(`PRAGMA user_version = ${i + 1}`); }); return d; };
@@ -771,11 +923,15 @@ export const COMPROVACIONS = [
       const t = l['Edició'][0].indexOf('Títol'); l['Edició'][1][t] = 'Un títol corregit a Edició';
       const d2 = buida(); X.carrega(d2, l); const dif2 = X.compara(A.estat.db, d2); d2.close();
       return { dif, dif2, pestanyes: Object.keys(l), edicio: l['Edició'][0].slice(0, 16), part: l['Part'][0].slice(0, 6), artista: l['Artista'][0].slice(0, 4),
-               escolta: l['Escolta'][0], scrobbles: l['Scrobble'].length - 1, meta: l['Meta'].slice(1).map(f => f[0]) };
+               escolta: l['Escolta'][0], scrobbles: l['Scrobble'].length - 1, meta: l['Meta'].slice(1).map(f => f[0]),
+               llistes: l['Cançó de llista'].length - 1, partCols: l['Part'][0] };
     });
     cal(!r.dif.length, 'l\'anada i tornada no és idèntica: ' + r.dif.slice(0, 3).join(' | '));
     cal(!r.dif2.length, 'una correcció del títol a Edició ha manat sobre Àlbum: ' + r.dif2.slice(0, 2).join(' | '));
-    igual(r.pestanyes.join(','), 'Edició,Part,Artista,Àlbum,Puntuació,Escolta,Scrobble,Preferent,Meta', 'pestanyes');
+    igual(r.pestanyes.join(','), 'Edició,Part,Artista,Àlbum,Puntuació,Escolta,Scrobble,Preferent,Llista,Cançó de llista,Meta', 'pestanyes');
+    igual(r.llistes, consulta('SELECT COUNT(*) AS n FROM llista_canco')[0].n, 'files de la pestanya Cançó de llista');
+    if (!real) cal(r.llistes > 0, 'la pestanya Cançó de llista hauria de portar les cançons de les llistes de les comprovacions d\'abans');
+    cal(r.part.length && r.partCols.includes('portada'), 'la pestanya Part no porta la columna portada (ACT-624)');
     igual(r.edicio.join(' | '), 'ID de càrrega | ID d\'àlbum | Títol | Artista | Nom de l\'artista | Nom de l\'edició | Durada total | Any de publicació original | Any d\'aquesta edició | Segell | Codi de catàleg | Formats disponibles | Estat d\'estrena | Lot de càrrega | Procedència | Avisos', 'columnes de càrrega d\'Edició');
     igual(r.part.join(' | '), 'ID de càrrega | Nom de l\'artista | Nom de l\'edició | Part.Número | Títol de la part | Durada', 'columnes de càrrega de Part');
     igual(r.artista.join(' | '), 'ID d\'artista | Nom canònic | Variants d\'escriptura | Persona', 'columnes de càrrega d\'Artista');
@@ -787,9 +943,9 @@ export const COMPROVACIONS = [
     await pagina.click('#btAjustos'); await pagina.waitForTimeout(300);
     const [baixada] = await Promise.all([pagina.waitForEvent('download', { timeout: 10000 }), pagina.click('[data-excel]')]);
     cal(/^la-meva-discoteca \d{4}-\d{2}-\d{2}\.xlsx$/.test(baixada.suggestedFilename()), 'nom del fitxer: ' + baixada.suggestedFilename());
-    const fs = await import('node:fs'), X = await import('../js/excel.js?v=1');
+    const fs = await import('node:fs'), X = await import('../js/excel.js?v=2');
     const l = await X.llegeix(new Uint8Array(fs.readFileSync(await baixada.path())));
-    igual(Object.keys(l).length, 9, 'pestanyes del fitxer baixat');
+    igual(Object.keys(l).length, 11, 'pestanyes del fitxer baixat');
     await pagina.click('[data-tornafull]').catch(() => {});
   } },
   { nom: 'sense connexió: sw.js està al dia amb el codi que guarda', sempre: true, async fes() {

@@ -7,14 +7,15 @@
 // Blocs 3.3 + 3.4 + 3.5 (v1.44), una sola publicació: les escoltes de ListenBrainz, la safata viva i la bústia.
 // Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 
-import * as A from './arxiu.js?v=16';
-import * as D from './dades.js?v=18';
+import * as A from './arxiu.js?v=17';
+import * as D from './dades.js?v=19';
 import * as E from './escoltes.js?v=10';
 import * as LB from './listenbrainz.js?v=2';
 import * as I from './imatges.js?v=4';
 import * as T from './tags.js?v=1';
-import * as C from './copies.js?v=1';
-import * as X from './excel.js?v=1';
+import * as C from './copies.js?v=2';
+import * as X from './excel.js?v=2';
+import * as L from './llistes.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -74,6 +75,7 @@ function avisa(txt, desfes) {
 // complet: les fitxes i La Cabina ocupen tota la pantalla, com la safata (3-11, Ricard). Les fulles d'acció ràpida
 // (la nota, el ▶ del grup, el canal…) es queden a mitja pantalla, perquè el fons fa de context.
 function obreFull(h, complet = false) {
+  estat.resoltaOberta = null;
   $('#full').innerHTML = '<button class="torna-full" data-tornafull="1">← Tornar</button>' + h;
   $('#full').classList.toggle('complet', complet);
   $('#full').classList.add('obert'); $('#fons').classList.add('obert'); $('#full').scrollTop = 0;
@@ -126,6 +128,7 @@ function pinta() {
   if (!A.estat.db) return;
   sincroCanals();
   pintaReixa(); pintaFiles(); pintaHistorial(); pintaSafata(); alertaCopia();
+  if (estat.superficie === 'prestatgeria') pintaPrestatgeria();
   if (estat.superficie === 'artista' && estat.artista) pintaArtista(estat.artista);
   I.omple();
 }
@@ -367,6 +370,126 @@ function fullGrupHistorial(nom) {
       </div>`; }).join('')}</div>`);
 }
 
+// ───────── La Prestatgeria, primer bloc (ACT-622) ─────────
+// Tots els discos: una fila per edició (ACT-637), per artista, amb cercador i sense filtres (ACT-636). La fila obre la
+// mateixa fitxa del Faristol (ACT-391). Agrupacions: els grups i les Llistes de reproducció (ACT-632 a ACT-635).
+// L'Afinació espera (ACT-622).
+const MIN_MS = 60e3;
+const minutsDe = ms => Math.round(ms / MIN_MS);
+function pintaPrestatgeria() {
+  if (!A.estat.db) return;
+  if (estat.psub === 'agr') pintaAgrupacions(); else pintaArxiu();
+}
+function pintaArxiu() {
+  const caixa = $('#arxiu'); if (!caixa) return;
+  const tots = D.totsElsDiscos(db()), f = norm($('#cercaArxiu')?.value);
+  const ll = f ? tots.filter(x => x.cerca.includes(f)) : tots;
+  $('#arxiuCompte').textContent = f ? `${ll.length} de ${tots.length} discos` : `${tots.length} discos, per artista`;
+  // Dues edicions del mateix àlbum: el nom de l'edició, si en té, i sempre la durada (ACT-637).
+  caixa.innerHTML = ll.map(x => `<button class="ar-fila" data-fitxa="${x.id}">
+      <span class="hcob">${esc(inicials(x.art))}${x.portada ? IMG(x.portada) : ''}</span>
+      <span class="htxt"><span class="htit">${esc(x.titol)}</span><span class="hart">${esc(x.art)}${x.n_edicions > 1 && x.nom_edicio ? ' · ' + esc(x.nom_edicio) : ''}${x.n_parts ? ` · <i>${x.n_parts} parts</i>` : ''}${x.rotacio_actual ? ' · <i>en rotació</i>' : ''}</span></span>
+      <span class="m">${x.durada_total}′</span></button>`).join('')
+    || `<p class="subtitol" style="margin:14px 0 0">${tots.length ? 'Res amb aquest nom.' : 'L\'arxiu encara és buit.'}</p>`;
+  I.omple(caixa);
+}
+// Sense cap portada encara, les inicials del nom, com les files de l'Historial.
+const mosaic = (refs, nom = '') => refs.length
+  ? `<span class="hcob collage n${Math.min(refs.length, 4)}"><span class="trossos">${refs.slice(0, 4).map(r => `<span class="tros">${IMG(r)}</span>`).join('')}</span></span>`
+  : `<span class="hcob collage buit">${esc(inicials(nom))}</span>`;
+const textDurLlista = l => l.durada_ms ? minutsDe(l.durada_ms) + '′' + (l.incompleta ? '+' : '') : (l.n ? '—' : '0′');
+function pintaAgrupacions() {
+  const caixa = $('#agrupacions'); if (!caixa) return;
+  const gs = D.grupsArxiu(db()), ls = L.llistes(db());
+  const filaGrup = g => {
+    const m = g.membres, total = m.every(x => x.min) ? m.reduce((a, x) => a + x.min, 0) : null;
+    return `<button class="ar-fila ag-fila" data-grup="${esc(g.nom)}">${mosaic(m.map(x => x.portada).filter(Boolean), titolGrup(g.nom, m))}
+      <span class="htxt"><span class="htit">${esc(titolGrup(g.nom, m))}</span><span class="hart">${esc([...new Set(m.map(x => x.art))].join(' · '))}</span>
+        <span class="hmeta">${m.length} discos${m.some(x => x.rotacio_actual) ? ' · ' + m.filter(x => x.rotacio_actual).length + ' en rotació' : ''}</span></span>
+      <span class="m">${total ? total + '′' : ''}</span></button>`;
+  };
+  const filaLlista = l => `<button class="ar-fila ag-fila" data-llista="${l.id}">${mosaic(l.portades, l.nom)}
+      <span class="htxt"><span class="htit">${esc(l.nom)}</span><span class="hart">${l.n === 1 ? 'una cançó' : l.n + ' cançons'}</span>
+        <span class="hmeta">${l.darrera ? 'l\'última, ' + esc(quan(l.darrera)) : 'encara no ha sonat'}</span></span>
+      <span class="m">${textDurLlista(l)}</span></button>`;
+  caixa.innerHTML = `<h2 class="ag-cap">Grups</h2>${gs.map(filaGrup).join('') || '<p class="subtitol">Encara no hi ha cap grup. Es fa des de la fitxa d\'un disc: «agrupa\'l amb…».</p>'}
+    <h2 class="ag-cap">Llistes</h2>${ls.map(filaLlista).join('') || '<p class="subtitol">Encara no hi ha cap llista. Es fa des de la safata, amb les cançons soltes d\'una sessió: «Això és una llista».</p>'}
+    ${ls.some(l => l.incompleta) ? '<p class="subtitol" style="font-size:12px;margin:10px 0 0">Una durada amb «+» és incompleta: alguna cançó va arribar sense durada.</p>' : ''}`;
+  I.omple(caixa);
+}
+// La fitxa d'una llista (ACT-635): les cançons en ordre, canviar-li el nom, treure'n una i esborrar-la. Sense ▶: viu fora.
+function fullLlista(id) {
+  const l = L.llista(db(), id); if (!l) { tancaFull(); return; }
+  estat.llistaOberta = id;
+  const cs = L.cancons(db(), id);
+  obreFull(`${l.portades.length ? `<div class="fitxa-portada mosaic-llista">${mosaic(l.portades, l.nom)}</div>` : ''}<h3>${esc(l.nom)}</h3>
+    <p>${l.n === 1 ? 'Una cançó' : l.n + ' cançons'} · ${textDurLlista(l)}${l.incompleta ? ' (alguna sense durada)' : ''} · ${l.darrera ? 'l\'última vegada, ' + esc(quan(l.darrera)) : 'encara no ha sonat'}</p>
+    <p class="gris" style="font-size:12px;margin-top:-6px">La llista viu a Amazon o a YouTube: aquí la màquina només la reconeix quan sona.</p>
+    <div class="barra-accions" style="position:static;padding:0 0 10px"><button class="bt" data-nomllista="${id}">Canvia-li el nom</button></div>
+    <div class="llista-cancons">${cs.map(c => `<div class="canco"><span class="n">${c.posicio}</span>
+        <span class="txt"><b>${esc(c.pista || '(sense títol)')}</b><small>${esc(c.artista || '')}${c.durada_ms ? ' · ' + minutsDe(c.durada_ms) + '′' : ''}</small></span>
+        <button class="treu" data-treucanco="${c.id}" aria-label="Treu ${esc(c.pista || '')} de la llista">treu-la</button></div>`).join('')}</div>
+    <div class="barra-accions" style="position:static;padding:14px 0 0"><button class="bt discret" data-esborrallista="${id}">Esborra la llista</button></div>`, true);
+}
+function fullNomLlista(id) {
+  const l = L.llista(db(), id); if (!l) return;
+  obreFull(`<h3>El nom de la llista</h3><p>Ara es diu <b>${esc(l.nom)}</b>.</p>
+    <label class="camp"><span>Nom</span><input id="inNomLlista" type="text" autocomplete="off" value="${esc(l.nom)}"></label>
+    <div class="barra-accions" style="position:static;padding:4px 0 0"><button class="bt principal" data-desanomllista="${id}">Desa'l</button></div>`);
+  setTimeout(() => $('#inNomLlista')?.select(), 30);
+}
+const PSUBS = ['tots', 'agr', 'afi'];
+function psub(v) {
+  const de = PSUBS.indexOf(estat.psub || 'tots'), a = PSUBS.indexOf(v), p = $('#q-' + v);
+  p.classList.remove('entra-dreta', 'entra-esquerra');
+  if (a !== de) { void p.offsetWidth; p.classList.add(a > de ? 'entra-dreta' : 'entra-esquerra'); window.scrollTo(0, 0); }
+  estat.psub = v;
+  PSUBS.forEach(k => { $('#ptab-' + k).setAttribute('aria-selected', v === k); $('#q-' + k).classList.toggle('activa', v === k); });
+  pintaPrestatgeria();
+}
+
+// ───────── les llistes a la safata (ACT-632 a ACT-634) ─────────
+// Les pistes de les cançons soltes d'una targeta: les dels discos sense edició que la màquina no fa néixer com a disc.
+function pistesSoltes(c, solta) {
+  return c.discos.filter(d => !d.edicio_id && solta.has(clauDisc(d))).flatMap(d => d.scr.map(x => x.id));
+}
+// El bloc de la targeta: les llistes que la sessió ja té, en una línia cadascuna, i per a la resta, la llista reconeguda
+// (un toc) o «Això és una llista» (només el nom). On: a la targeta i al «Canvia» d'una resolta.
+function blocLlista(c, solta) {
+  const ps = pistesSoltes(c, solta); if (!ps.length) return '';
+  const s = L.deLaSessio(db(), ps), clau = c.clau;
+  let h = s.ja.map(l => `<p class="sf-llista">Llista · <b>${esc(l.nom)}</b> · ${l.n === 1 ? 'una cançó' : l.n + ' cançons'} d'aquesta sessió
+      <button class="sf-link" style="padding:0 0 0 6px" data-llista="${l.id}">obre-la</button></p>`).join('');
+  if (!s.resta.length) return h;
+  const n = new Set(s.resta.map(x => x.recording_msid)).size;
+  if (estat.nomLlistaDe === clau) return h + `<div class="sf-nova-llista"><label class="camp"><span>Nom de la llista</span>
+      <input id="inLlista" type="text" autocomplete="off" placeholder="p. ex. AA Händel" value="${esc(estat.nomLlistaTxt || '')}"></label>
+      <div class="sf-chips"><button class="principal" data-sfllistanova="${clau}">Desa-la</button><button class="mes" data-sfllistaobre="">Deixa-ho</button></div></div>`;
+  const p = s.proposta;
+  const altra = `<button class="${p ? 'mes' : ''}" data-sfllistaobre="${clau}">${p ? 'No: és una altra llista' : 'Això és una llista'}</button>`;
+  return h + `<div class="sf-chips sf-llistes">${p ? `<button class="principal" data-sfllistasi="${clau}|${p.id}">${p.continua ? 'Afegeix-les a ' + esc(p.nom) : 'Sí, és ' + esc(p.nom)}${p.noves ? ` · s'hi ${p.noves === 1 ? 'afegeix una cançó' : 'afegeixen ' + p.noves + ' cançons'}` : ''}</button>` : ''}${altra}</div>
+    ${p || n < 2 ? '' : `<p class="sf-pre" style="margin-top:4px">${n} cançons soltes en aquesta sessió.</p>`}`;
+}
+const targetaDe = clau => E.targetes(db(), { estat: 'totes' }).find(x => x.clau === +clau);
+const restaDe = c => L.deLaSessio(db(), pistesSoltes(c, solteSet())).resta.map(x => x.id);
+// Després de tocar una llista: la safata es torna a pintar sola (fes → pinta); el «Canvia» d'una resolta, es torna a obrir.
+function refrescaLlista() { if (estat.resoltaOberta && $('#full').classList.contains('obert')) obreResolta(estat.resoltaOberta); else pintaSafata(); }
+const solteSet = () => new Set(E.discosNous(db(), mbCache).soltes.map(x => x.clau));
+
+// El «Canvia» d'una sessió resolta. Des de la v7, també hi viu la llista de les seves cançons soltes (ACT-632).
+function obreResolta(clau) {
+  const c = targetaDe(clau); if (!c) { tancaFull(); return; }
+  const ll = blocLlista(c, solteSet());
+  obreFull(`<h3>${esc(franja(c))}</h3><p>${ctxPerDisc(c)}</p><div class="canals">
+      <button data-sfreobre="${c.scr.map(x => x.id).join(',')}">On ho escoltaves${c.discos.length > 1 ? ', tota la sessió' : ''} <small>torna la targeta a la safata</small></button>
+      ${c.discos.length > 1 ? c.discos.map(x => `<button data-sfreobre="${x.scr.map(s => s.id).join(',')}">On escoltaves ${esc(x.titol)} <small>ara: ${esc(ctxDisc(x))} · només aquest disc torna a la safata</small></button>`).join('') : ''}
+      ${c.discos.filter(x => x.edicio_id).map(x => `<button data-canviaedicio="${x.edicio_id}">L'edició de ${esc(x.titol)} <small>la mateixa operació que a la fitxa</small></button>`).join('')}
+      ${c.discos.filter(x => x.edicio_id).map(x => `<button data-sfcanaldisc="${x.edicio_id}">El canal de ${esc(x.titol)} <small>ara: ${esc(nomCanal(x.app_escolta))}</small></button>`).join('')}
+    </div>${ll ? `<h3 style="margin-top:18px">Les cançons soltes</h3>${ll}` : ''}`);
+  estat.resoltaOberta = clau;
+  I.omple($('#full'));
+}
+
 // ───────── la safata (§8.7) ─────────
 // Una sola cua: la pregunta 2, els discos nous, les preguntes 7, 8 i 9, i les targetes de sessió. A sota, les resoltes,
 // cadascuna amb «Canvia». La màquina no interromp: el número del icona fa la feina (v1.34).
@@ -472,6 +595,12 @@ function ctxPerDisc(c) {
     : v.map(([t, x]) => `${esc(t)} · <b>${esc(x)}</b>`).join('; ');
 }
 function pintaSafata() {
+  // La safata es torna a pintar sola (una lectura de ListenBrainz, un desat): el nom de la llista que s'està escrivint
+  // es conserva, i el cursor també.
+  const escrivint = document.activeElement?.id === 'inLlista';
+  try { pintaSafata_(); } finally { if (escrivint) { const i = $('#inLlista'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } } }
+}
+function pintaSafata_() {
   sincroCanals();
   const cua = cuaSafata();
   const q2 = new Map(cua.q2.map(q => [q.clau, q])), nous = new Map(cua.nous.map(x => [x.clau, x]));
@@ -522,6 +651,7 @@ function pintaSafata() {
       ${perGrups(c.discos, d => !d.llest ? `<div class="sf-sonant">${minDisc(d, ' · <i>sonant</i>')}</div>`
         : d.contestat ? fila(d) + jaContestat(d)
         : `<div class="sf-separat">${fila(d)}${xipsContext('d' + c.clau + ':' + d.clau, c, 'Acabat. On l\'escoltaves?')}</div>`)}
+      ${blocLlista(c, solta)}
       <p class="sf-pre">Cada disc es pot contestar quan fa 5 minuts que ha acabat o quan en comença un altre. Si esperes, quan faci 30 minuts que no sona res, la sessió sencera es contesta amb un toc.</p></div>`).join('');
   // la pregunta 2 i el disc nou que no tenen cap targeta a la cua (per exemple, d'escoltes d'abans de l'1-11)
   h += q2Sols.map(q => `<div class="sf-card"><span class="sf-tipus">És aquesta edició?</span>
@@ -554,7 +684,7 @@ function pintaSafata() {
         ? perGrups(c.discos, d => d.contestat ? fila(d) + jaContestat(d) : `<div class="sf-separat">${fila(d)}${xipsContext('d' + c.clau + ':' + d.clau, c, 'On escoltaves aquest?')}</div>`)
         : perGrups(c.discos, d => fila(d) + (parcial && d.contestat ? jaContestat(d) : '')) + xipsContext('t' + c.clau, c, parcial ? 'On escoltaves la resta?' : null)
           + (c.discos.filter(d => !d.contestat).length > 1 ? `<button class="sf-link" data-sfsepara="${c.clau}">Separa: cada disc per la seva banda</button>` : '');
-    return `<div class="sf-card"><div class="sf-cap"><b>${esc(franja(c))}</b><span>${nomCompte(c.comptes)} · ${c.discos.length} ${c.discos.length === 1 ? 'disc' : 'discos'}</span></div>${cos}</div>`;
+    return `<div class="sf-card"><div class="sf-cap"><b>${esc(franja(c))}</b><span>${nomCompte(c.comptes)} · ${c.discos.length} ${c.discos.length === 1 ? 'disc' : 'discos'}</span></div>${cos}${blocLlista(c, solta)}</div>`;
   }).join('');
   if (!n) h += `<div class="sf-buit"><b>Res per resoldre</b>${E.arrencada(db()) ? 'La màquina llegeix les dues comptes de ListenBrainz des del ' + dia(E.arrencada(db())) + ' cada vegada que obres l\'app i quan toques la safata.' : 'Quan hi hagi connexió, la màquina començarà a llegir ListenBrainz.'}${estat.lbError ? '<br><small>' + esc(estat.lbError) + '</small>' : ''}</div>`;
   // les resoltes, amb «Canvia» (tot el que es contesta aquí és editable sempre, §8.7)
@@ -656,7 +786,7 @@ function fullPortada(d) {
     <div class="candidats" id="candidats"></div>
     <div class="canals" style="margin-top:16px">
       <button data-pujaportada="1">Puja-la <small>si no surt enlloc: una foto o una imatge teva</small></button>
-      ${d.portada ? `<button data-noportada="${d.id}">Treu-la <small>no és aquesta, i no en tinc cap altra</small></button>` : ''}
+      ${d.portada ? `<button data-noportada="${d.partId ? 'p' + d.partId : d.id}">Treu-la <small>${d.partId ? 'la part torna a fer servir la de la caixa' : 'no és aquesta, i no en tinc cap altra'}</small></button>` : ''}
     </div>
     <input type="file" id="inPortada" accept="image/*" hidden>`, true);
   $('#inPortada').onchange = e => { const f = e.target.files?.[0]; if (f) pujaPortada(d, f); };
@@ -682,7 +812,7 @@ async function pujaPortada(d, fitxer) {
     const blob = await I.redueix(fitxer);
     const ref = 'drive:' + await A.pujaPortada(d.art + ' - ' + d.titol, blob);
     await I.guardaJa(ref, blob);
-    tancaFull(); fes(D.posaPortada(d.id, ref, 'pujada'), 'Portada desada');
+    tancaFull(); fes(d.partId ? D.posaPortadaPart(d.partId, ref) : D.posaPortada(d.id, ref, 'pujada'), 'Portada desada');
   } catch (e) { avisa('No s\'ha pogut pujar la portada: ' + e.message); }
 }
 
@@ -748,15 +878,29 @@ function fullFitxa(d) {
         <button class="sf-link" style="padding:0 0 0 8px" data-fitxagrup="${esc(d.conjunt)}">obre el grup</button>`
         : `cap <button class="sf-link" style="padding:0 0 0 8px" data-agrupa="${d.id}">agrupa'l amb…</button>`}</span></li>
       ${d.parts.length ? `<li><b>Part viva</b><span>${d.esperant ? 'cap: la caixa espera' : esc(d.viva.nom || '') + ' · ' + d.viva.numero + ' de ' + d.parts.length}</span></li>` : ''}
-      <li><b>Portada</b><span>${ORIGEN_PORTADA[d.portada ? d.portada_origen || 'escolta' : d.portada_origen === 'rebutjada' ? 'rebutjada' : 'cap']}
+      <li><b>Portada</b><span>${d.parts.length ? '<small class="gris">de la caixa:</small> ' : ''}${ORIGEN_PORTADA[d.portada_edicio ? d.portada_origen || 'escolta' : d.portada_origen === 'rebutjada' ? 'rebutjada' : 'cap']}
         <button class="sf-link" style="padding:0 0 0 8px" data-canviaportada="${d.id}">canvia-la</button></span></li>
     </ul>
+    ${d.parts.length ? blocParts(d) : ''}
     ${blocTags(d)}
     <div class="barra-accions" style="position:static;padding:0">
       ${d.esperant ? `<button class="bt principal" data-repren="${d.id}">Reprèn</button>` : `<button class="bt principal" data-escoltar="${d.id}">Escoltar ara</button>`}
       ${jaPref ? '' : `<button class="bt" data-fespref="${d.artista_id}">Afegir a Artistes Preferents</button>`}
       ${d.rotacio_actual ? `<button class="bt" data-treure="${d.id}">Treu de rotació</button>` : `<button class="bt" data-hrot="${d.id}">Posa'l en rotació</button>`}
     </div>`, true);
+}
+
+// La caixa sencera a la fitxa (ACT-624): totes les parts, amb número, títol, durada i estat, i la portada de cada una.
+// L'estat surt de Part.Rotació actual (viva) i Part.Data darrera escolta (escoltada); si no, pendent.
+// La reixa i Tots els discos fan servir la portada de la part viva si en té; si no, la de la caixa.
+function blocParts(d) {
+  return `<h3 style="margin:4px 0 8px">La caixa · ${d.parts.length} parts</h3><div class="parts-caixa">${d.parts.map(p => {
+    const est = p.rotacio_actual ? ['viva', 'viva'] : p.data_darrera_escolta ? ['escoltada', ''] : ['pendent', ''];
+    const cob = p.portada || d.portada_edicio;
+    return `<div class="part-fila"><span class="mini">${p.numero}${cob ? IMG(cob) : ''}</span>
+      <span class="txt"><b>${esc(p.nom || 'Part ' + p.numero)}</b><small>${p.durada ? p.durada + '′' : 'sense durada'}${p.portada ? '' : cob ? ' · la portada de la caixa' : ''}</small>
+        <button class="sf-link" style="padding:2px 0 0;font-size:12px" data-portadapart="${d.id}:${p.id}">canvia la portada</button></span>
+      <span class="estat-part ${est[1]}">${est[0]}</span></div>`; }).join('')}</div>`;
 }
 
 // El nom d'un grup (ACT-520): el posa la màquina i Ricard el canvia. Es desa a meta; Àlbum.Conjunt no es toca.
@@ -1106,7 +1250,7 @@ function sub(v) {
   estat.sub = v;
   SUBS.forEach(k => { $('#tab-' + k).setAttribute('aria-selected', v === k); $('#p-' + k).classList.toggle('activa', v === k); });
 }
-function lliscar(el) {
+function lliscar(el, llista = SUBS, actual = () => estat.sub, ves = sub) {
   let toc = null;
   el.addEventListener('touchstart', e => {
     toc = null; if (e.touches.length !== 1 || arros || e.target.closest('input,.nansa')) return;
@@ -1116,8 +1260,8 @@ function lliscar(el) {
     if (!toc || arros) return;
     const dx = e.changedTouches[0].clientX - toc.x, dy = e.changedTouches[0].clientY - toc.y; toc = null;
     if (Math.abs(dx) < 60 || Math.abs(dx) < 1.6 * Math.abs(dy)) return;
-    const i = SUBS.indexOf(estat.sub) + (dx < 0 ? 1 : -1);
-    if (i >= 0 && i < SUBS.length) sub(SUBS[i]);
+    const i = llista.indexOf(actual()) + (dx < 0 ? 1 : -1);
+    if (i >= 0 && i < llista.length) ves(llista[i]);
   }, { passive: true });
 }
 
@@ -1145,7 +1289,8 @@ document.addEventListener('click', e => {
   if (d.gps) { estat.gps = 'Mirant…'; detectaLloc(true); return; }
   if (t.id === 'btSafata') { if (!A.estat.db) return; if (estat.superficie !== 'safata') estat.abansSafata = estat.superficie; tancaFull(); vesA('safata'); pintaSafata(); llegeixEscoltes(); return; }
   if (d.tornasafata) { vesA(estat.abansSafata || 'faristol'); return; }
-  if (d.anar) { vesA(d.anar); return; }
+  if (d.anar) { vesA(d.anar); if (d.anar === 'prestatgeria') pintaPrestatgeria(); return; }
+  if (d.psub) { if ($('#full').classList.contains('obert')) tancaFull(); psub(d.psub); return; }
   if (d.sub) { if ($('#full').classList.contains('obert')) tancaFull(); sub(d.sub); return; }
   if (d.tornar) { vesA('faristol'); sub('pref'); return; }
 
@@ -1210,6 +1355,30 @@ document.addEventListener('click', e => {
   if (d.reprenpart) { const [id, n] = d.reprenpart.split(':').map(Number); tancaFull(); fes(D.posaPart(id, n), 'La part ' + n + ' entra en rotació'); return; }
   if (d.fespref) { const aid = +d.fespref; tancaFull(); fes(D.afegeixPreferentId(aid), 'Afegit a Artistes Preferents'); sub('pref'); return; }
 
+  // Les Llistes de reproducció (ACT-632 a ACT-635)
+  if (d.llista) { fullLlista(+d.llista); return; }
+  if (d.nomllista) { fullNomLlista(+d.nomllista); return; }
+  if (d.desanomllista) { const id = +d.desanomllista, nom = $('#inNomLlista')?.value.trim();
+    if (!nom) { avisa('Cal un nom.'); return; }
+    const altra = L.perNom(db(), nom); if (altra && altra.id !== id) { avisa(`Ja hi ha una llista que es diu «${altra.nom}».`); return; }
+    fes(L.canviaNom(id, nom), `La llista es diu «${nom}»`); fullLlista(id); return; }
+  if (d.treucanco) { const id = estat.llistaOberta; fes(L.treuCanco(+d.treucanco), 'Cançó fora de la llista'); if (id) fullLlista(id); return; }
+  if (d.esborrallista) { const l = L.llista(db(), +d.esborrallista); if (!l) return; tancaFull();
+    fes(L.esborra(l.id), `Llista «${l.nom}» esborrada. Les seves cançons tornen a ser soltes.`); return; }
+  if (d.sfllistaobre !== undefined) { estat.nomLlistaDe = d.sfllistaobre ? +d.sfllistaobre : null; estat.nomLlistaTxt = ''; refrescaLlista(); if (estat.nomLlistaDe) setTimeout(() => $('#inLlista')?.focus(), 30); return; }
+  if (d.sfllistanova) { const c = targetaDe(d.sfllistanova); if (!c) return; const nom = $('#inLlista')?.value.trim();
+    if (!nom) { avisa('Cal un nom.'); return; }
+    const ids = restaDe(c); if (!ids.length) return;
+    estat.nomLlistaDe = null; estat.nomLlistaTxt = '';
+    fes(L.crea(nom, ids), r => r.existia ? `Ja hi havia «${r.nom}»: ${r.noves ? (r.noves === 1 ? 'una cançó afegida' : r.noves + ' cançons afegides') : 'ja hi eren totes'}`
+                                         : `Llista «${r.nom}», amb ${r.noves === 1 ? 'una cançó' : r.noves + ' cançons'}. És a La Prestatgeria, Agrupacions.`);
+    refrescaLlista(); return; }
+  if (d.sfllistasi) { const [clau, id] = d.sfllistasi.split('|').map(Number), c = targetaDe(clau); if (!c) return;
+    const ids = restaDe(c); if (!ids.length) return;
+    const nom = L.llista(db(), id)?.nom || 'la llista';
+    fes(L.confirma(id, ids), r => `És ${nom}${r.noves ? ': ' + (r.noves === 1 ? 'una cançó afegida' : r.noves + ' cançons afegides') + ' al final' : ''}`);
+    refrescaLlista(); return; }
+
   if (d.grup) { fullGrup(d.grup); return; }
   if (d.grupplay) { fullGrupEscolta(d.grupplay); return; }
   if (d.fitxagrup) { fullGrup(d.fitxagrup); return; }
@@ -1246,13 +1415,7 @@ document.addEventListener('click', e => {
   if (d.excel) { descarregaExcel(); return; }
   if (d.alarmaok) { fes(C.treuAlarma, 'D\'acord. La propera còpia torna a rotar.', { desfes: false }).then(() => fullCabina()); return; }
   if (d.notaok) { fes(C.treuNota, 'Entesos.', { desfes: false }); return; }
-  if (d.sfresolta) { const c = E.targetes(db(), { estat: 'totes' }).find(x => x.clau === +d.sfresolta); if (!c) return;
-    obreFull(`<h3>${esc(franja(c))}</h3><p>${ctxPerDisc(c)}</p><div class="canals">
-      <button data-sfreobre="${c.scr.map(x => x.id).join(',')}">On ho escoltaves${c.discos.length > 1 ? ', tota la sessió' : ''} <small>torna la targeta a la safata</small></button>
-      ${c.discos.length > 1 ? c.discos.map(x => `<button data-sfreobre="${x.scr.map(s => s.id).join(',')}">On escoltaves ${esc(x.titol)} <small>ara: ${esc(ctxDisc(x))} · només aquest disc torna a la safata</small></button>`).join('') : ''}
-      ${c.discos.filter(x => x.edicio_id).map(x => `<button data-canviaedicio="${x.edicio_id}">L'edició de ${esc(x.titol)} <small>la mateixa operació que a la fitxa</small></button>`).join('')}
-      ${c.discos.filter(x => x.edicio_id).map(x => `<button data-sfcanaldisc="${x.edicio_id}">El canal de ${esc(x.titol)} <small>ara: ${esc(nomCanal(x.app_escolta))}</small></button>`).join('')}
-    </div>`); return; }
+  if (d.sfresolta) { obreResolta(+d.sfresolta); return; }
   if (d.sfreobre) { tancaFull(); fes(E.reobre(d.sfreobre.split(',').map(Number)), 'Torna a la safata'); return; }
   if (d.canviaedicio) { const x = D.fitxa(db(), +d.canviaedicio); if (x) fullEdicio(x); return; }
   if (d.triaedicio) { const [de, a] = d.triaedicio.split(':').map(Number); preguntaCorreccio(de, a); return; }
@@ -1336,11 +1499,15 @@ document.addEventListener('click', e => {
       return { album: ja ? x.album_tags : T.commutaIdioma(x.album_tags, v), edicio: x.tags }; }); return; }
 
   // Imatges (bloc 3.2)
-  if (d.canviaportada) { const x = rot(d.canviaportada); if (x) fullPortada(x); return; }
+  if (d.canviaportada) { const x = rot(d.canviaportada); if (x) fullPortada({ ...x, portada: x.portada_edicio, partId: null }); return; }
+  // La portada d'una part d'una caixa (ACT-624): la mateixa fulla, amb el títol de la part per cercar.
+  if (d.portadapart) { const [id, pid] = d.portadapart.split(':').map(Number), x = rot(id), p = x?.parts.find(y => y.id === pid); if (!p) return;
+    fullPortada({ ...x, titol: x.titol + (p.nom ? ' ' + p.nom : ' ' + p.numero), portada: p.portada, partId: pid }); return; }
   if (d.cercaportada) { cercaPortada(); return; }
   if (d.triaportada) { const x = estat.portadaDe; if (!x) return; tancaFull();
-    fes(D.posaPortada(x.id, d.triaportada, 'triada'), 'Portada triada'); return; }
+    fes(x.partId ? D.posaPortadaPart(x.partId, d.triaportada) : D.posaPortada(x.id, d.triaportada, 'triada'), x.partId ? 'Portada de la part triada' : 'Portada triada'); return; }
   if (d.pujaportada) { $('#inPortada')?.click(); return; }
+  if (d.noportada?.startsWith('p')) { tancaFull(); fes(D.posaPortadaPart(+d.noportada.slice(1), null), 'Portada de la part fora: fa servir la de la caixa.'); return; }
   if (d.noportada) { const id = +d.noportada; tancaFull(); fes(D.rebutjaPortada(id), 'Portada fora. Arribarà amb les escoltes, o la tries tu.'); return; }
   if (d.canviafoto) { const p = D.preferents(db()).find(x => x.id === +d.canviafoto); if (p) fullFoto(p); return; }
   if (d.cercafoto) { cercaFoto(); return; }
@@ -1514,6 +1681,9 @@ A.vigilaPendents(r => {
   marcaDesat(r); if (r.desat) avisa('Desat al Drive.');
 });
 lliscar($('#s-faristol'));
+lliscar($('#s-prestatgeria'), PSUBS, () => estat.psub || 'tots', psub);
+$('#cercaArxiu').addEventListener('input', () => pintaArxiu());
+document.addEventListener('input', e => { if (e.target.id === 'inLlista') estat.nomLlistaTxt = e.target.value; });
 try { const l = localStorage.getItem('tria-lloc'); if (l === 'Lleida' || l === 'Fora') posaLloc(l, false); } catch {}
 try { navigator.permissions?.query({ name: 'geolocation' }).then(r => { if (r.state === 'granted') detectaLloc(false); }).catch(() => {}); } catch {}
 

@@ -170,8 +170,41 @@ export const MIGRACIONS = [
   `
   ALTER TABLE escolta ADD COLUMN unio INTEGER;
   CREATE INDEX escolta_unio ON escolta(unio);
+  `,
+  // v7 · el primer bloc de La Prestatgeria (ACT-624, ACT-632 i ACT-635), en una sola migració:
+  //   part.portada: la portada d'una part d'una caixa (ACT-624). La reixa fa servir la de la part viva si en té, i si no,
+  //     la de l'edició. Es canvia a mà des de la fitxa de la caixa; cap sonda no l'omple.
+  //   llista: les Llistes de reproducció (ACT-632). Només nom i data d'alta: res del cor (és del cor, data del concert,
+  //     estat del programa i l'enllaç a l'Obra queden fora; les tres regles del cor, congelades).
+  //   llista_canco: les cançons de cada llista, en ordre, amb el recording_msid, l'artista i la pista tal com van arribar,
+  //     i la durada en mil·lisegons presa de Scrobble.duration_ms en afegir-la (ACT-635). Buida si la pista no la portava:
+  //     llavors la durada total de la llista surt com a incompleta.
+  //   scrobble.llista_id: la llista amb què va sonar la pista (ACT-632). D'aquí surten l'última escolta i l'ordre d'Agrupacions.
+  `
+  ALTER TABLE part ADD COLUMN portada TEXT;
+  CREATE TABLE llista (
+    id        INTEGER PRIMARY KEY,
+    nom       TEXT NOT NULL,
+    data_alta TEXT NOT NULL
+  );
+  CREATE TABLE llista_canco (
+    id             INTEGER PRIMARY KEY,
+    llista_id      INTEGER NOT NULL REFERENCES llista(id),
+    posicio        INTEGER NOT NULL,
+    recording_msid TEXT NOT NULL,
+    artista        TEXT,
+    pista          TEXT,
+    durada_ms      INTEGER
+  );
+  CREATE INDEX llista_canco_llista ON llista_canco(llista_id, posicio);
+  CREATE INDEX llista_canco_msid ON llista_canco(recording_msid);
+  ALTER TABLE scrobble ADD COLUMN llista_id INTEGER REFERENCES llista(id);
   `
 ];
+
+// Les taules de les Llistes de reproducció (v7). No són a TAULES: treure una cançó o esborrar una llista és normal,
+// i la còpia de seguretat no ha d'avisar quan baixen. Sí que van a l'Excel i a la comparació de l'anada i tornada.
+export const TAULES_LLISTES = ['llista', 'llista_canco'];
 
 // Les taules on una baixada de files és sospitosa. Les escoltes i els scrobbles només poden créixer (§3.5).
 export const TAULES = ['artista', 'album', 'edicio', 'puntuacio', 'part', 'escolta', 'preferent', 'scrobble'];

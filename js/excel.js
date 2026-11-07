@@ -2,7 +2,8 @@
 // qualsevol màquina futura. Es genera des de l'estructura, no a mà, així que és complet per construcció.
 //
 // El mapa (ACT-603):
-//  · Pestanyes: Edició, Part, Artista, Àlbum, Puntuació, Escolta, Scrobble, Preferent i Meta.
+//  · Pestanyes: Edició, Part, Artista, Àlbum, Puntuació, Escolta, Scrobble, Preferent i Meta, i des de l'estructura 7
+//    les dues de les Llistes de reproducció, Llista i Cançó de llista (ACT-632: l'Excel és complet per construcció).
 //  · Edició, Part i Artista comencen amb les columnes del fitxer de càrrega (§3.2, H-06.b), en el mateix ordre.
 //    «ID de càrrega» = Edició.id, que lliga Part amb Edició. «Avisos» va buida: no hi ha cap camp darrere, només hi és
 //    per la forma del fitxer de càrrega.
@@ -16,7 +17,7 @@
 // Sense cap biblioteca de fora (§3.6): un .xlsx és un zip de fitxers XML, i el zip s'escriu aquí.
 // També es llegeix aquí, per a la prova d'anada i tornada del §3.5 (exportar, carregar en una base buida, comparar).
 
-import { TAULES } from './esquema.js?v=5';
+import { TAULES, TAULES_LLISTES } from './esquema.js?v=6';
 
 const CARREGA = {
   edicio: {
@@ -37,8 +38,9 @@ const CARREGA = {
     cols: [['ID d\'artista', 'id'], ['Nom canònic', 'nom_canonic'], ['Variants d\'escriptura', 'variants'], ['Persona', 'persona']]
   }
 };
-const ALTRES = [['album', 'Àlbum'], ['puntuacio', 'Puntuació'], ['escolta', 'Escolta'], ['scrobble', 'Scrobble'], ['preferent', 'Preferent']];
-export const PESTANYES = ['Edició', 'Part', 'Artista', 'Àlbum', 'Puntuació', 'Escolta', 'Scrobble', 'Preferent', 'Meta'];
+const ALTRES = [['album', 'Àlbum'], ['puntuacio', 'Puntuació'], ['escolta', 'Escolta'], ['scrobble', 'Scrobble'], ['preferent', 'Preferent'],
+                ['llista', 'Llista'], ['llista_canco', 'Cançó de llista']];
+export const PESTANYES = ['Edició', 'Part', 'Artista', 'Àlbum', 'Puntuació', 'Escolta', 'Scrobble', 'Preferent', 'Llista', 'Cançó de llista', 'Meta'];
 
 const campsDe = (db, t) => db.exec(`PRAGMA table_info(${t})`)[0].values.map(v => v[1]);
 
@@ -236,7 +238,7 @@ export function compara(a, b) {
   const dif = [];
   const ver = d => d.exec('PRAGMA user_version')[0].values[0][0];
   if (ver(a) !== ver(b)) dif.push(`estructura ${ver(a)} ≠ ${ver(b)}`);
-  for (const t of [...TAULES, 'meta']) {
+  for (const t of [...TAULES, ...TAULES_LLISTES, 'meta']) {
     const q = `SELECT * FROM ${t} ORDER BY ${t === 'meta' ? 'clau' : 'rowid'}`;
     const fa = a.exec(q)[0]?.values || [], fb = b.exec(q)[0]?.values || [];
     if (fa.length !== fb.length) { dif.push(`${t}: ${fa.length} files ≠ ${fb.length}`); continue; }

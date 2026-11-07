@@ -626,3 +626,37 @@ body[data-estil="ricard"] .full.complet{border-radius:0}
 .sf-grup{border-left:3px solid var(--accent); padding:2px 0 2px 10px; margin:6px 0 8px}
 .sf-grupcap{font-size:12px; color:var(--os-2); margin:0 0 6px}
 .sf-grupcap b{color:var(--os); font-weight:700}
+
+/* ---------- La Prestatgeria, primer bloc (6-11): Tots els discos, Agrupacions i les Llistes ---------- */
+#s-prestatgeria .ar-fila .htxt{flex:1; min-width:0}
+#s-prestatgeria .ar-fila .hart i{font-style:normal; color:var(--os-3)}
+#s-prestatgeria .ar-fila .m{flex:none}
+.ag-cap{font-family:var(--titol); font-weight:800; font-stretch:80%; font-size:21px; margin:20px 0 4px}
+.ag-cap:first-child{margin-top:4px}
+.ag-fila .hcob{width:56px; height:56px; flex-basis:56px}
+.fitxa-portada.mosaic-llista{position:relative}
+.fitxa-portada.mosaic-llista .hcob{width:100%; height:100%; flex:none; border-radius:0}
+.llista-cancons{display:flex; flex-direction:column; margin:4px 0 0}
+.canco{display:flex; align-items:center; gap:10px; padding:9px 2px; border-bottom:1px solid var(--vora)}
+.canco .n{flex:none; width:22px; text-align:right; color:var(--os-3); font-size:12px; font-variant-numeric:tabular-nums}
+.canco .txt{flex:1; min-width:0; font:14px var(--sans)}
+.canco .txt b{display:block; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.canco .txt small{color:var(--os-3); font-size:12px}
+.canco .treu,.part-fila .treu{flex:none; background:none; border:1px solid var(--vora-2); color:var(--os-2); border-radius:14px; padding:4px 10px; font:12px var(--sans); cursor:pointer}
+/* les parts d'una caixa a la fitxa (ACT-624) */
+.parts-caixa{display:flex; flex-direction:column; margin:0 0 16px}
+.part-fila{display:flex; align-items:center; gap:10px; padding:8px 2px; border-bottom:1px solid var(--vora)}
+.part-fila .mini{position:relative; width:46px; height:46px; flex:none; border-radius:4px; overflow:hidden; background:var(--fons-3);
+  display:grid; place-items:center; font:700 13px var(--sans); color:var(--os-3)}
+.part-fila .mini img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover}
+.part-fila .txt{flex:1; min-width:0; font:14px var(--sans)}
+.part-fila .txt b{display:block; font-weight:600}
+.part-fila .txt small{color:var(--os-3); font-size:12px}
+.part-fila .estat-part{font-size:11.5px; padding:2px 8px; border-radius:10px; border:1px solid var(--vora-2); color:var(--os-2); white-space:nowrap}
+.part-fila .estat-part.viva{background:var(--accent); border-color:var(--accent); color:var(--tinta,#111); font-weight:700}
+/* la llista a la targeta de la safata */
+.sf-llista{font-size:13px; color:var(--os-2); margin:8px 0 0 54px}
+.sf-llista b{color:var(--os)}
+.sf-chips.sf-llistes{margin:8px 0 0 54px}
+.sf-nova-llista{margin:8px 0 0 54px}
+.hcob.collage.buit{display:grid; place-items:center; font:700 13px var(--sans); color:var(--os-3)}

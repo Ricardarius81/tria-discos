@@ -40,8 +40,12 @@ function carrega(db, on, params = []) {
     FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id
     WHERE ${on}`, params);
   for (const e of eds) {
-    e.parts = files(db, 'SELECT id, numero, nom, durada, rotacio_actual, codi_bandcamp FROM part WHERE edicio_id = ? ORDER BY numero', [e.id]);
+    e.parts = files(db, 'SELECT id, numero, nom, durada, rotacio_actual, codi_bandcamp, portada, data_darrera_escolta FROM part WHERE edicio_id = ? ORDER BY numero', [e.id]);
     e.viva = e.parts.find(p => p.rotacio_actual) || null;
+    // La portada que es pinta (ACT-624): la de la part viva si en té, i si no, la de l'edició. La de l'edició es
+    // conserva a part, perquè «Canvia la portada» de l'edició no ha de confondre-la amb la de la part.
+    e.portada_edicio = e.portada;
+    if (e.viva?.portada) e.portada = e.viva.portada;
     e.esperant = e.parts.length > 0 && !e.viva;
     e.formats = llista(e.formats); e.tags = llista(e.tags); e.album_tags = llista(e.album_tags);
     // L'historial sencer de notes (§5.2): la vigent és l'última.
@@ -279,6 +283,34 @@ export const rebutjaPortada = id => db => db.run("UPDATE edicio SET portada = NU
 export const rebutjaRetrat = id => db => db.run("UPDATE artista SET retrat = NULL, retrat_origen = 'rebutjat' WHERE id = ?", [id]);
 // La portada que tria o puja Ricard: mana sobre tot, també sobre la de l'escolta (3.3). origen: 'triada' · 'pujada'.
 export const posaPortada = (id, ref, origen) => db => db.run('UPDATE edicio SET portada = ?, portada_origen = ? WHERE id = ?', [ref, origen, id]);
+// La portada d'una part (ACT-624). Només a mà: triada, pujada o treta.
+export const posaPortadaPart = (partId, ref) => db => db.run('UPDATE part SET portada = ? WHERE id = ?', [ref || null, partId]);
+
+// ───────── La Prestatgeria · Tots els discos (ACT-622, ACT-636 i ACT-637) ─────────
+// Una fila per edició (ACT-637, opció A), amb la seva portada i la seva durada, ordenades per artista (Artista.nom_canonic),
+// títol i edició. Sense filtres (ACT-636). La portada és la mateixa que a la reixa: la de la part viva si en té (ACT-624).
+// Una consulta sola, sense la fitxa sencera de cada disc: la fitxa es carrega en tocar la fila.
+export function totsElsDiscos(db) {
+  return files(db, `
+    SELECT e.id, e.album_id, e.nom_edicio, e.durada_total, e.rotacio_actual,
+           COALESCE((SELECT p.portada FROM part p WHERE p.edicio_id = e.id AND p.rotacio_actual = 1), e.portada) AS portada,
+           (SELECT COUNT(*) FROM part p WHERE p.edicio_id = e.id) AS n_parts,
+           (SELECT COUNT(*) FROM edicio x WHERE x.album_id = e.album_id) AS n_edicions,
+           a.titol, ar.nom_canonic AS art, ar.variants
+    FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id`)
+    .map(e => ({ ...e, cerca: norm([e.art, ...llista(e.variants), e.titol, e.nom_edicio].join(' ')) }))
+    .sort((x, y) => x.art.localeCompare(y.art, 'ca', { sensitivity: 'base' }) || x.titol.localeCompare(y.titol, 'ca', { sensitivity: 'base' }) || x.id - y.id);
+}
+
+// ───────── La Prestatgeria · Agrupacions: els grups (§7.5) ─────────
+// Tots els grups de l'arxiu (Àlbum.Conjunt amb dos àlbums o més), en rotació o no. L'ordre és el mateix que el de les
+// llistes (ACT-635): el que ha sonat o s'ha obert més recentment, primer (decisió de construcció de Claude, per ratificar).
+export function grupsArxiu(db) {
+  const noms = files(db, 'SELECT conjunt, COUNT(*) AS n FROM album WHERE conjunt IS NOT NULL GROUP BY conjunt HAVING n > 1').map(r => r.conjunt);
+  return noms.map(nom => { const m = grup(db, nom); return { nom, membres: m, clau: m.map(x => x.clau).sort().pop() || '' }; })
+    .filter(g => g.membres.length > 1)
+    .sort((a, b) => b.clau.localeCompare(a.clau) || a.nom.localeCompare(b.nom, 'ca'));
+}
 // La foto triada per Ricard entre les candidates ('triat'): mana com la pujada.
 export const posaRetrat = (id, ref, origen) => db => db.run('UPDATE artista SET retrat = ?, retrat_origen = ? WHERE id = ?', [ref, origen, id]);
 // La foto pujada a mà: mana sobre tot.
