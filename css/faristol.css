@@ -663,3 +663,22 @@ body[data-estil="ricard"] .full.complet{border-radius:0}
 
 /* El disc anterior i el següent (ACT-647): el proper que es substituiria, dit abans de triar. */
 .substitueix { color: var(--accent); font-weight: 600; }
+
+/* L'Afinació (v1.49). El gènere a la fitxa (ACT-684): les branques triades en ordre, amb ↑ i ✕; la llista de L'Afinació
+   amb el motiu de cada fila (ACT-686); la pregunta d'identitat com a acció de la fitxa (ACT-658). */
+.fila-genere{margin:0 0 10px}
+.fila-genere > div{flex:1; padding-top:6px; font-size:14px; line-height:1.35}
+.gen-triats{display:flex; flex-direction:column; gap:6px; margin:6px 0 12px}
+.gen-triat{display:flex; align-items:center; gap:8px; border:1px solid var(--vora-2); border-radius:var(--r); padding:6px 8px}
+.gen-triat span{flex:1; font:600 14px var(--sans); color:var(--os)}
+.gen-triat:first-child span{color:var(--accent)}
+.gen-triat button{border:1px dashed var(--vora-2); background:none; color:var(--os-2); border-radius:14px; padding:4px 10px; font:13px var(--sans); cursor:pointer}
+.gen-eix{margin:12px 0 8px; font:700 11px var(--sans); letter-spacing:.08em; text-transform:uppercase; color:var(--os-3)}
+.afi-motiu{color:var(--accent)}
+.avis-caixa{border-left:3px solid var(--accent); padding:4px 0 4px 10px; color:var(--os)}
+.part-fila.tria-part{width:100%; background:none; border:0; border-bottom:1px solid var(--vora); text-align:left; color:var(--os); cursor:pointer; font:14px var(--sans)}
+.part-fila.tria-part .mini{display:grid; place-items:center; font:700 14px var(--sans); color:var(--os-2)}
+.part-fila.tria-part .txt b{display:block}
+.part-fila.tria-part .txt small{color:var(--os-3); font-size:12px}
+.barra-accions.identitat{flex-wrap:wrap}
+.fitxa-dades li.per-afinar b{color:var(--accent)}

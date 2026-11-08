@@ -199,6 +199,13 @@ export const MIGRACIONS = [
   CREATE INDEX llista_canco_llista ON llista_canco(llista_id, posicio);
   CREATE INDEX llista_canco_msid ON llista_canco(recording_msid);
   ALTER TABLE scrobble ADD COLUMN llista_id INTEGER REFERENCES llista(id);
+  `,
+  // v8 · L'Afinació (v1.49, ACT-674, ACT-676 i ACT-681). edicio.per_afinar: la DATA en què Ricard toca «Per afinar» a la
+  //   fitxa, en text ISO en UTC; buit = no marcat. «Ja està afinat» la buida. És una data i no un sí o no perquè el símptoma
+  //   de la ACT-676 —«Per afinar» amb discos marcats fa mesos— només es pot calcular amb una data (§13.3).
+  //   Nom de la columna fixat en la construcció (el §8.3 el deixava per fixar).
+  `
+  ALTER TABLE edicio ADD COLUMN per_afinar TEXT;
   `
 ];
 

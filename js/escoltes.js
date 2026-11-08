@@ -21,6 +21,7 @@
 //      Des de l'ACT-625 (6-11): si el nom de l'àlbum diu el número de la part («vol / volume / CD / disc» + número),
 //      la pista va a aquella part, i en tornar a calcular hi torna sola encara que abans hagués anat a la viva;
 //      si no el diu, (d) com abans. Camps: Scrobble.album, Part.numero.
+//      Des de la ACT-665 (v1.49), abans del número: si el nom de l'àlbum és, normalitzat, el Part.Nom d'una part, hi va.
 
 const files = (db, sql, p = []) => {
   const st = db.prepare(sql); st.bind(p);
@@ -255,7 +256,7 @@ export const recalcula = db => {
   // Les edicions amb les seves durades i parts.
   const eds = new Map(files(db, 'SELECT e.id, e.durada_total, e.app_escolta, a.titol FROM edicio e JOIN album a ON a.id = e.album_id').map(e => [e.id, e]));
   const parts = new Map();
-  for (const p of files(db, 'SELECT id, edicio_id, numero, durada, rotacio_actual FROM part')) (parts.get(p.edicio_id) || parts.set(p.edicio_id, []).get(p.edicio_id)).push(p);
+  for (const p of files(db, 'SELECT id, edicio_id, numero, nom, durada, rotacio_actual FROM part')) (parts.get(p.edicio_id) || parts.set(p.edicio_id, []).get(p.edicio_id)).push(p);
 
   // Agrupar (ACT-585, opció B de Ricard del 4-11; abans: mateix context o res).
   // La unió és l'escolta sencera: mateixa edició (i part), dins de 15 hores des del seu primer tros (c).
@@ -273,8 +274,11 @@ export const recalcula = db => {
     const ctx = s.context ?? null, at = s.atencio ?? null;
     const ps = parts.get(ed) || [];
     const viva = ps.find(p => p.rotacio_actual);
-    const nPart = ps.length ? numeroDePart(s.album, eds.get(ed).titol) : null;
-    const perNom = nPart !== null ? ps.find(p => p.numero === nPart) : null;                     // ACT-625
+    // ACT-665 (v1.49): primer, la part que es diu com l'àlbum que arriba (Part.Nom, normalitzat); després, el número
+    // del nom (ACT-625); després, la viva. És el que fa que «És part d'un que ja tinc» no es desfaci a la pista següent.
+    const perNomPart = s.album && ps.length ? ps.find(p => p.nom && norm(p.nom) === norm(s.album)) : null;
+    const nPart = ps.length && !perNomPart ? numeroDePart(s.album, eds.get(ed).titol) : null;
+    const perNom = perNomPart || (nPart !== null ? ps.find(p => p.numero === nPart) : null);       // ACT-625
     const part = perNom ? perNom.id : (s.escolta_id ? (s.part_id ?? null) : (viva?.id ?? null));   // (d)
     const ku = ed + '|' + part;
     let u = oberta.get(ku);

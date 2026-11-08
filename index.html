@@ -8,7 +8,7 @@
 <link rel="icon" href="icones/icona-192.png">
 <link rel="apple-touch-icon" href="icones/apple-touch-icon.png">
 <title>La Meva Discoteca</title>
-<link rel="stylesheet" href="css/faristol.css?v=15">
+<link rel="stylesheet" href="css/faristol.css?v=16">
 </head>
 <body data-lloc="Fora" data-estil="ricard">
 <div id="telefon">
@@ -46,7 +46,8 @@
       </div>
       <div class="panell" id="q-agr"><div id="agrupacions"></div></div>
       <div class="panell" id="q-afi">
-        <div class="marcador"><p class="cita">Encara no construïda.</p><p>Per catalogar i Feina de fons arriben després d'aquest bloc (ACT-622). Abans cal separar la seva pregunta d'identitat de la pregunta 2 de la safata.</p></div>
+        <p class="subtitol" id="afiCompte" style="margin:8px 0 0"></p>
+        <div id="afinacio"></div>
       </div>
     </section>
 
@@ -109,7 +110,7 @@
   setTimeout(() => { const m = document.getElementById('entradaTxt'); if (m && m.textContent === 'Obrint…') { m.className = 'mal'; m.textContent = 'La màquina no ha arrencat. Tanca la pestanya, espera un minut i torna-la a obrir.'; } }, 10000);
 </script>
 <script src="vendor/sqljs/sql-wasm.js?v=1"></script>
-<script type="module" src="js/faristol.js?v=27"></script>
+<script type="module" src="js/faristol.js?v=28"></script>
 <script>
   // El codi de l'app es guarda al mòbil perquè s'obri sense connexió (ACT-581). Si el navegador no en sap, tot va com abans.
   if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
