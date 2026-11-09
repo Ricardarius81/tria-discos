@@ -831,7 +831,7 @@ async function llegeixEscoltes() {
     // Les pistes que arriben tard a una targeta ja contestada n'hereten la resposta (1-11). Es mira cada vegada, encara que
     // no n'arribi cap de nova, perquè una targeta es tanca amb el temps: 30 minuts sense sonar.
     const tard = db_ => E.heretaRespostes()(db_);
-    // Un arxiu que acaba de passar a l'estructura 6 té les escoltes sense unió: es tornen a calcular un cop (ACT-585).
+    // Un arxiu sense unió (estructura 6, ACT-585) o calculat amb una altra estructura o regles (ACT-700): es torna a calcular un cop.
     const unio = E.calRecalcular(db());
     const cal = !E.arrencada(db()) || noves.length || E.calHeretar(db()) || unio;
     if (cal) {

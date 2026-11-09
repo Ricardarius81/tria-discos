@@ -247,9 +247,23 @@ const PES = x => `(${x}.completitud / (CASE WHEN ${x}.atencio = 'Dormir' THEN ${
 const PROU = 1 - 1e-9;                     // la suma de quocients pot quedar a una milionèsima d'1 per l'arrodoniment
 export const SQL_COMPTA = `(CASE WHEN s.unio IS NULL THEN (s.completitud >= ${LLINDAR} OR (s.atencio = 'Dormir' AND s.completitud >= ${LLINDAR_DORMIR}))
   ELSE (SELECT SUM(${PES('x')}) FROM escolta x WHERE x.unio = s.unio) >= ${PROU} END)`;
-// Que falta posar la unió a les escoltes que vénen de scrobbles (un arxiu que acaba de passar a l'estructura 6).
-export const calRecalcular = db => !!un(db, `SELECT 1 AS x FROM escolta s WHERE s.unio IS NULL
-                                            AND EXISTS (SELECT 1 FROM scrobble p WHERE p.escolta_id = s.id) LIMIT 1`);
+// La marca del càlcul (ACT-700, 8-11): les escoltes es van calcular amb aquesta estructura i aquestes regles.
+// Abans, només es tornaven a calcular quan arribaven pistes noves, en confirmar un emparellament o en canviar una durada:
+// en publicar regles noves (5050801, estructura 9), les escoltes ja fetes es quedaven amb les velles fins a la pista
+// següent, i el Chuck Berry va sortir «a mitges» a la prova. Ara, si la marca de l'arxiu no és la d'aquest codi, la
+// lectura de ListenBrainz les torna a calcular totes un cop, encara que no n'arribi cap de nova.
+// CALCUL s'ha de pujar quan canviï una regla de recalcula sense estructura nova; amb estructura nova, la marca ja canvia sola.
+export const CALCUL = 1;
+const MARCA = 'calcul-escoltes';
+const marcaDelCodi = db => db.exec('PRAGMA user_version')[0].values[0][0] + '·' + CALCUL;
+export const marcaDeLArxiu = db => un(db, 'SELECT valor FROM meta WHERE clau = ?', [MARCA])?.valor ?? null;
+
+// Que cal tornar a calcular les escoltes sense que arribin pistes noves: falta la unió (un arxiu que acaba de passar a
+// l'estructura 6) o la marca del càlcul no és la d'aquest codi (ACT-700). Només si hi ha scrobbles: sense, no hi ha res a calcular.
+export const calRecalcular = db => !!un(db, 'SELECT 1 AS x FROM scrobble LIMIT 1') && (
+  marcaDeLArxiu(db) !== marcaDelCodi(db) ||
+  !!un(db, `SELECT 1 AS x FROM escolta s WHERE s.unio IS NULL
+            AND EXISTS (SELECT 1 FROM scrobble p WHERE p.escolta_id = s.id) LIMIT 1`));
 
 // ───────── tornar a calcular les escoltes ─────────
 // Les escoltes que vénen de scrobbles es tornen a calcular senceres des dels scrobbles cada vegada que n'arriben
@@ -344,6 +358,7 @@ export const recalcula = db => {
             WHERE id = ? AND (portada_origen IS NULL OR portada_origen IN ('sonda', 'rebutjada')) `, ['release/' + mbid, ed]);
     portades += db.getRowsModified();
   }
+  db.run('INSERT OR REPLACE INTO meta (clau, valor) VALUES (?, ?)', [MARCA, marcaDelCodi(db)]);   // ACT-700
   return { escoltes: n, portades };
 };
 

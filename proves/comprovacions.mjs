@@ -1407,6 +1407,29 @@ export const COMPROVACIONS = [
     cal(!(await f2.count()) || !(await f2.innerText()).includes('durada?'), 'la fila de L\'Afinació encara diu «durada?»');
     await pagina.click('[data-anar="faristol"]');
   } },
+  { nom: 'marca del càlcul (ACT-700): l\'arxiu porta la marca «estructura·CALCUL»; amb una marca vella, obrir torna a calcular les escoltes sense cap pista nova', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    const { MIGRACIONS } = await import('../js/esquema.js');
+    const { CALCUL } = await import('../js/escoltes.js');
+    const marca = () => consulta("SELECT valor FROM meta WHERE clau = 'calcul-escoltes'")[0]?.valor ?? null;
+    igual(marca(), MIGRACIONS.length + '·' + CALCUL, 'meta.calcul-escoltes');
+    const sql = "SELECT s.id, s.completitud FROM escolta s JOIN edicio e ON e.id = s.edicio_id JOIN album a ON a.id = e.album_id WHERE a.titol = 'Disc Curt' ORDER BY s.id";
+    const abans = consulta(sql).map(x => x.completitud);
+    cal(abans.length > 0, 'el Disc Curt no té escoltes');
+    // una escolta calculada amb unes regles velles: completitud falsa i marca d'una altra versió, sense recalcular
+    const r = await pagina.evaluate(async () => {
+      const A = await import('./js/arxiu.js?v=19');
+      return A.canvia(db => {
+        db.run("UPDATE escolta SET completitud = 0.123 WHERE edicio_id = (SELECT e.id FROM edicio e JOIN album a ON a.id = e.album_id WHERE a.titol = 'Disc Curt')");
+        db.run("INSERT OR REPLACE INTO meta (clau, valor) VALUES ('calcul-escoltes', '8·1')");
+      });
+    });
+    cal(r.desat, 'no s\'ha desat l\'arxiu amb la marca vella: ' + r.motiu);
+    igual(marca(), '8·1', 'la marca vella al Drive');
+    await reobre(pagina);
+    await espera(() => marca() === MIGRACIONS.length + '·' + CALCUL, 'obrir no ha tornat a calcular: la marca és ' + marca(), 12000);
+    await esperaDesat();
+    igual(JSON.stringify(consulta(sql).map(x => x.completitud)), JSON.stringify(abans), 'Escolta.completitud del Disc Curt, recalculada');
+  } },
   { nom: 'excel: anada i tornada idèntica fila a fila, amb les onze pestanyes (les dues de les llistes, des de l\'estructura 7) i les columnes de càrrega del §3.2', async fes({ pagina, consulta, real }) {
     const r = await pagina.evaluate(async () => {
       const A = await import('./js/arxiu.js?v=19'), X = await import('./js/excel.js?v=4'), { MIGRACIONS } = await import('./js/esquema.js?v=8');
