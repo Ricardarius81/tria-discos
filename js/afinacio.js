@@ -3,7 +3,8 @@
 //
 // El que fa complir, i d'on surt:
 //  · La llista de L'Afinació (ACT-673, ACT-683, ACT-684, ACT-686): una fila per EDICIÓ. Hi entra la que té Àlbum.Gènere
-//    buit o, si porta «Clàssica», sense cap llenguatge o sense cap formació; i la que té Edició.Per afinar. A dalt les
+//    buit o, si porta «Clàssica», sense cap llenguatge o sense cap formació; i la que té Edició.Per afinar; i des de la
+//    ACT-696, la que té una escolta que ha sonat més del que diu la fitxa (motiu «durada?», duradesSospitoses). A dalt les
 //    marcades, de la més recent a la més antiga; a sota la resta, per escoltes QUE COMPTEN (SQL_COMPTA, el 75 %).
 //  · El gènere a la fitxa (ACT-684): les 26 branques del §6.2 en l'ordre en què es toquen; si hi ha «Clàssica», Llenguatge
 //    i Formació (diversos valors cadascun), i Instrument solista si hi ha «instrument sol». Treure «Clàssica» i desar-ho
@@ -12,8 +13,8 @@
 //  · «Un que ja tinc amb un altre nom» (ACT-658 a ACT-664, ACT-670, ACT-680): juntar dues fitxes en una.
 //  · «És part d'un que ja tinc» (ACT-665 a ACT-669, ACT-685): una fitxa passa a ser una Part d'una altra.
 
-import { SQL_COMPTA, norm, recalcula, canviaEdicio } from './escoltes.js?v=12';
-import { treuDelGrup } from './dades.js?v=23';
+import { SQL_COMPTA, norm, recalcula, canviaEdicio, duradesSospitoses } from './escoltes.js?v=13';
+import { treuDelGrup } from './dades.js?v=24';
 
 const files = (db, sql, p = []) => {
   const st = db.prepare(sql); st.bind(p);
@@ -74,11 +75,12 @@ export function escoltesPerEdicio(db) {
 const perNom = (x, y) => x.art.localeCompare(y.art, 'ca', { sensitivity: 'base' }) || x.titol.localeCompare(y.titol, 'ca', { sensitivity: 'base' }) || x.id - y.id;
 
 // ───────── la llista de L'Afinació (ACT-683, ACT-686) ─────────
-// Torna { marcats, resta }. Cada fila diu els seus motius: «per afinar», «sense gènere», «falten llenguatge / formació».
+// Torna { marcats, resta }. Cada fila diu els seus motius: «per afinar», «durada?» (ACT-696), «sense gènere»,
+// «falten llenguatge / formació».
 // Una marcada que a més no té gènere els porta tots dos (decisió de construcció, per ratificar). Empat d'escoltes, per artista
 // i títol, com Tots els discos (decisió de construcció).
 export function llistaAfinacio(db) {
-  const n = escoltesPerEdicio(db);
+  const n = escoltesPerEdicio(db), sosp = duradesSospitoses(db);
   const out = files(db, `
     SELECT e.id, e.album_id, e.nom_edicio, e.durada_total, e.per_afinar, e.rotacio_actual,
            COALESCE((SELECT p.portada FROM part p WHERE p.edicio_id = e.id AND p.rotacio_actual = 1), e.portada) AS portada,
@@ -87,7 +89,10 @@ export function llistaAfinacio(db) {
     FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id`)
     .map(r => {
       const f = falta({ generes: llista(r.generes), llenguatge: llista(r.llenguatge), formacio: llista(r.formacio) });
-      return { ...r, escoltes: n.get(r.id) || 0, falta: f, motius: [r.per_afinar ? 'per afinar' : null, f].filter(Boolean) };
+      // ACT-696: «durada?», calculat (duradesSospitoses), no guardat; s'apaga amb «Posa X′» o «La durada és bona».
+      const dq = sosp.get(r.id);
+      return { ...r, escoltes: n.get(r.id) || 0, falta: f, durada_sospitosa: dq || null,
+               motius: [r.per_afinar ? 'per afinar' : null, dq ? 'durada?' : null, f].filter(Boolean) };
     })
     .filter(r => r.motius.length);
   return {

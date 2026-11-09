@@ -7,17 +7,17 @@
 // Blocs 3.3 + 3.4 + 3.5 (v1.44), una sola publicació: les escoltes de ListenBrainz, la safata viva i la bústia.
 // Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 
-import * as A from './arxiu.js?v=18';
-import * as D from './dades.js?v=23';
-import * as E from './escoltes.js?v=12';
+import * as A from './arxiu.js?v=19';
+import * as D from './dades.js?v=24';
+import * as E from './escoltes.js?v=13';
 import * as LB from './listenbrainz.js?v=2';
 import * as I from './imatges.js?v=4';
 import * as T from './tags.js?v=1';
-import * as C from './copies.js?v=3';
-import * as X from './excel.js?v=3';
+import * as C from './copies.js?v=4';
+import * as X from './excel.js?v=4';
 import * as L from './llistes.js?v=1';
 import * as V from './discografia.js?v=1';
-import * as F from './afinacio.js?v=1';
+import * as F from './afinacio.js?v=2';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -578,6 +578,13 @@ function minDisc(d, extra = '') {
   return `<span class="sf-disc"><span class="hcob">${esc(inicials(d.art))}${d.portada ? IMG(d.portada) : ''}</span>
     <span><span class="t">${esc(d.titol || '')}</span><span class="a">${esc(d.art || '')}${d.partNom ? ' · ' + esc(d.partNom) : ''}${extra}</span></span><span class="m">${d.min || d.durada_total ? (d.min || d.durada_total) + '′' : ''}</span></span>`;
 }
+// La durada sospitosa (ACT-696): una escolta ha sonat més del que diu la fitxa. Es resol igual a la safata i a la fitxa
+// (on porta L'Afinació): «Posa X′» escriu Edició.Durada total i torna a calcular; «La durada és bona» guarda els minuts.
+function avisDurada(id, q, estil = '') {
+  return `<div class="sf-durada"${estil}><p class="sf-pre">Ha sonat més del que diu la fitxa: <b>${q.proposta}′ sonats</b>, la fitxa en diu ${q.durada}′.</p>
+    <div class="sf-chips"><button class="principal" data-posadurada="${id}:${q.proposta}">Posa ${q.proposta}′</button>
+      <button data-durabona="${id}">La durada és bona</button></div></div>`;
+}
 function cuaSafata() {
   if (!A.estat.db) return { q2: [], nous: [], soltes: [], rot: [], tg: [] };
   const { nous, soltes } = E.discosNous(db(), mbCache);
@@ -704,7 +711,7 @@ function pintaSafata_() {
   const p = $('#safataNum'); if (p) { p.textContent = n; p.classList.toggle('zero', !n); }
   const caixa = $('#safataCos'); if (!caixa) return;
   let h = '';
-  const posats = new Set();
+  const posats = new Set(), sosp = E.duradesSospitoses(db());
   const fila = d => {
     const k = clauDisc(d), esSolta = !d.edicio_id && k && solta.has(k);
     let bloc = '';
@@ -713,6 +720,8 @@ function pintaSafata_() {
       else { posats.add(k); bloc = q2.has(k) ? blocQ2(q2.get(k)) : blocNou(nous.get(k)); }
     }
     const extra = d.edicio_id ? '' : esSolta ? ` · <i>cançó solta</i>` : '';
+    const dq = d.edicio_id ? sosp.get(d.edicio_id) : null;
+    if (dq && d.scr?.some(s => dq.escoltes.has(s.escolta_id))) bloc = avisDurada(d.edicio_id, dq, ' style="padding-left:54px"') + bloc;
     return minDisc(d, extra) + (esSolta ? `<button class="sf-link" style="padding:0 0 6px 54px" data-sfdisc="${esc(k)}">És un disc</button>` : '')
       + (d.edicio_id ? `<button class="sf-link sf-canal" data-sfcanaldisc="${d.edicio_id}">Canal: ${esc(nomCanal(d.app_escolta))} · canvia'l</button>` : '') + bloc;
   };
@@ -950,6 +959,7 @@ function fullFitxa(d) {
     <ul class="fitxa-dades">
       ${d.per_afinar ? `<li class="per-afinar"><b>Per afinar</b><span>marcat ${esc(fa(d.per_afinar))} <button class="sf-link" style="padding:0 0 0 8px" data-jaafinat="${d.id}">Ja està afinat</button></span></li>` : ''}
       <li><b>Durada</b><span>${d.min ? d.min + '′' : 'pendent'} <button class="sf-link" style="padding:0 0 0 8px" data-durada="${d.id}">canvia-la</button></span></li>
+      ${(q => q ? `<li class="per-afinar"><b>Durada?</b><span>${avisDurada(d.id, q)}</span></li>` : '')(E.duradesSospitoses(db()).get(d.id))}
       <li><b>Canal</b><span>${esc(canal)}${codi} <button class="sf-link" style="padding:0 0 0 8px" data-canalfitxa="${d.id}">canvia'l</button></span></li>
       <li><b>Nota</b><span>${textNota(d)} <button class="sf-link" style="padding:0 0 0 8px" data-notafitxa="${d.id}">${d.nota ? 'canvia-la' : 'posa-li nota'}</button></span></li>
       ${d.formats.length ? `<li><b>Format</b><span>${esc(d.formats.map(f => NOMS_FISICS[f] || f).join(', '))}</span></li>` : ''}
@@ -1572,6 +1582,11 @@ document.addEventListener('click', e => {
 
   // L'afinació a la fitxa (v1.49)
   if (d.perafinar) { const id = +d.perafinar; fes(F.marcaPerAfinar(id), 'Marcat per afinar: és a L\'Afinació fins que toquis «Ja està afinat».'); const x = rot(id); if (x) fullFitxa(x); return; }
+  // ACT-696: la durada sospitosa, des de la safata o des de la fitxa.
+  if (d.posadurada) { const [id, m] = d.posadurada.split(':').map(Number); const obert = $('#full').classList.contains('obert');
+    fes(y => { D.canviaDurada(id, m)(y); E.recalcula(y); }, `Durada: ${m}′`); if (obert) { const x = rot(id); if (x) fullFitxa(x); } return; }
+  if (d.durabona) { const id = +d.durabona; const obert = $('#full').classList.contains('obert');
+    fes(E.confirmaDurada(id), 'Durada confirmada: no tornarà a avisar mentre no la canviïs.'); if (obert) { const x = rot(id); if (x) fullFitxa(x); } return; }
   if (d.jaafinat) { const id = +d.jaafinat; fes(F.jaAfinat(id), 'Afinat'); const x = rot(id); if (x) fullFitxa(x); return; }
   if (d.generefitxa) { const x = rot(d.generefitxa); if (x) { estat.gen = null; fullGenere(x); } return; }
   if (d.genbr) { tocaGenere(g => { const i = g.generes.indexOf(d.genbr); if (i >= 0) g.generes.splice(i, 1); else g.generes.push(d.genbr); }); return; }

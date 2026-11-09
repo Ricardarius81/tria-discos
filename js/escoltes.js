@@ -12,9 +12,12 @@
 //
 // Decisions de construcció que no són al pla, i que van a la v1.45 per ratificar:
 //  (a) el que va sonar una pista no passa mai de la seva duration_ms: una pausa llarga no infla l'escolta;
-//  (b) una mateixa pista que torna a sonar dins la finestra de 15 h obre una escolta nova: és una segona escolta;
-//      des de l'estructura 6 (ACT-585), només quan l'escolta ja compta; mentre no compta, la pista repetida compta un
-//      sol cop (la que més va sonar) i no talla;
+//  (b) una mateixa pista que torna a sonar dins la finestra de 15 h: des de la ACT-695 (8-11, Ricard, cas Chuck Berry),
+//      només obre una escolta nova si l'escolta en curs ja ha sonat sencera (cobertura de la unió ≥ 0,95, ENTERA);
+//      si no, és reprendre el disc: compta un sol cop (la que més va sonar) i no talla. Abans (ACT-585) n'obria una de
+//      nova en quant la unió comptava (75 %), i tornar a començar una cançó en reprendre el disc el partia en dos.
+//      «La mateixa pista» (ACT-694): el mateix recording_msid, o el mateix nom (normalitzat) i la mateixa durada ±2 s,
+//      perquè ListenBrainz dona un msid nou a la mateixa pista en una altra sessió (In Moll, Glass Menagerie);
 //  (c) un release_name confirmat a dues edicions va a la que és en rotació, i si no, a la més recent (la pregunta 3
 //      no entra en aquesta construcció);
 //  (d) una escolta nova d'una caixa va a la part viva en aquell moment, i ja no es mou.
@@ -75,6 +78,16 @@ let darreraLectura;
 export const fixaLectura = t => { darreraLectura = Number.isFinite(t) && t > 0 ? t : null; };
 const finsA = (ara, llegit) => llegit === undefined ? ara : Math.min(ara, llegit ?? -Infinity);
 export const LLINDAR = 0.75, LLINDAR_DORMIR = 0.5;
+// ACT-695 i ACT-696 (8-11, Ricard): una escolta és sencera quan la seva cobertura (la suma d'Escolta.completitud dels seus
+// trossos, sense dividir pel llindar) arriba a 0,95; passa de 1,05, la durada de la fitxa és sospitosa de curta.
+// Mesurat a l'arxiu el 8-11: les escoltes senceres de veritat donen entre 0,984 i 1,018 (durades en minuts arrodonits).
+export const ENTERA = 0.95, SOSPITOSA = 1.05;
+// «La mateixa pista» (ACT-694): mateix recording_msid, o mateix nom normalitzat i mateixa duration_ms amb ±2 s.
+// Campos: Scrobble.recording_msid, Scrobble.pista, Scrobble.duration_ms.
+export const MARGE_PISTA = 2000;
+export const mateixaPista = (a, b) => a.recording_msid === b.recording_msid
+  || (!!norm(a.pista) && norm(a.pista) === norm(b.pista) && a.duration_ms > 0 && b.duration_ms > 0
+      && Math.abs(a.duration_ms - b.duration_ms) <= MARGE_PISTA);
 
 // ───────── l'Arrencada (ACT-453) ─────────
 const ARRENCADA = 'arrencada-escoltes';
@@ -245,7 +258,7 @@ export const calRecalcular = db => !!un(db, `SELECT 1 AS x FROM escolta s WHERE 
 // Retorna { escoltes, portades } amb el que ha canviat.
 export const recalcula = db => {
   const mapa = mapaEmparellaments(db);
-  const scr = files(db, `SELECT s.id, s.compte, s.listened_at, s.duration_ms, s.recording_msid, s.album, s.caa_release_mbid,
+  const scr = files(db, `SELECT s.id, s.compte, s.listened_at, s.duration_ms, s.recording_msid, s.pista, s.album, s.caa_release_mbid,
                                 s.estat, s.escolta_id, s.context, s.atencio, e.part_id
                          FROM scrobble s LEFT JOIN escolta e ON e.id = s.escolta_id
                          WHERE s.estat != 'ignorat'`)
@@ -261,12 +274,14 @@ export const recalcula = db => {
   // Agrupar (ACT-585, opció B de Ricard del 4-11; abans: mateix context o res).
   // La unió és l'escolta sencera: mateixa edició (i part), dins de 15 hores des del seu primer tros (c).
   // Dins de la unió, cada context i atenció és un tros, i cada tros és la seva pròpia Escolta.
-  // Pistes repetides (b): mentre la unió no compta, una pista repetida compta un sol cop —la que més va sonar— i no talla;
-  // quan ja compta, repetir-ne una obre una escolta nova (una segona escolta, com abans).
+  // Pistes repetides (b, ACT-695): mentre la unió no ha sonat sencera (cobertura < ENTERA), una pista repetida compta un
+  // sol cop —la que més va sonar— i no talla; quan ja és sencera, repetir-ne una obre una escolta nova.
+  // La pista repetida es reconeix amb mateixaPista (ACT-694); cada pista de la unió té la seva clau, s.kp.
   const durDe = (ed, part) => part ? (parts.get(ed) || []).find(p => p.id === part)?.durada : eds.get(ed).durada_total;
-  const sonatDe = (u, t) => t.s.reduce((x, s) => x + (u.millor.get(s.recording_msid) === s ? s.sonat : 0), 0);
+  const sonatDe = (u, t) => t.s.reduce((x, s) => x + (u.millor.get(s.kp) === s ? s.sonat : 0), 0);
   const complDe = (u, t) => u.durada ? Math.round(sonatDe(u, t) / (u.durada * MIN) * 1000) / 1000 : null;
-  const compta = u => [...u.trossos.values()].reduce((x, t) => x + (complDe(u, t) ?? 0) / llindarDe(t.at), 0) >= PROU;
+  const cobertura = u => [...u.trossos.values()].reduce((x, t) => x + (complDe(u, t) ?? 0), 0);
+  const clauDe = (u, s) => { const i = u.pistes.findIndex(p => mateixaPista(p, s)); return i; };
   const trossos = [], oberta = new Map();
   for (const s of scr) {
     const ed = edicioDe(mapa, s);
@@ -282,16 +297,18 @@ export const recalcula = db => {
     const part = perNom ? perNom.id : (s.escolta_id ? (s.part_id ?? null) : (viva?.id ?? null));   // (d)
     const ku = ed + '|' + part;
     let u = oberta.get(ku);
-    if (!u || s.t - u.t0 >= FINESTRA_ESCOLTA || (u.millor.has(s.recording_msid) && compta(u))) {
-      u = { ed, part, t0: s.t, durada: durDe(ed, part), trossos: new Map(), millor: new Map(), id: null };
+    if (!u || s.t - u.t0 >= FINESTRA_ESCOLTA || (clauDe(u, s) >= 0 && cobertura(u) >= ENTERA - 1e-9)) {
+      u = { ed, part, t0: s.t, durada: durDe(ed, part), trossos: new Map(), millor: new Map(), pistes: [], id: null };
       oberta.set(ku, u);
     }
+    let kp = clauDe(u, s); if (kp < 0) { kp = u.pistes.length; u.pistes.push(s); }
+    s.kp = kp;
     const kt = ctx + '|' + at;
     let t = u.trossos.get(kt);
     if (!t) { t = { u, ctx, at, t0: s.t, s: [], comptes: new Set() }; u.trossos.set(kt, t); trossos.push(t); }
     t.s.push(s); t.comptes.add(s.compte);
-    const m = u.millor.get(s.recording_msid);
-    if (!m || s.sonat > m.sonat) u.millor.set(s.recording_msid, s);
+    const m = u.millor.get(kp);
+    if (!m || s.sonat > m.sonat) u.millor.set(kp, s);
   }
 
   // Esborrar les escoltes que vénen de scrobbles i tornar-les a escriure.
@@ -427,8 +444,22 @@ export function historial(db) {
     const t = ms(r.inici);
     return tir.find(f => t >= f.t0 && t < f.t0 + FINESTRA_TIRADA) || null;
   };
+  // ACT-696 (8-11, Ricard: «si escucho el disco entero y luego repito una canción o dos, no quiero que me salga otra
+  // escucha a mitges»): una escolta que comença dins les 15 hores d'una escolta sencera (cobertura ≥ ENTERA) del mateix
+  // disc no porta «a mitges»; el disc puja igual. Camps: Escolta.unio, Escolta.data_hora del primer tros, i la suma
+  // d'Escolta.completitud de l'escolta d'abans. Consequència dita: un disc tornat a començar i deixat a mitges dins
+  // aquestes 15 hores no surt «a mitges».
+  const senceres = files(db, `SELECT edicio_id, MIN(data_hora) AS inici FROM escolta WHERE unio IS NOT NULL
+                              GROUP BY unio HAVING SUM(completitud) >= ${ENTERA - 1e-9}`);
+  const propina = r => senceres.some(x => x.edicio_id === r.edicio_id && x.inici < r.inici && ms(r.inici) - ms(x.inici) < FINESTRA_ESCOLTA);
   for (const [ed, r] of darreraEd) {
     if (compten.has(r.u)) continue;
+    if (propina(r)) {
+      const x = perEd.get(ed); if (x && r.darrer > x.darrera) x.darrera = r.darrer;
+      const q = r.conjunt ? filaDe.get(r.conjunt) : null;
+      if (q && q.fila.edicions.includes(ed) && r.darrer > q.fila.darrera) q.fila.darrera = r.darrer;
+      continue;
+    }
     const f = dinsTirada(r);
     if (f) {
       const q = filaDe.get(r.conjunt);
@@ -445,6 +476,34 @@ export function historial(db) {
   files_.push(...perEd.values());
   return files_.sort((a, b) => b.darrera.localeCompare(a.darrera));
 }
+
+// ───────── la durada sospitosa (ACT-696, 8-11, Ricard) ─────────
+// Una escolta d'una edició (no d'una part) que ha sonat més del que diu la fitxa: cobertura (suma d'Escolta.completitud de
+// la unió) per sobre de SOSPITOSA. La proposta és la suma de les duration_ms de les pistes diferents de l'escolta
+// (mateixaPista), en minuts. Callat si Edició.durada_confirmada és igual a la durada d'ara: «La durada és bona» guarda els
+// minuts confirmats, i si la durada canvia la confirmació ja no val. Retorna Map edicio_id → { unio, cobertura, proposta,
+// escoltes (els ids dels trossos) }, la més recent de cada edició. S'ensenya a la safata (a la targeta del disc on hi ha
+// algun tros) i a L'Afinació amb el motiu «durada?», calculat i no guardat: «Per afinar» continua sent només de Ricard.
+export function duradesSospitoses(db) {
+  const us = files(db, `SELECT x.unio AS u, x.edicio_id, SUM(x.completitud) AS c, MIN(x.data_hora) AS inici, e.durada_total
+                        FROM escolta x JOIN edicio e ON e.id = x.edicio_id
+                        WHERE x.unio IS NOT NULL AND x.part_id IS NULL
+                          AND (e.durada_confirmada IS NULL OR e.durada_confirmada != e.durada_total)
+                        GROUP BY x.unio HAVING SUM(x.completitud) > ${SOSPITOSA} ORDER BY inici`);
+  const out = new Map();
+  for (const r of us) {
+    const scr = files(db, `SELECT p.recording_msid, p.pista, p.duration_ms, p.escolta_id FROM scrobble p JOIN escolta x ON x.id = p.escolta_id
+                           WHERE x.unio = ? AND p.estat != 'ignorat'`, [r.u]);
+    const dif = [];
+    for (const p of scr) { const i = dif.findIndex(q => mateixaPista(q, p)); if (i < 0) dif.push(p); else if (p.duration_ms > dif[i].duration_ms) dif[i] = p; }
+    const proposta = Math.max(1, Math.round(dif.reduce((a, p) => a + (p.duration_ms || 0), 0) / MIN));
+    out.set(r.edicio_id, { unio: r.u, cobertura: Math.round(r.c * 1000) / 1000, proposta, durada: r.durada_total,
+                           escoltes: new Set(scr.map(p => p.escolta_id)) });
+  }
+  return out;
+}
+// «La durada és bona»: queden recordats els minuts d'ara (Edició.durada_confirmada, estructura 9).
+export const confirmaDurada = id => db => db.run('UPDATE edicio SET durada_confirmada = durada_total WHERE id = ?', [id]);
 
 // Té cara de disc (el mateix llindar que fa néixer un disc nou, ACT-461): «És un disc», dues pistes o més, o 15 minuts sonats.
 // Les cançons d'una Llista de reproducció no compten per fer néixer un disc (opció C de Ricard, 7-11): el que sona amb una

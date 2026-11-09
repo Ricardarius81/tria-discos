@@ -14,8 +14,8 @@
 //  · Una segona còpia el mateix dia substitueix la primera (la vella, a la paperera): les cinc són cinc dies.
 //  · Quan salta la vermella, la còpia es fa però no va res a la paperera, ni la del mateix dia: les d'abans són les bones.
 
-import * as A from './arxiu.js?v=18';
-import * as X from './excel.js?v=3';
+import * as A from './arxiu.js?v=19';
+import * as X from './excel.js?v=4';
 
 const PATRO = /· còpia de seguretat (\d{4}-\d{2}-\d{2})\.(sqlite|xlsx)$/;
 export const nomCopia = (data, ext) => `la-meva-discoteca · còpia de seguretat ${data}.${ext}`;

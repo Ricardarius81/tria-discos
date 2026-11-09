@@ -206,6 +206,12 @@ export const MIGRACIONS = [
   //   Nom de la columna fixat en la construcció (el §8.3 el deixava per fixar).
   `
   ALTER TABLE edicio ADD COLUMN per_afinar TEXT;
+  `,
+  // v9 · La durada sospitosa (8-11, ACT-696). edicio.durada_confirmada: els minuts que Ricard ha dit que són bons amb
+  //   «La durada és bona», quan una escolta va sonar més del que diu la fitxa (cobertura per sobre de 1,05). Buit = mai
+  //   confirmada. Si Edició.durada_total canvia, ja no és igual i l'avís pot tornar.
+  `
+  ALTER TABLE edicio ADD COLUMN durada_confirmada INTEGER;
   `
 ];
 
