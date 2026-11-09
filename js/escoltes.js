@@ -82,6 +82,9 @@ export const LLINDAR = 0.75, LLINDAR_DORMIR = 0.5;
 // trossos, sense dividir pel llindar) arriba a 0,95; passa de 1,05, la durada de la fitxa és sospitosa de curta.
 // Mesurat a l'arxiu el 8-11: les escoltes senceres de veritat donen entre 0,984 i 1,018 (durades en minuts arrodonits).
 export const ENTERA = 0.95, SOSPITOSA = 1.05;
+// ACT-701 (8-11, Ricard, cas Glass Menagerie): una escolta «a mitges» es completa amb la següent del mateix disc encara que
+// sigui fora de les 15 hores, si comença dins dels 7 dies següents a l'última pista de la primera. Veure recalcula.
+export const FINESTRA_COMPLETAR = 7 * 24 * H;
 // «La mateixa pista» (ACT-694): mateix recording_msid, o mateix nom normalitzat i mateixa duration_ms amb ±2 s.
 // Campos: Scrobble.recording_msid, Scrobble.pista, Scrobble.duration_ms.
 export const MARGE_PISTA = 2000;
@@ -253,7 +256,7 @@ export const SQL_COMPTA = `(CASE WHEN s.unio IS NULL THEN (s.completitud >= ${LL
 // següent, i el Chuck Berry va sortir «a mitges» a la prova. Ara, si la marca de l'arxiu no és la d'aquest codi, la
 // lectura de ListenBrainz les torna a calcular totes un cop, encara que no n'arribi cap de nova.
 // CALCUL s'ha de pujar quan canviï una regla de recalcula sense estructura nova; amb estructura nova, la marca ja canvia sola.
-export const CALCUL = 1;
+export const CALCUL = 2;   // 2: ACT-701, completar una escolta a mitges
 const MARCA = 'calcul-escoltes';
 const marcaDelCodi = db => db.exec('PRAGMA user_version')[0].values[0][0] + '·' + CALCUL;
 export const marcaDeLArxiu = db => un(db, 'SELECT valor FROM meta WHERE clau = ?', [MARCA])?.valor ?? null;
@@ -296,6 +299,15 @@ export const recalcula = db => {
   const complDe = (u, t) => u.durada ? Math.round(sonatDe(u, t) / (u.durada * MIN) * 1000) / 1000 : null;
   const cobertura = u => [...u.trossos.values()].reduce((x, t) => x + (complDe(u, t) ?? 0), 0);
   const clauDe = (u, s) => { const i = u.pistes.findIndex(p => mateixaPista(p, s)); return i; };
+  const compta = u => [...u.trossos.values()].reduce((x, t) => x + (complDe(u, t) ?? 0) / llindarDe(t.at), 0) >= PROU;
+  // Completar (ACT-701, 8-11, Ricard: OK a la proposta de Claude i als 7 dies): quan la finestra de 15 hores ja ha passat,
+  // una unió que no compta (suma de completitud/llindar < 1, com SQL_COMPTA) no es tanca si la pista nova arriba dins dels
+  // 7 dies (FINESTRA_COMPLETAR) des de la seva última pista: la pista hi entra, sense repetir pista (mateixaPista), i la
+  // finestra de 15 hores torna a començar amb ella. Els trossos de la represa són trossos nous (porten la seva hora), i
+  // la unió pren l'id del primer d'ells: la data de l'escolta completada és la de la primera pista de la segona meitat
+  // (decisió de construcció de Claude, OK de Ricard). Fora de la finestra de 15 hores no hi ha res a fer amb la pista
+  // repetida: una unió que no compta tampoc no és sencera. Camps: Escolta.unio, Escolta.completitud, Scrobble.listened_at,
+  // Scrobble.recording_msid/pista/duration_ms. Si la unió ja compta, o han passat més de 7 dies, s'obre una escolta nova.
   const trossos = [], oberta = new Map();
   for (const s of scr) {
     const ed = edicioDe(mapa, s);
@@ -311,15 +323,18 @@ export const recalcula = db => {
     const part = perNom ? perNom.id : (s.escolta_id ? (s.part_id ?? null) : (viva?.id ?? null));   // (d)
     const ku = ed + '|' + part;
     let u = oberta.get(ku);
-    if (!u || s.t - u.t0 >= FINESTRA_ESCOLTA || (clauDe(u, s) >= 0 && cobertura(u) >= ENTERA - 1e-9)) {
-      u = { ed, part, t0: s.t, durada: durDe(ed, part), trossos: new Map(), millor: new Map(), pistes: [], id: null };
+    const completa = u && s.t - u.t0 >= FINESTRA_ESCOLTA && s.t - u.tn <= FINESTRA_COMPLETAR && !compta(u);   // ACT-701
+    if (completa) { u.t0 = s.t; u.represa++; u.cap = null; }
+    else if (!u || s.t - u.t0 >= FINESTRA_ESCOLTA || (clauDe(u, s) >= 0 && cobertura(u) >= ENTERA - 1e-9)) {
+      u = { ed, part, t0: s.t, tn: s.t, represa: 0, cap: null, durada: durDe(ed, part), trossos: new Map(), millor: new Map(), pistes: [], id: null };
       oberta.set(ku, u);
     }
+    u.tn = s.t;
     let kp = clauDe(u, s); if (kp < 0) { kp = u.pistes.length; u.pistes.push(s); }
     s.kp = kp;
-    const kt = ctx + '|' + at;
+    const kt = ctx + '|' + at + '|' + u.represa;
     let t = u.trossos.get(kt);
-    if (!t) { t = { u, ctx, at, t0: s.t, s: [], comptes: new Set() }; u.trossos.set(kt, t); trossos.push(t); }
+    if (!t) { t = { u, ctx, at, t0: s.t, s: [], comptes: new Set() }; u.trossos.set(kt, t); trossos.push(t); if (u.represa && !u.cap) u.cap = t; }
     t.s.push(s); t.comptes.add(s.compte);
     const m = u.millor.get(kp);
     if (!m || s.sonat > m.sonat) u.millor.set(kp, s);
@@ -338,11 +353,14 @@ export const recalcula = db => {
     const u = t.u;
     ins.run([u.ed, u.part, new Date(t.t0).toISOString(), t.ctx, t.at, complDe(u, t), [...t.comptes].sort().join(','), u.id]);
     const id = un(db, 'SELECT last_insert_rowid() AS id').id;
+    t.id = id;
     if (u.id === null) { u.id = id; db.run('UPDATE escolta SET unio = ? WHERE id = ?', [id, id]); }   // la unió porta l'id del seu primer tros
     for (const s of t.s) lliga.run([id, s.id]);
     n++;
   }
   ins.free(); lliga.free();
+  // Una unió completada (ACT-701) porta l'id del primer tros de l'última represa: la seva data és la d'aquest tros.
+  for (const u of new Set(trossos.map(t => t.u))) if (u.cap && u.cap.id !== u.id) db.run('UPDATE escolta SET unio = ? WHERE unio = ?', [u.cap.id, u.id]);
 
   // La data de la darrera escolta de cada part (§8.5): la mou només una escolta que compta.
   db.run(`UPDATE part SET data_darrera_escolta = (SELECT MAX(s.data_hora) FROM escolta s WHERE s.part_id = part.id AND ${SQL_COMPTA})
@@ -364,9 +382,10 @@ export const recalcula = db => {
 
 // ───────── el que la màquina sap de les escoltes ─────────
 // Les escoltes que compten, en ordre de temps, amb l'àlbum i el grup. Una per escolta sencera (ACT-585): els trossos
-// d'una unió que compta són una sola escolta, amb l'hora del primer tros. u: l'id de la unió (o de l'escolta física).
+// d'una unió que compta són una sola escolta, amb l'hora del tros que porta l'id de la unió: el primer, o el primer de la
+// represa si és una escolta completada (ACT-701). u: l'id de la unió (o de l'escolta física).
 export function escoltesQueCompten(db) {
-  return files(db, `SELECT MIN(s.id) AS id, s.edicio_id, MIN(s.data_hora) AS data_hora, e.album_id, a.conjunt, COALESCE(s.unio, s.id) AS u
+  return files(db, `SELECT MIN(s.id) AS id, s.edicio_id, (SELECT y.data_hora FROM escolta y WHERE y.id = COALESCE(s.unio, s.id)) AS data_hora, e.album_id, a.conjunt, COALESCE(s.unio, s.id) AS u
                     FROM escolta s JOIN edicio e ON e.id = s.edicio_id JOIN album a ON a.id = e.album_id
                     WHERE ${SQL_COMPTA} GROUP BY COALESCE(s.unio, s.id) ORDER BY data_hora, id`);
 }
@@ -423,7 +442,7 @@ export function juntsARotacio(finestresGrup) {
 export function historial(db) {
   const totes = escoltesQueCompten(db), compten = new Set(totes.map(e => e.u));
   // L'última pista de cada escolta sencera, i l'última escolta de cada edició.
-  const sons = files(db, `SELECT x.edicio_id, COALESCE(x.unio, x.id) AS u, MAX(p.listened_at) AS darrer, MIN(x.data_hora) AS inici,
+  const sons = files(db, `SELECT x.edicio_id, COALESCE(x.unio, x.id) AS u, MAX(p.listened_at) AS darrer, (SELECT y.data_hora FROM escolta y WHERE y.id = COALESCE(x.unio, x.id)) AS inici,
                                  a.id AS album_id, a.conjunt
                           FROM escolta x JOIN scrobble p ON p.escolta_id = x.id JOIN edicio e ON e.id = x.edicio_id
                           JOIN album a ON a.id = e.album_id GROUP BY x.edicio_id, COALESCE(x.unio, x.id)`);
@@ -464,7 +483,7 @@ export function historial(db) {
   // disc no porta «a mitges»; el disc puja igual. Camps: Escolta.unio, Escolta.data_hora del primer tros, i la suma
   // d'Escolta.completitud de l'escolta d'abans. Consequència dita: un disc tornat a començar i deixat a mitges dins
   // aquestes 15 hores no surt «a mitges».
-  const senceres = files(db, `SELECT edicio_id, MIN(data_hora) AS inici FROM escolta WHERE unio IS NOT NULL
+  const senceres = files(db, `SELECT edicio_id, (SELECT y.data_hora FROM escolta y WHERE y.id = escolta.unio) AS inici FROM escolta WHERE unio IS NOT NULL
                               GROUP BY unio HAVING SUM(completitud) >= ${ENTERA - 1e-9}`);
   const propina = r => senceres.some(x => x.edicio_id === r.edicio_id && x.inici < r.inici && ms(r.inici) - ms(x.inici) < FINESTRA_ESCOLTA);
   for (const [ed, r] of darreraEd) {
@@ -500,7 +519,7 @@ export function historial(db) {
 // escoltes (els ids dels trossos) }, la més recent de cada edició. S'ensenya a la safata (a la targeta del disc on hi ha
 // algun tros) i a L'Afinació amb el motiu «durada?», calculat i no guardat: «Per afinar» continua sent només de Ricard.
 export function duradesSospitoses(db) {
-  const us = files(db, `SELECT x.unio AS u, x.edicio_id, SUM(x.completitud) AS c, MIN(x.data_hora) AS inici, e.durada_total
+  const us = files(db, `SELECT x.unio AS u, x.edicio_id, SUM(x.completitud) AS c, (SELECT y.data_hora FROM escolta y WHERE y.id = COALESCE(x.unio, x.id)) AS inici, e.durada_total
                         FROM escolta x JOIN edicio e ON e.id = x.edicio_id
                         WHERE x.unio IS NOT NULL AND x.part_id IS NULL
                           AND (e.durada_confirmada IS NULL OR e.durada_confirmada != e.durada_total)
@@ -831,7 +850,7 @@ export function preguntesRotacio(db, ara = Date.now()) {
                          FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id`);
   // Una moneda per escolta sencera que compta i que té algun tros d'Efectes plens (ACT-585; decisió de construcció de
   // Claude, per ratificar). Els contextos de la pregunta 8 són els dels seus trossos d'Efectes plens.
-  const esc = [...files(db, `SELECT s.edicio_id, MIN(s.data_hora) AS data_hora, GROUP_CONCAT(s.context, '|') AS contextos FROM escolta s
+  const esc = [...files(db, `SELECT s.edicio_id, (SELECT y.data_hora FROM escolta y WHERE y.id = COALESCE(s.unio, s.id)) AS data_hora, GROUP_CONCAT(s.context, '|') AS contextos FROM escolta s
                          WHERE s.part_id IS NULL AND s.atencio = 'Efectes plens' AND s.data_hora >= ? AND ${SQL_COMPTA}
                          GROUP BY COALESCE(s.unio, s.id)`, [desDe])]
     .map(x => ({ ...x, contextos: String(x.contextos || '').split('|') }));

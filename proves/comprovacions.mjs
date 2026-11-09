@@ -1407,6 +1407,46 @@ export const COMPROVACIONS = [
     cal(!(await f2.count()) || !(await f2.innerText()).includes('durada?'), 'la fila de L\'Afinació encara diu «durada?»');
     await pagina.click('[data-anar="faristol"]');
   } },
+  { nom: 'completar (ACT-701): una escolta a mitges es completa amb la següent del disc dins de 7 dies, amb la data de la segona meitat; a 8 dies, dues a mitges', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    // dos discos de 12′ (quatre pistes de 3′): un en dues meitats a 3 dies de distància, l'altre a 8 dies; lluny de tota la resta
+    const r = await pagina.evaluate(async () => {
+      const A = await import('./js/arxiu.js?v=19'), E = await import('./js/escoltes.js?v=13');
+      return A.canvia(db => {
+        db.run("INSERT INTO artista (nom_canonic) VALUES ('Banc Meitats')"); const ar = db.exec('SELECT last_insert_rowid()')[0].values[0][0];
+        const disc = (titol, dies0, dies1) => {
+          db.run('INSERT INTO album (titol, artista_id) VALUES (?, ?)', [titol, ar]); const al = db.exec('SELECT last_insert_rowid()')[0].values[0][0];
+          db.run(`INSERT INTO edicio (album_id, durada_total, rotacio_actual, app_escolta, emparellaments) VALUES (?, 12, 0, 'amazon', ?)`, [al, JSON.stringify([titol])]);
+          const t = i => Date.now() - (i < 2 ? dies0 : dies1) * 864e5 + (i % 2) * 180000;
+          [0, 1, 2, 3].forEach(i => db.run(`INSERT INTO scrobble (compte, listened_at, artista, pista, album, duration_ms, recording_msid, estat, context, atencio)
+            VALUES ('crimsonnnnfeina', ?, 'Banc Meitats', ?, ?, 180000, ?, 'resolt', 'A casa', 'Efectes plens')`, [new Date(t(i)).toISOString(), titol + ' ' + i, titol, 'msid-' + titol + '-' + i]));
+        };
+        disc('Disc Completat', 50, 47); disc('Disc Separat', 70, 62);
+        E.recalcula(db);
+      });
+    });
+    cal(r.desat, 'no s\'ha desat: ' + r.motiu);
+    const unions = titol => consulta(`SELECT s.id, s.unio, s.data_hora, s.completitud FROM escolta s JOIN edicio e ON e.id = s.edicio_id
+                                      JOIN album a ON a.id = e.album_id WHERE a.titol = ? ORDER BY s.data_hora`, [titol]);
+    const c = unions('Disc Completat');
+    igual(c.length, 2, 'trossos del Disc Completat (un per meitat)');
+    igual(new Set(c.map(x => x.unio)).size, 1, 'unions del Disc Completat');
+    igual(c[0].unio, c[1].id, 'Escolta.unio del Disc Completat: l\'id del primer tros de la segona meitat');
+    igual(Math.round((c[0].completitud + c[1].completitud) * 100) / 100, 1, 'cobertura del Disc Completat');
+    const d = unions('Disc Separat');
+    igual(new Set(d.map(x => x.unio)).size, 2, 'unions del Disc Separat (8 dies: no es completa)');
+    const res = await pagina.evaluate(async () => {
+      const A = await import('./js/arxiu.js?v=19'), E = await import('./js/escoltes.js?v=13');
+      const db = A.estat.db, ed = t => db.exec('SELECT e.id FROM edicio e JOIN album a ON a.id = e.album_id WHERE a.titol = ?', [t])[0].values[0][0];
+      const h = E.historial(db), q = E.escoltesQueCompten(db);
+      const f = t => h.find(x => x.edicio_id === ed(t)) || null;
+      return { comp: f('Disc Completat'), sep: f('Disc Separat'), data: q.find(x => x.edicio_id === ed('Disc Completat'))?.data_hora ?? null,
+               nSep: q.filter(x => x.edicio_id === ed('Disc Separat')).length };
+    });
+    cal(res.comp && res.comp.n === 1 && !res.comp.mitges, 'l\'Historial del Disc Completat: s\'esperava «1 escolta» sense «a mitges» i hi ha ' + JSON.stringify(res.comp));
+    igual(res.data, c[1].data_hora, 'la data de l\'escolta completada (la primera pista de la segona meitat)');
+    cal(res.sep && res.sep.n === 0 && res.sep.mitges, 'l\'Historial del Disc Separat: s\'esperava «0 escoltes · a mitges» i hi ha ' + JSON.stringify(res.sep));
+    igual(res.nSep, 0, 'escoltes que compten del Disc Separat');
+  } },
   { nom: 'marca del càlcul (ACT-700): l\'arxiu porta la marca «estructura·CALCUL»; amb una marca vella, obrir torna a calcular les escoltes sense cap pista nova', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
     const { MIGRACIONS } = await import('../js/esquema.js');
     const { CALCUL } = await import('../js/escoltes.js');
