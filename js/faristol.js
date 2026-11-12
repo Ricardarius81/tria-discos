@@ -1322,6 +1322,9 @@ function fullCabina() {
           : `el resultat surt el ${dia(v.dataLlesta)}, quan faci un mes`}</small></span></li>`; })()}
       <li><button data-ignorats="1">Artistes que s'ignoren sempre <small>${(n => n ? (n === 1 ? 'un' : n) + ' · obre la llista' : 'cap')(E.ignoraSempre(db()).length)}</small></button></li>
       <li><span class="ll-info">ListenBrainz <small>${E.arrencada(db()) ? 'les dues comptes, des del ' + dia(E.arrencada(db())) + ' · ' + r.scrobble + ' pistes' : 'encara no s\'ha llegit'}${estat.lbError ? ' · ' + esc(estat.lbError) : ''}</small></span></li>
+      <li><span class="ll-info">Bústia de Bandcamp <small>${(b => !b ? 'encara no s\'ha mirat en aquesta sessió (cal connexió amb el Drive)'
+        : (b.pendents === null ? '' : b.pendents ? (b.pendents === 1 ? 'un disc espera' : b.pendents + ' discos esperen') + ' codi; es busquen cada nit' : 'cap disc espera codi')
+          + (b.errors.length ? ` · <b class="mal">${esc(b.errors.join(' · ').slice(0, 160))}</b>` : ''))(estat.bustia)}</small></span></li>
       ${liniesCopia()}
       <li><a href="privadesa.html" target="_blank" rel="noopener">Política de privadesa <small>què surt d'aquest mòbil, i cap a on</small></a></li>
     </ul></div>`, true);
@@ -1890,15 +1893,22 @@ async function despresDeConnectar() {
 let bustiant = false;
 async function bustia() {
   if (bustiant || !navigator.onLine || !A.tePermis()) return; bustiant = true;
+  // L'estat es guarda per ensenyar-lo a La Cabina (12-11): abans un error es quedava a estat.bustiaError, que no llegia ningú.
+  const b = estat.bustia = { quan: new Date().toISOString(), pendents: null, errors: [] };
   try {
-    const codis = await A.llegeixCodisBustia();
-    const fets = codis.length ? await fes(E.aplicaCodis(codis), null, { desfes: false, auto: true }) : [];
-    if (fets.length) avisa(`Bandcamp: ${fets.length === 1 ? 'un codi nou' : fets.length + ' codis nous'}. El ▶ ja obre el disc a l'app.`);
-    const text = E.textPendents(E.pendentsBandcamp(db()));
-    let abans = null; try { abans = localStorage.getItem('tria-bustia'); } catch {}
-    if (text !== abans) { await A.escriuPendentsBustia(text); try { localStorage.setItem('tria-bustia', text); } catch {} }
-  } catch (e) { estat.bustiaError = e.message; }
-  finally { bustiant = false; }
+    // Dos passos independents: si la lectura dels codis falla, els pendents s'escriuen igualment (i a l'inrevés).
+    try {
+      const codis = await A.llegeixCodisBustia();
+      const fets = codis.length ? await fes(E.aplicaCodis(codis), null, { desfes: false, auto: true }) : [];
+      if (fets.length) avisa(`Bandcamp: ${fets.length === 1 ? 'un codi nou' : fets.length + ' codis nous'}. El ▶ ja obre el disc a l'app.`);
+    } catch (e) { b.errors.push('codis: ' + e.message); }
+    try {
+      const pend = E.pendentsBandcamp(db()), text = E.textPendents(pend);
+      b.pendents = pend.length;
+      let abans = null; try { abans = localStorage.getItem('tria-bustia'); } catch {}
+      if (text !== abans) { await A.escriuPendentsBustia(text); try { localStorage.setItem('tria-bustia', text); } catch {} }
+    } catch (e) { b.errors.push('pendents: ' + e.message); }
+  } finally { bustiant = false; }
 }
 
 // La sonda no torna a provar cada dia el que no ha trobat: espera una setmana (es recorda en aquest mòbil).

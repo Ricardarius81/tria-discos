@@ -83,7 +83,12 @@ async function creaFitxer(nom, mime, pares, cos, propietats = null) {
   const V = 'tria-discos-' + Math.random().toString(36).slice(2);
   const meta = { name: nom, mimeType: mime, ...(pares ? { parents: pares } : {}), ...(propietats ? { appProperties: propietats } : {}) };
   const parts = ['\r\n--' + V + '\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n' + JSON.stringify(meta)];
-  if (cos) parts.push('\r\n--' + V + '\r\nContent-Type: ' + mime + '\r\n\r\n', cos);
+  // El tipus del cos és el del cos, no el del fitxer que en surt (12-11): el full de codis de la bústia és un full de
+  // Google que es crea pujant un CSV, i el Drive rebutja un cos que es presenta amb un tipus de Google (400). Fins ara
+  // s'hi posava el tipus de destí: el full no s'havia creat mai, la bústia fallava en silenci i la tasca de nit no
+  // trobava res. La sonda del 14-10 (prova-bustia.html) ho feia bé; en portar-ho aquí es va perdre.
+  const tipusCos = (cos instanceof Blob && cos.type) || mime;
+  if (cos) parts.push('\r\n--' + V + '\r\nContent-Type: ' + tipusCos + '\r\n\r\n', cos);
   parts.push('\r\n--' + V + '--');
   const r = await g(`${PUJADA}?uploadType=multipart&fields=id,name,modifiedTime`, {
     method: 'POST', headers: { 'Content-Type': 'multipart/related; boundary=' + V }, body: new Blob(parts) });

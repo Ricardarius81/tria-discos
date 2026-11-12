@@ -47,6 +47,10 @@ export class DriveFals {
       const cap = p => { const j = p.indexOf('\r\n\r\n'); return j < 0 ? Buffer.alloc(0) : p.subarray(j + 4); };
       const meta = JSON.parse(cap(parts[0]).toString('utf8'));
       const dades = parts[1] ? cap(parts[1]) : Buffer.alloc(0);
+      // Com el Drive de veritat: un cos que es presenta amb un tipus de Google (application/vnd.google-apps.*) es rebutja.
+      // Un full de Google es crea pujant un CSV com a text/csv (12-11: la bústia no havia creat mai el seu full).
+      const tipusCos = parts[1] ? (/content-type:\s*([^\r\n;]+)/i.exec(parts[1].subarray(0, parts[1].indexOf('\r\n\r\n')).toString('utf8'))?.[1] || '') : '';
+      if (tipusCos.startsWith('application/vnd.google-apps')) return json({ error: { code: 400, message: 'Bad Request: invalid media type ' + tipusCos } }, 400);
       const f = this.afegeix({ name: meta.name, mimeType: meta.mimeType, parents: meta.parents || [], bytes: dades.subarray(0, Math.max(0, dades.length - 2)), appProperties: meta.appProperties || null });
       return json(this.meta(f));
     }

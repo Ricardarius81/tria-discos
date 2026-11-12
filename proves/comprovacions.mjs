@@ -1407,6 +1407,32 @@ export const COMPROVACIONS = [
     cal(!(await f2.count()) || !(await f2.innerText()).includes('durada?'), 'la fila de L\'Afinació encara diu «durada?»');
     await pagina.click('[data-anar="faristol"]');
   } },
+  { nom: 'bústia de Bandcamp: el full de codis i el fitxer de pendents es creen al Drive, un disc sense codi hi surt, i el codi que hi deixa la tasca arriba a Edició.codi_bandcamp', sintetic: true, async fes({ pagina, drive, consulta, esperaDesat }) {
+    const troba = nom => [...drive.fitxers.values()].find(f => f.name === nom && !f.trashed);
+    cal(troba('tria-discos-bustia-codis'), 'no s\'ha creat el full de codis: ' + [...drive.fitxers.values()].map(f => f.name).join(', '));
+    igual(troba('tria-discos-bustia-codis').mimeType, 'application/vnd.google-apps.spreadsheet', 'el tipus del full de codis');
+    cal(troba('tria-discos-bustia-pendents.txt'), 'no s\'ha creat el fitxer de pendents');
+    const r = await pagina.evaluate(async () => {
+      const A = await import('./js/arxiu.js?v=19');
+      return A.canvia(db => {
+        db.run("INSERT INTO artista (nom_canonic) VALUES ('Banc Bústia')"); const ar = db.exec('SELECT last_insert_rowid()')[0].values[0][0];
+        db.run("INSERT INTO album (titol, artista_id) VALUES ('Disc Sense Codi', ?)", [ar]); const al = db.exec('SELECT last_insert_rowid()')[0].values[0][0];
+        db.run("INSERT INTO edicio (album_id, durada_total, rotacio_actual, app_escolta, emparellaments) VALUES (?, 40, 0, 'bandcamp', '[]')", [al]);
+      });
+    });
+    cal(r.desat, 'no s\'ha desat: ' + r.motiu);
+    const id = consulta("SELECT e.id FROM edicio e JOIN album a ON a.id = e.album_id WHERE a.titol = 'Disc Sense Codi'")[0].id;
+    await reobre(pagina);
+    const linia = `E${id} | Banc Bústia | Disc Sense Codi`;
+    await espera(() => troba('tria-discos-bustia-pendents.txt').bytes.toString('utf8').includes(linia), 'el disc sense codi no surt als pendents: ' + JSON.stringify(troba('tria-discos-bustia-pendents.txt').bytes.toString('utf8')), 12000);
+    // la tasca de nit hi afegeix una fila
+    const full = troba('tria-discos-bustia-codis');
+    full.bytes = Buffer.concat([full.bytes, Buffer.from(`E${id},7654321,2026-11-12T02:40:00Z,https://banc.bandcamp.com/album/disc-sense-codi\n`)]);
+    await reobre(pagina);
+    await espera(() => consulta('SELECT codi_bandcamp AS c FROM edicio WHERE id = ?', [id])[0]?.c === '7654321', 'el codi no ha arribat a Edició.codi_bandcamp', 12000);
+    await esperaDesat();
+    await espera(() => !troba('tria-discos-bustia-pendents.txt').bytes.toString('utf8').includes(linia), 'el disc ja té codi i encara surt als pendents', 12000);
+  } },
   { nom: 'completar (ACT-701): una escolta a mitges es completa amb la següent del disc dins de 7 dies, amb la data de la segona meitat; a 8 dies, dues a mitges', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
     // dos discos de 12′ (quatre pistes de 3′): un en dues meitats a 3 dies de distància, l'altre a 8 dies; lluny de tota la resta
     const r = await pagina.evaluate(async () => {
