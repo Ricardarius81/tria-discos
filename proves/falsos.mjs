@@ -90,8 +90,9 @@ export const GSI_FALS = `window.google = { accounts: { oauth2: { initTokenClient
 // ───────── la Wikipedia i MusicBrainz, falsos, per al disc anterior i el següent (ACT-626) ─────────
 // Només contesten quan una comprovació els encén (actiu) i només el que porten carregat: la resta continua avortant-se
 // com sempre, perquè la sonda de portades i fotos no canviï de comportament.
+const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 export class FontsFalses {
-  constructor() { this.actiu = false; this.wp = { cerques: {}, pagines: {} }; this.mb = { artistes: {}, grups: {} }; this.crides = []; }
+  constructor() { this.actiu = false; this.wp = { cerques: {}, pagines: {} }; this.mb = { artistes: {}, grups: {} }; this.caa = {}; this.crides = []; }
   async atén(route) {
     if (!this.actiu) return false;
     const u = new URL(route.request().url()), q = u.searchParams;
@@ -105,6 +106,17 @@ export class FontsFalses {
         const p = q.get('page'), w = this.wp.pagines[p]; this.crides.push('wp pàgina ' + p);
         await json(w ? { parse: { title: p, wikitext: w } } : { error: { code: 'missingtitle' } }); return true;
       }
+    }
+    // Cover Art Archive (ACT-726): una referència carregada a caa contesta 'no-hi-ha' (404 a totes les mides) o 'imatge'
+    // (un PNG d'un píxel). Com el de veritat, amb la capçalera CORS també al 404: és el que deixa la màquina llegir que
+    // no hi ha portada (el cas Infinitati del 4-11 ja ho fa servir). La resta, avortada: és «no respon».
+    if (u.host === 'coverartarchive.org') {
+      const m = u.pathname.match(/^\/((?:release|release-group)\/[^/]+)\/(front(?:-\d+)?)$/);
+      if (!m || !(m[1] in this.caa)) return false;
+      const que = this.caa[m[1]]; this.crides.push('caa ' + m[1] + ' ' + m[2]);
+      if (que === 'no-hi-ha') { await route.fulfill({ status: 404, contentType: 'text/plain', headers: { 'Access-Control-Allow-Origin': '*' }, body: 'Not Found' }); return true; }
+      if (que === 'imatge') { await route.fulfill({ status: 200, contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: PIXEL }); return true; }
+      return false;
     }
     if (u.host === 'musicbrainz.org') {
       if (u.pathname === '/ws/2/artist/') {

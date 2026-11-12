@@ -256,7 +256,7 @@ export const SQL_COMPTA = `(CASE WHEN s.unio IS NULL THEN (s.completitud >= ${LL
 // següent, i el Chuck Berry va sortir «a mitges» a la prova. Ara, si la marca de l'arxiu no és la d'aquest codi, la
 // lectura de ListenBrainz les torna a calcular totes un cop, encara que no n'arribi cap de nova.
 // CALCUL s'ha de pujar quan canviï una regla de recalcula sense estructura nova; amb estructura nova, la marca ja canvia sola.
-export const CALCUL = 2;   // 2: ACT-701, completar una escolta a mitges
+export const CALCUL = 3;   // 2: ACT-701, completar una escolta a mitges · 3: ACT-719, la que ja compta sense ser sencera
 const MARCA = 'calcul-escoltes';
 const marcaDelCodi = db => db.exec('PRAGMA user_version')[0].values[0][0] + '·' + CALCUL;
 export const marcaDeLArxiu = db => un(db, 'SELECT valor FROM meta WHERE clau = ?', [MARCA])?.valor ?? null;
@@ -308,6 +308,13 @@ export const recalcula = db => {
   // (decisió de construcció de Claude, OK de Ricard). Fora de la finestra de 15 hores no hi ha res a fer amb la pista
   // repetida: una unió que no compta tampoc no és sencera. Camps: Escolta.unio, Escolta.completitud, Scrobble.listened_at,
   // Scrobble.recording_msid/pista/duration_ms. Si la unió ja compta, o han passat més de 7 dies, s'obre una escolta nova.
+  // La que ja compta sense ser sencera (ACT-719, 12-11, Ricard: «OK», cas Billy Cobham, que va arribar al 75 % i l'última
+  // pista, escoltada després, va obrir una escolta nova «a mitges»): una unió que no és sencera (cobertura < ENTERA)
+  // continua oberta els mateixos 7 dies per a les pistes que encara no hi han sonat; una pista que ja hi va sonar obre
+  // escolta nova si la unió ja compta, i és reprendre si no (ACT-701, com abans). La data de l'escolta és la del tram en
+  // què va arribar a comptar (u.arriba): canvia la ACT-702 només quan hi ha tres trams (el segon la fa comptar i el
+  // tercer la completa: la data és la del segon). Una unió que no arriba a comptar porta la del seu últim tram, com abans.
+  // «Totes les pistes» i «en ordre» no tenen camp (§11): la màquina no sap quines pistes té una edició.
   const trossos = [], oberta = new Map();
   for (const s of scr) {
     const ed = edicioDe(mapa, s);
@@ -323,10 +330,11 @@ export const recalcula = db => {
     const part = perNom ? perNom.id : (s.escolta_id ? (s.part_id ?? null) : (viva?.id ?? null));   // (d)
     const ku = ed + '|' + part;
     let u = oberta.get(ku);
-    const completa = u && s.t - u.t0 >= FINESTRA_ESCOLTA && s.t - u.tn <= FINESTRA_COMPLETAR && !compta(u);   // ACT-701
-    if (completa) { u.t0 = s.t; u.represa++; u.cap = null; }
+    const completa = u && s.t - u.t0 >= FINESTRA_ESCOLTA && s.t - u.tn <= FINESTRA_COMPLETAR
+      && cobertura(u) < ENTERA - 1e-9 && (!compta(u) || clauDe(u, s) < 0);   // ACT-701, ACT-719
+    if (completa) { u.t0 = s.t; u.represa++; }
     else if (!u || s.t - u.t0 >= FINESTRA_ESCOLTA || (clauDe(u, s) >= 0 && cobertura(u) >= ENTERA - 1e-9)) {
-      u = { ed, part, t0: s.t, tn: s.t, represa: 0, cap: null, durada: durDe(ed, part), trossos: new Map(), millor: new Map(), pistes: [], id: null };
+      u = { ed, part, t0: s.t, tn: s.t, represa: 0, inicis: [], arriba: null, durada: durDe(ed, part), trossos: new Map(), millor: new Map(), pistes: [], id: null };
       oberta.set(ku, u);
     }
     u.tn = s.t;
@@ -334,10 +342,11 @@ export const recalcula = db => {
     s.kp = kp;
     const kt = ctx + '|' + at + '|' + u.represa;
     let t = u.trossos.get(kt);
-    if (!t) { t = { u, ctx, at, t0: s.t, s: [], comptes: new Set() }; u.trossos.set(kt, t); trossos.push(t); if (u.represa && !u.cap) u.cap = t; }
+    if (!t) { t = { u, ctx, at, t0: s.t, s: [], comptes: new Set() }; u.trossos.set(kt, t); trossos.push(t); if (!u.inicis[u.represa]) u.inicis[u.represa] = t; }
     t.s.push(s); t.comptes.add(s.compte);
     const m = u.millor.get(kp);
     if (!m || s.sonat > m.sonat) u.millor.set(kp, s);
+    if (u.arriba === null && compta(u)) u.arriba = u.represa;   // ACT-719: el tram en què arriba a comptar
   }
 
   // Esborrar les escoltes que vénen de scrobbles i tornar-les a escriure.
@@ -359,8 +368,12 @@ export const recalcula = db => {
     n++;
   }
   ins.free(); lliga.free();
-  // Una unió completada (ACT-701) porta l'id del primer tros de l'última represa: la seva data és la d'aquest tros.
-  for (const u of new Set(trossos.map(t => t.u))) if (u.cap && u.cap.id !== u.id) db.run('UPDATE escolta SET unio = ? WHERE unio = ?', [u.cap.id, u.id]);
+  // Una unió completada (ACT-701) porta l'id del primer tros del tram en què va arribar a comptar (ACT-719), o del seu
+  // últim tram si no hi arriba: la seva data és la d'aquest tros.
+  for (const u of new Set(trossos.map(t => t.u))) {
+    const cap = u.inicis[u.arriba ?? u.represa];
+    if (cap && cap.id !== u.id) db.run('UPDATE escolta SET unio = ? WHERE unio = ?', [cap.id, u.id]);
+  }
 
   // La data de la darrera escolta de cada part (§8.5): la mou només una escolta que compta.
   db.run(`UPDATE part SET data_darrera_escolta = (SELECT MAX(s.data_hora) FROM escolta s WHERE s.part_id = part.id AND ${SQL_COMPTA})

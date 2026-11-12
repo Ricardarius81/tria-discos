@@ -96,17 +96,70 @@ export async function url(ref) {
   try { return await p; } finally { enCurs.delete(ref); }
 }
 
+// ───────── la portada que no arriba (ACT-726, 12-11, Ricard: «Ratifico los tres puntos») ─────────
+// Dos fallades que abans es pintaven igual: «no hi ha portada» (Cover Art Archive contesta 404 a totes les mides: no hi
+// ha res a reintentar; url() torna null) i «no respon» (error de xarxa o del servidor: la imatge no carrega). La segona
+// és una portada pendent: a la fitxa, en lloc del marc buit, un text i «Torna-ho a provar ara»; a les files, una marca ↻
+// a la cantonada. Sense camp nou: és estat de pantalla, les referències que han fallat per xarxa en aquesta sessió. El
+// reintent ja passa sol a cada repintat (una <img> nova torna a demanar-la). Només les portades de Cover Art Archive
+// (release/, release-group/): una foto de Commons o una imatge del Drive que no arriba es treu com sempre.
+// Sense connexió no es marca res: no és que MusicBrainz no respongui (decisió de construcció, per ratificar).
+// Consequència dita: si MusicBrainz està caigut dies, la marca s'hi queda dies.
+export const pendents = new Set();
+const esPortadaCAA = ref => /^(release|release-group)\//.test(ref || '');
+export const TEXT_PENDENT = 'Portada pendent · MusicBrainz no respon, es tornarà a provar';
+
 // Omple totes les imatges pendents d'un tros de pantalla. Si una no arriba, treu-la i deixa el text.
 export function omple(arrel = document) {
   arrel.querySelectorAll('img[data-ref]:not([src])').forEach(async im => {
-    const u = await url(im.dataset.ref);
+    const ref = im.dataset.ref;
+    const u = await url(ref);
     if (!im.isConnected) return;
-    if (u) im.src = u; else treu(im);
+    if (!u) {                                   // 404 a totes les mides (no n'hi ha), o sense connexió
+      if (esPortadaCAA(ref) && navigator.onLine) pendents.delete(ref);
+      const marc = im.closest('.fitxa-portada.pendent');
+      treu(im);
+      if (marc) { if (navigator.onLine) marc.remove(); else pintaPendent(marc, ref); }   // venia de «Torna-ho a provar ara»
+      return;
+    }
+    im.onerror = () => falla(im);
+    im.onload = () => arriba(im);
+    im.src = u;
   });
 }
 export function treu(im) {
   const c = im.closest('.coberta'); if (c) c.classList.remove('amb-img');
   im.remove();
+}
+// No ha carregat: si és una portada de Cover Art Archive i hi ha connexió, és que no respon.
+function falla(im) {
+  const ref = im.dataset.ref;
+  if (!esPortadaCAA(ref) || !navigator.onLine) { treu(im); return; }
+  pendents.add(ref);
+  const marc = im.closest('.fitxa-portada'), lloc = im.parentElement;
+  treu(im);
+  if (marc) pintaPendent(marc, ref);
+  else if (lloc && !lloc.querySelector(':scope > .marca-pendent'))
+    lloc.insertAdjacentHTML('beforeend', '<span class="marca-pendent" title="Portada pendent: es tornarà a provar" aria-label="Portada pendent">↻</span>');
+}
+function arriba(im) {
+  pendents.delete(im.dataset.ref);
+  const marc = im.closest('.fitxa-portada.pendent');
+  if (marc) { marc.classList.remove('pendent'); marc.querySelector('.portada-espera')?.remove(); }
+}
+const escapa = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function pintaPendent(marc, ref) {
+  marc.classList.add('pendent');
+  marc.innerHTML = `<div class="portada-espera"><p>${TEXT_PENDENT}</p>
+    <button class="bt discret" data-reprovaportada="${escapa(ref)}">Torna-ho a provar ara</button></div>`;
+}
+// «Torna-ho a provar ara»: una <img> nova dins el mateix marc, amb el text a sota mentre prova.
+export function reprova(boto) {
+  const marc = boto.closest('.fitxa-portada'), ref = boto.dataset.reprovaportada;
+  if (!marc || !ref) return;
+  boto.disabled = true; boto.textContent = 'Provant…';
+  marc.insertAdjacentHTML('beforeend', `<img data-ref="${escapa(ref)}" alt="" referrerpolicy="no-referrer">`);
+  omple(marc);
 }
 
 // Una imatge pujada a mà es guarda de seguida, sense tornar-la a baixar.

@@ -1746,6 +1746,7 @@ document.addEventListener('click', e => {
   if (d.portadapart) { const [id, pid] = d.portadapart.split(':').map(Number), x = rot(id), p = x?.parts.find(y => y.id === pid); if (!p) return;
     fullPortada({ ...x, titol: x.titol + (p.nom ? ' ' + p.nom : ' ' + p.numero), portada: p.portada, partId: pid }); return; }
   if (d.cercaportada) { cercaPortada(); return; }
+  if (d.reprovaportada) { I.reprova(t); return; }   // ACT-726: la portada pendent, ara mateix
   if (d.triaportada) { const x = estat.portadaDe; if (!x) return;
     fes(x.partId ? D.posaPortadaPart(x.partId, d.triaportada) : D.posaPortada(x.id, d.triaportada, 'triada'), x.partId ? 'Portada de la part triada' : 'Portada triada'); tornaFitxa(x.id); return; }
   if (d.pujaportada) { $('#inPortada')?.click(); return; }

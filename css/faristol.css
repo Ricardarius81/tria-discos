@@ -682,3 +682,13 @@ body[data-estil="ricard"] .full.complet{border-radius:0}
 .part-fila.tria-part .txt small{color:var(--os-3); font-size:12px}
 .barra-accions.identitat{flex-wrap:wrap}
 .fitxa-dades li.per-afinar b{color:var(--accent)}
+/* ACT-726 · la portada pendent: MusicBrainz no respon i es tornarà a provar */
+.marca-pendent{position:absolute; bottom:6px; right:6px; z-index:3; width:17px; height:17px; border-radius:50%;
+  background:rgba(0,0,0,.62); color:var(--accent); font:700 11px/17px var(--sans); text-align:center; pointer-events:none}
+.fitxa-portada.pendent{position:relative; width:auto; max-width:260px; aspect-ratio:auto; padding:12px 14px;
+  border:1px dashed var(--vora-2); box-shadow:none; background:var(--fons-2)}
+.fitxa-portada.pendent img{position:absolute; inset:0; width:100%; height:100%; opacity:0}
+.portada-espera p{margin:0 0 8px; font:12.5px/1.35 var(--sans); color:var(--os-2)}
+body .fitxa-portada .portada-espera .bt{padding:6px 0; color:var(--accent)}
+/* a les files (.hcob) el ▶ ocupa la cantonada de baix: la marca va a dalt */
+.hcob > .marca-pendent{top:3px; bottom:auto; right:3px}

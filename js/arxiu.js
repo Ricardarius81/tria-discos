@@ -278,8 +278,22 @@ export async function resolConflicte(guanya, { drive, copia }) {
 // Escriure: primer a la còpia del navegador (no es perd res), després al Drive.
 // auto: una escriptura que la màquina pot tornar a fer sola (lectura de ListenBrainz, sonda, bústia). No compta com a canvi
 // de Ricard a l'hora de decidir si hi ha conflicte (ACT-492).
+// Cada canvi és una transacció (ACT-721, punt 1.2 de l'auditoria del 12-11): o entra sencer, o no entra. Abans, si una
+// excepció tallava recalcula a mitges, l'arxiu en memòria es quedava amb les escoltes esborrades i el canvi següent el
+// desava així; i la part d'una caixa es llegeix de l'escolta que s'acaba d'esborrar, i no es pot tornar a calcular.
+// Ara, si fn falla: ROLLBACK, l'arxiu queda com abans del toc, no es marca res per desar i l'error continua amunt.
+// SAVEPOINT i no BEGIN: fora d'una transacció fa el mateix que BEGIN, i dins de les que ja hi ha (afinacio.js) no xoca.
 export async function canvia(fn, { auto = false } = {}) {
-  fn(estat.db);
+  const db = estat.db;
+  db.run('SAVEPOINT canvia');
+  try {
+    const r = fn(db);
+    if (r && typeof r.then === 'function') throw new Error('arxiu.canvia: el canvi no pot ser asíncron');
+    db.run('RELEASE canvia');
+  } catch (e) {
+    try { db.run('ROLLBACK TO canvia'); db.run('RELEASE canvia'); } catch {}
+    throw e;
+  }
   estat.pendent = true;
   if (!auto) estat.manual = true;
   await desaLocal();
