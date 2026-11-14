@@ -6,7 +6,7 @@
 //  · «Pendent de desar» fins que la data de modificació del fitxer al Drive canvia (§3.5, v1.35).
 //  · Comprovació d'integritat en obrir (§3.5).
 
-import { MIGRACIONS, TAULES } from './esquema.js?v=8';
+import { MIGRACIONS, TAULES } from './esquema.js?v=9';
 
 export const CLIENT_ID = '918975060033-hs8so80pee5mjlrlpeu9gnleuoqjib3a.apps.googleusercontent.com';
 const ABAST = 'https://www.googleapis.com/auth/drive.file';
@@ -294,11 +294,16 @@ export async function canvia(fn, { auto = false } = {}) {
     try { db.run('ROLLBACK TO canvia'); db.run('RELEASE canvia'); } catch {}
     throw e;
   }
-  estat.pendent = true;
+  estat.pendent = true; versio++;
   if (!auto) estat.manual = true;
   await desaLocal();
   return desa();
 }
+// Quants canvis s'han fet (14-11, trobat construint la ACT-732): un desat que puja una foto de l'arxiu presa abans d'un
+// canvi no pot donar aquest canvi per desat. Abans, «pendent» es buidava en acabar la pujada encara que entremig s'hagués
+// fet un altre toc, i el desat següent de la fila trobava que no hi havia res pendent: el toc quedava al mòbil i no
+// arribava al Drive fins al toc següent. Amb el gènere desat a cada toc, dos tocs seguits ho feien passar.
+let versio = 0;
 
 // Els desats van en fila: dos tocs seguits no han de pujar alhora, perquè el segon veuria la data
 // que acaba de canviar el primer i ho prendria per un conflicte (tram 3).
@@ -327,9 +332,11 @@ async function desaAra({ forca = false, intern = false } = {}) {
     const ara = await metadades(estat.fitxerId);
     if (ara.trashed) return { desat: false, motiu: 'l\'arxiu del Drive és a la paperera' };
     if (!forca && ara.modifiedTime !== estat.base) return { desat: false, motiu: 'conflicte', drive: ara };
+    const v = versio;
     const r = await sobreescriu(estat.fitxerId, estat.db.export());
     if (r.modifiedTime === ara.modifiedTime) return { desat: false, motiu: 'el Drive no ha canviat la data' };
-    estat.base = r.modifiedTime; estat.pendent = false; estat.manual = false;
+    estat.base = r.modifiedTime;
+    if (versio === v) { estat.pendent = false; estat.manual = false; }   // si entremig hi ha hagut un toc, continua pendent
     await desaLocal();
     return { desat: true };
   } catch (e) { return { desat: false, motiu: e.message }; }
@@ -361,7 +368,7 @@ export function vigilaPendents(avisa) {
 // Desfés (tram 3): torna l'arxiu a l'estat d'abans d'un canvi, i ho desa com un canvi més.
 export async function restaura(bytes) {
   obreBytes(bytes);
-  estat.pendent = true; estat.manual = true;
+  estat.pendent = true; estat.manual = true; versio++;
   await desaLocal();
   return desa();
 }

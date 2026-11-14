@@ -13,8 +13,8 @@
 //  · «Un que ja tinc amb un altre nom» (ACT-658 a ACT-664, ACT-670, ACT-680): juntar dues fitxes en una.
 //  · «És part d'un que ja tinc» (ACT-665 a ACT-669, ACT-685): una fitxa passa a ser una Part d'una altra.
 
-import { SQL_COMPTA, norm, recalcula, canviaEdicio, duradesSospitoses } from './escoltes.js?v=13';
-import { treuDelGrup } from './dades.js?v=24';
+import { SQL_COMPTA, norm, recalcula, canviaEdicio, duradesSospitoses } from './escoltes.js?v=14';
+import { treuDelGrup } from './dades.js?v=25';
 
 const files = (db, sql, p = []) => {
   const st = db.prepare(sql); st.bind(p);
@@ -44,8 +44,25 @@ export const LLENGUATGES = ['Antiga', 'Canon', 'Atonal / Dodecafònica'];
 export const FORMACIONS = ['vocal-coral', 'lied', 'òpera', 'ballet', 'sarsuela', 'orquestral', 'cambra', 'instrument sol'];
 
 export function genere(db, albumId) {
-  const a = un(db, 'SELECT generes, llenguatge, formacio, instrument_solista FROM album WHERE id = ?', [albumId]) || {};
-  return { generes: llista(a.generes), llenguatge: llista(a.llenguatge), formacio: llista(a.formacio), instrument: a.instrument_solista || '' };
+  const a = un(db, 'SELECT generes, llenguatge, formacio, instrument_solista, subgeneres FROM album WHERE id = ?', [albumId]) || {};
+  return { generes: llista(a.generes), llenguatge: llista(a.llenguatge), formacio: llista(a.formacio), instrument: a.instrument_solista || '',
+           subgeneres: llista(a.subgeneres) };
+}
+// ───────── els subgèneres (v1.52, ACT-733) ─────────
+// Llista oberta, sense arbre. Un subgènere escrit a mà es neteja (espais) i va en minúscula, com un idioma nou (§6.3); si,
+// normalitzat, ja n'hi ha un d'igual a l'arxiu, es fa servir aquell: és el que redueix els noms dobles («Piano Ambient» i
+// «piano ambient»). Decisió de construcció de Claude, per ratificar. «Ambient piano» és un altre nom: la màquina no ho sap.
+export const subgenereNet = txt => String(txt ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+// Els ja usats, per oferir-los primer a la fulla (ACT-733): tots els de l'arxiu, els més usats primer i, a igualtat,
+// per ordre alfabètic. D'on surt la llista: d'Àlbum.Subgèneres de tots els àlbums (fixat en la construcció).
+export function subgeneresUsats(db) {
+  const n = new Map();
+  for (const r of files(db, 'SELECT subgeneres FROM album WHERE subgeneres IS NOT NULL')) for (const s of llista(r.subgeneres)) n.set(s, (n.get(s) || 0) + 1);
+  return [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ca')).map(([s]) => s);
+}
+export function subgenereCanonic(db, txt) {
+  const net = subgenereNet(txt); if (!net) return null;
+  return subgeneresUsats(db).find(s => norm(s) === norm(net)) || net;
 }
 // El que li falta a un àlbum per sortir de L'Afinació (ACT-684): res, el gènere, o els eixos de la clàssica.
 export const falta = g => !g.generes.length ? 'sense gènere'
@@ -54,13 +71,21 @@ export const falta = g => !g.generes.length ? 'sense gènere'
 // Desar el gènere de l'àlbum (és de l'àlbum: canvia a totes les edicions, §6.2). Sense «Clàssica» no hi ha eixos ni
 // instrument (ACT-684). L'instrument també se'n va si ja no hi ha «instrument sol»: només té sentit amb aquesta formació
 // (§6.2, «solo se rellena en la formació instrument sol»; decisió de construcció de Claude, per ratificar).
-export const desaGenere = (albumId, { generes, llenguatge, formacio, instrument }) => db => {
+// Des de la v1.52 (ACT-732) es crida a cada toc de la fulla, sense «Desa'l». La fulla guarda en memòria el que hi ha tocat
+// mentre és oberta: si treus «Clàssica» i la tornes a tocar, els eixos tornen (tornar a tocar és el desfés).
+// Els subgèneres (ACT-733) només es desen si hi ha almenys una branca: sense branca, la columna queda buida i la fulla els
+// recorda mentre és oberta. Així es compleix que un disc amb subgènere sempre té branca (decisió de construcció de Claude).
+export const desaGenere = (albumId, { generes, llenguatge, formacio, instrument, subgeneres = null }) => db => {
   const gs = [...new Set(generes.filter(g => BRANQUES.includes(g)))];
   const cl = gs.includes(CLASSICA);
   const ll = cl ? LLENGUATGES.filter(x => llenguatge.includes(x)) : [];
   const fo = cl ? FORMACIONS.filter(x => formacio.includes(x)) : [];
   const ins = cl && fo.includes(INSTRUMENT_SOL) && String(instrument || '').trim() ? String(instrument).trim() : null;
   db.run('UPDATE album SET generes = ?, llenguatge = ?, formacio = ?, instrument_solista = ? WHERE id = ?', [json(gs), json(ll), json(fo), ins, albumId]);
+  if (subgeneres !== null) {
+    const sub = gs.length ? [...new Map(subgeneres.map(subgenereNet).filter(Boolean).map(x => [norm(x), x])).values()] : [];
+    db.run('UPDATE album SET subgeneres = ? WHERE id = ?', [json(sub), albumId]);
+  }
 };
 
 // ───────── «Per afinar» (ACT-674, ACT-676, ACT-681) ─────────
@@ -184,11 +209,11 @@ export const junta = ({ de, a }) => tot(db => {
   // descripció: un bloc
   const ax = un(db, 'SELECT * FROM album WHERE id = ?', [x.album_id]), ay = un(db, 'SELECT * FROM album WHERE id = ?', [y.album_id]);
   const mateixAlbum = ax.id === ay.id;
-  const BLOC = ['generes', 'llenguatge', 'formacio', 'compositors', 'tags'];
+  const BLOC = ['generes', 'llenguatge', 'formacio', 'compositors', 'tags', 'subgeneres'];   // subgeneres: ACT-733
   const teBloc = (al, ed) => (!mateixAlbum && (BLOC.some(c => llista(al[c]).length) || !!al.instrument_solista)) || llista(ed.tags).length > 0;
   if (!teBloc(ay, y) && teBloc(ax, x)) {
-    if (!mateixAlbum) db.run('UPDATE album SET generes = ?, llenguatge = ?, formacio = ?, compositors = ?, tags = ?, instrument_solista = ? WHERE id = ?',
-      [ax.generes, ax.llenguatge, ax.formacio, ax.compositors, ax.tags, ax.instrument_solista, ay.id]);
+    if (!mateixAlbum) db.run('UPDATE album SET generes = ?, llenguatge = ?, formacio = ?, compositors = ?, tags = ?, instrument_solista = ?, subgeneres = ? WHERE id = ?',
+      [ax.generes, ax.llenguatge, ax.formacio, ax.compositors, ax.tags, ax.instrument_solista, ax.subgeneres, ay.id]);
     db.run('UPDATE edicio SET tags = ? WHERE id = ?', [x.tags, a]);
   }
   if (!mateixAlbum) {

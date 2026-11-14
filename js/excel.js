@@ -17,7 +17,7 @@
 // Sense cap biblioteca de fora (§3.6): un .xlsx és un zip de fitxers XML, i el zip s'escriu aquí.
 // També es llegeix aquí, per a la prova d'anada i tornada del §3.5 (exportar, carregar en una base buida, comparar).
 
-import { TAULES, TAULES_LLISTES } from './esquema.js?v=8';
+import { TAULES, TAULES_LLISTES } from './esquema.js?v=9';
 
 const CARREGA = {
   edicio: {

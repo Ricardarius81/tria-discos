@@ -5,7 +5,7 @@
 //  · Scrobble és la pista; Escolta és l'escolta d'una edició o d'una part, calculada (§8.3, ACT-451 i ACT-452).
 //  · Una escolta compta si sona el 75 % de la durada dins d'una finestra de 15 hores; dormir, el 50 % (§8.5).
 //  · El que va sonar una pista és el temps fins al scrobble següent DE LA MATEIXA COMPTE (ACT-456); l'última
-//    pista d'una tanda es compta sencera (v1.3).
+//    pista d'una tanda es compta sencera (v1.3), de fiat, i des de la ACT-730 es pot reprendre 7 dies.
 //  · Una «tirada» són dos o més discos del mateix Conjunt que compten dins d'una finestra fixa de 24 hores,
 //    oberta per la primera escolta de qualsevol d'ells; res del que soni enmig la trenca (§7.5, ACT-446).
 //  · No s'empareja res sense confirmar: el release_name confirmat viu a Edició.Emparellaments (§8.8, ACT-469).
@@ -234,8 +234,10 @@ function cronologia(scr) {
       const fi = s.t + (s.duration_ms || 0);
       // Dins la mateixa tanda (el silenci no passa de 30 minuts) el que va sonar és el temps fins a la següent;
       // l'última de la tanda es compta sencera (v1.3). (a) Mai més que la seva durada.
-      if (seg && seg.t - fi <= SILENCI_TARGETA) s.sonat = s.duration_ms ? Math.min(seg.t - s.t, s.duration_ms) : Math.max(0, seg.t - s.t);
-      else s.sonat = s.duration_ms || 0;
+      // ACT-730 (v1.52, cas Cobham): «sonó» feia dues feines. Amb pista següent és una mesura; sense, és un supòsit:
+      // s.fiat marca la pista comptada sencera de fiat, que recalcula deixa reprendre (veure RETOMAR).
+      if (seg && seg.t - fi <= SILENCI_TARGETA) { s.sonat = s.duration_ms ? Math.min(seg.t - s.t, s.duration_ms) : Math.max(0, seg.t - s.t); s.fiat = false; }
+      else { s.sonat = s.duration_ms || 0; s.fiat = s.sonat > 0; }
     });
   }
   return scr;
@@ -256,7 +258,8 @@ export const SQL_COMPTA = `(CASE WHEN s.unio IS NULL THEN (s.completitud >= ${LL
 // següent, i el Chuck Berry va sortir «a mitges» a la prova. Ara, si la marca de l'arxiu no és la d'aquest codi, la
 // lectura de ListenBrainz les torna a calcular totes un cop, encara que no n'arribi cap de nova.
 // CALCUL s'ha de pujar quan canviï una regla de recalcula sense estructura nova; amb estructura nova, la marca ja canvia sola.
-export const CALCUL = 3;   // 2: ACT-701, completar una escolta a mitges · 3: ACT-719, la que ja compta sense ser sencera
+export const CALCUL = 4;   // 2: ACT-701, completar una escolta a mitges · 3: ACT-719, la que ja compta sense ser sencera
+                           // 4: ACT-730, l'última pista comptada de fiat es pot reprendre 7 dies
 const MARCA = 'calcul-escoltes';
 const marcaDelCodi = db => db.exec('PRAGMA user_version')[0].values[0][0] + '·' + CALCUL;
 export const marcaDeLArxiu = db => un(db, 'SELECT valor FROM meta WHERE clau = ?', [MARCA])?.valor ?? null;
@@ -315,6 +318,18 @@ export const recalcula = db => {
   // què va arribar a comptar (u.arriba): canvia la ACT-702 només quan hi ha tres trams (el segon la fa comptar i el
   // tercer la completa: la data és la del segon). Una unió que no arriba a comptar porta la del seu últim tram, com abans.
   // «Totes les pistes» i «en ordre» no tenen camp (§11): la màquina no sap quines pistes té una edició.
+  // RETOMAR (ACT-730, 13-11, Ricard: «Si», cas Cobham: Brooze, l'última pista del 9-11, es va comptar sencera perquè no en
+  // va sonar cap altra en 30 minuts, i l'endemà, posada per escoltar-la sencera, va obrir una escolta nova del 13 %):
+  // «La última pista que sonó, si se contó de fiado, se puede retomar durante 7 días: entra en la misma escucha y no abre
+  // otra.» Excepció: si aquesta pista pesa el 75 % del disc o més (Scrobble.duration_ms ≥ LLINDAR × la durada), repetir-la
+  // és escolta nova: un disc d'una sola peça. «L'última que va sonar» és l'última pista de la unió (u.ultima), i «de fiat»
+  // és s.fiat de la cronologia. Dins la unió, la pista compta un sol cop, la que més va sonar (com la ACT-695): la represa
+  // no treu ni afegeix cobertura; només evita l'escolta nova. Passades les 15 hores, la represa és un tram nou, com la ACT-701.
+  // Camps: Scrobble.listened_at, Scrobble.duration_ms, mateixaPista (ACT-694), Edició.durada_total, Escolta.unio.
+  // Conseqüències dites i acceptades: l'última pista posada per gust als tres dies se suma en silenci a l'escolta anterior;
+  // tornar a començar el disc per la seva última pista deixa aquesta pista a l'escolta vella.
+  const retoma = (u, s) => !!u && !!u.ultima && u.ultima.fiat && mateixaPista(u.ultima, s) && s.t - u.tn <= FINESTRA_COMPLETAR
+    && !(u.durada && (u.ultima.duration_ms || 0) >= LLINDAR * u.durada * MIN);
   const trossos = [], oberta = new Map();
   for (const s of scr) {
     const ed = edicioDe(mapa, s);
@@ -332,12 +347,13 @@ export const recalcula = db => {
     let u = oberta.get(ku);
     const completa = u && s.t - u.t0 >= FINESTRA_ESCOLTA && s.t - u.tn <= FINESTRA_COMPLETAR
       && cobertura(u) < ENTERA - 1e-9 && (!compta(u) || clauDe(u, s) < 0);   // ACT-701, ACT-719
-    if (completa) { u.t0 = s.t; u.represa++; }
+    if (retoma(u, s)) { if (s.t - u.t0 >= FINESTRA_ESCOLTA) { u.t0 = s.t; u.represa++; } }   // ACT-730
+    else if (completa) { u.t0 = s.t; u.represa++; }
     else if (!u || s.t - u.t0 >= FINESTRA_ESCOLTA || (clauDe(u, s) >= 0 && cobertura(u) >= ENTERA - 1e-9)) {
       u = { ed, part, t0: s.t, tn: s.t, represa: 0, inicis: [], arriba: null, durada: durDe(ed, part), trossos: new Map(), millor: new Map(), pistes: [], id: null };
       oberta.set(ku, u);
     }
-    u.tn = s.t;
+    u.tn = s.t; u.ultima = s;
     let kp = clauDe(u, s); if (kp < 0) { kp = u.pistes.length; u.pistes.push(s); }
     s.kp = kp;
     const kt = ctx + '|' + at + '|' + u.represa;
@@ -523,6 +539,47 @@ export function historial(db) {
   files_.push(...perEd.values());
   return files_.sort((a, b) => b.darrera.localeCompare(a.darrera));
 }
+
+// ───────── les escoltes d'un disc, a la fitxa (v1.52, ACT-736) ─────────
+// «Escoltes»: els totals a dalt i la llista, de la més recent a la més antiga. Una fila per escolta sencera (la unió,
+// ACT-585), amb els seus trossos: cada tros té el seu context i la seva atenció, i és el que es corregeix.
+// Compta: la mateixa regla que SQL_COMPTA (llindar mixt de la unió; l'escolta física, sola). Sencera: cobertura ≥ ENTERA.
+// «A mitges» a la fitxa és una unió que no compta. Diferència dita: l'Historial no posa «a mitges» a la que torna dins les
+// 15 hores d'una escolta sencera (ACT-696); aquí sí que surt, perquè és la llista de totes, no l'estat del disc.
+// Camps: Escolta.data_hora, Escolta.completitud, Escolta.unio, Escolta.context, Escolta.atencio (calculats dels scrobbles).
+export function escoltesDeLEdicio(db, edicioId) {
+  const fs = files(db, `SELECT s.id, s.data_hora, s.context, s.atencio, s.completitud, s.unio, s.canal, s.part_id,
+                               (SELECT COUNT(*) FROM scrobble p WHERE p.escolta_id = s.id) AS pistes
+                        FROM escolta s WHERE s.edicio_id = ? ORDER BY s.data_hora, s.id`, [edicioId]);
+  const per = new Map();
+  for (const f of fs) { const u = f.unio ?? f.id; (per.get(u) || per.set(u, []).get(u)).push(f); }
+  const out = [...per.entries()].map(([u, tr]) => {
+    const cap = tr.find(t => t.id === u) || tr[0];
+    const fisica = tr.every(t => !t.pistes);
+    const cob = tr.reduce((x, t) => x + (t.completitud ?? 0), 0);
+    const compta = f => (f.completitud ?? 0) / llindarDe(f.atencio);
+    const comptaU = fisica && tr.length === 1 && cap.unio === null
+      ? (cap.completitud ?? 0) >= LLINDAR || (cap.atencio === 'Dormir' && (cap.completitud ?? 0) >= LLINDAR_DORMIR)
+      : tr.reduce((x, t) => x + compta(t), 0) >= PROU;
+    return { u, data: cap.data_hora, trossos: tr, fisica, cobertura: Math.round(cob * 1000) / 1000, compta: comptaU, sencera: cob >= ENTERA - 1e-9 };
+  });
+  out.sort((a, b) => b.data.localeCompare(a.data) || b.u - a.u);
+  const compten = out.filter(x => x.compta);
+  const primera = (compten.length ? compten : out).map(x => x.data).sort()[0] || null;
+  return { escoltes: out, compten: compten.length, mitges: out.length - compten.length, primera };
+}
+// Corregir el context i l'atenció d'un tros des de la fitxa (ACT-736): «Lo corregido se escribe en los scrobbles de ese
+// tramo, que es como viaja lo contestado en la safata, y se recalcula». És contesta() sobre les pistes del tros, com un
+// disc sol ('disc', ACT-537). Pasar una escolta a Dormir canvia si compta (el 50 %). Una escolta física, sense pistes,
+// es corregeix a la mateixa Escolta. Després de recalcular, els id de les escoltes canvien: la pantalla torna a llegir.
+export const corregeixEscolta = (escoltaId, context, atencioBoto = null) => db => {
+  const ids = files(db, 'SELECT id FROM scrobble WHERE escolta_id = ?', [escoltaId]).map(r => r.id);
+  if (ids.length) return contesta(ids, context, atencioBoto, 'disc')(db);
+  let ctx = context, at = atencioBoto ? (ATENCIONS.find(([b]) => b === atencioBoto)?.[1] || atencioBoto) : atencioDe(context);
+  if (ctx === 'A casa' && at === 'Dormir') ctx = 'Dormir';
+  db.run('UPDATE escolta SET context = ?, atencio = ? WHERE id = ?', [ctx, at, escoltaId]);
+  return { ctx, at };
+};
 
 // ───────── la durada sospitosa (ACT-696, 8-11, Ricard) ─────────
 // Una escolta d'una edició (no d'una part) que ha sonat més del que diu la fitxa: cobertura (suma d'Escolta.completitud de

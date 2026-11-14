@@ -692,3 +692,71 @@ body[data-estil="ricard"] .full.complet{border-radius:0}
 body .fitxa-portada .portada-espera .bt{padding:6px 0; color:var(--accent)}
 /* a les files (.hcob) el ▶ ocupa la cantonada de baix: la marca va a dalt */
 .hcob > .marca-pendent{top:3px; bottom:auto; right:3px}
+
+/* ---------- la fitxa del disc (v1.52, ACT-734 a ACT-736; maqueta v14) ----------
+   Taronja és que falta; ple és el color del Lloc (var(--accent): blau fora, groc a Lleida; correcció de Ricard del 14-11);
+   el que no s'omple, sense color i amb vora discontínua. */
+:root{--taronja:#FF6B3D; --taronja-fons:rgba(255,107,61,.13)}
+.fitxa-cap{display:grid; grid-template-columns:118px 1fr; gap:14px; align-items:start; margin-top:4px}
+.fitxa-cap .fitxa-portada.cap-cob{width:118px; margin:0; border-radius:8px; background:var(--fons-3); display:flex; align-items:center; justify-content:center; position:relative}
+.fitxa-cap .fitxa-portada.cap-cob .inicials{font-family:var(--titol); font-weight:800; font-size:30px; color:var(--os-3)}
+.fitxa-cap .fitxa-portada.cap-cob img{position:absolute; inset:0}
+.fitxa-cap .fitxa-portada.pendent{grid-column:1 / -1; width:auto}
+.cap-txt h3{margin:0 0 3px}
+.cap-txt .cap-art{margin:0 0 8px; font-size:13.5px}
+.cap-ed{font-size:12.5px; color:var(--os-2); line-height:1.55}
+.cap-ed .min{font-family:var(--titol); font-weight:800; font-size:18px; color:var(--accent); margin-right:6px}
+.cap-ed .min.falta{color:var(--taronja); font-size:14px}
+.cap-ed .sf-link{padding:0; font-size:12.5px}
+.cap-ed small{color:var(--os-3)}
+.afinar{margin-top:10px; width:100%; padding:10px 12px; border-radius:22px; border:1.5px solid var(--vora-2); background:var(--fons-3);
+  color:var(--os); font-weight:700; font-size:14px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:1px}
+.afinar.marcat{border-color:var(--taronja); color:var(--taronja); background:var(--taronja-fons); padding:8px 10px}
+.afinar small{font-weight:500; font-size:11px; color:var(--os-2)}
+.avis-durada{margin:14px 0 0; border:1.5px solid var(--taronja); background:var(--taronja-fons); border-radius:14px; padding:10px 12px; font-size:13px}
+.avis-durada > b{color:var(--taronja)}
+.barra-accions.fitxa-accions{position:static; padding:16px 0 0; display:flex; gap:8px}
+.fitxa-accions .bt{flex:1}
+.graella{display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:16px}
+.cel{position:relative; text-align:left; border-radius:14px; padding:11px 12px 10px 14px; cursor:pointer; background:var(--fons-3);
+  border:1.5px solid var(--vora); min-height:62px; color:var(--os); font:inherit}
+.cel b{display:block; font-family:var(--titol); font-weight:700; font-stretch:90%; font-size:15.5px}
+.cel span{display:block; font-size:12px; color:var(--os-2); margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.cel::before{content:''; position:absolute; left:0; top:12px; bottom:12px; width:4px; border-radius:0 3px 3px 0; background:transparent}
+.cel.ple{border-color:color-mix(in srgb, var(--accent) 45%, transparent); background:color-mix(in srgb, var(--accent) 11%, transparent)}
+.cel.ple::before{background:var(--accent)}
+.cel.falta{border-color:var(--taronja); background:var(--taronja-fons)}
+.cel.falta::before{background:var(--taronja)}
+.cel.falta span{color:var(--taronja); font-weight:600}
+.cel.neutre{background:transparent; border-style:dashed}
+.llegenda{display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color:var(--os-3); margin:12px 2px 6px}
+.llegenda i{display:inline-block; width:9px; height:9px; border-radius:3px; margin-right:5px; vertical-align:-1px}
+.llegenda .l-falta{background:var(--taronja)} .llegenda .l-ple{background:var(--accent)} .llegenda .l-neutre{border:1px dashed var(--os-3)}
+.mes-ll{flex-direction:column}
+.gen-eix small{font-weight:400; text-transform:none; letter-spacing:0; color:var(--os-3)}
+.chips button.sub.triat{background:transparent; color:var(--accent); border-color:var(--accent)}
+.desat-toc{font-size:11.5px; margin-top:14px}
+/* «Escoltes» (ACT-736) */
+.esc-total{display:flex; gap:18px; margin:4px 0 8px}
+.esc-total div{font-size:11.5px; color:var(--os-3)}
+.esc-total b{display:block; font-family:var(--titol); font-size:24px; font-weight:800; color:var(--os)}
+.esc-llista{list-style:none; margin:0; padding:0}
+.esc-fila{display:grid; grid-template-columns:70px 1fr 54px; gap:10px; align-items:center; width:100%; text-align:left; padding:10px 0;
+  border:0; border-bottom:1px solid var(--vora); background:none; color:var(--os); font:inherit; font-size:13px; cursor:pointer}
+.esc-fila .q{font-family:var(--titol); font-weight:700; font-size:14px}
+.esc-fila small{display:block; font-family:var(--sans); font-weight:400; font-size:11px; color:var(--os-3)}
+.esc-fila .ctx{color:var(--os-2); line-height:1.35}
+.barra-c{height:6px; border-radius:3px; background:var(--vora); overflow:hidden}
+.barra-c i{display:block; height:100%; background:var(--accent)}
+.esc-fila.mitges .q, .esc-fila.mitges .ctx{color:var(--taronja)}
+.esc-fila.mitges .barra-c i{background:var(--taronja)}
+.corr-tros{margin:0 0 14px; padding-bottom:10px; border-bottom:1px solid var(--vora)}
+/* la nota en sortir de rotació (ACT-735) */
+#full.nota-sortida{border-top:4px solid var(--taronja); box-shadow:0 -10px 40px rgba(255,107,61,.28);
+  background:linear-gradient(180deg, rgba(255,107,61,.16), var(--fons-2) 150px)}
+.etiq-sortida{display:block; width:max-content; background:var(--taronja); color:#1b0a03; font-weight:800; font-size:11px; letter-spacing:.8px;
+  text-transform:uppercase; padding:4px 10px; border-radius:12px; margin:4px 0 10px}
+#full.nota-sortida .escala button{font-size:17px; padding:17px 6px; border-width:1.5px}
+#full.nota-sortida .escala button:hover{border-color:var(--taronja); color:var(--taronja)}
+/* l'Historial amb finestra (ACT-737) */
+.barra-accions.hmes{position:static; padding:14px 0 4px; justify-content:center}

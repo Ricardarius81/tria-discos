@@ -212,6 +212,13 @@ export const MIGRACIONS = [
   //   confirmada. Si Edició.durada_total canvia, ja no és igual i l'avís pot tornar.
   `
   ALTER TABLE edicio ADD COLUMN durada_confirmada INTEGER;
+  `,
+  // v10 · Els subgèneres (v1.52, ACT-733). album.subgeneres: una llista, com Idioma, que Ricard escriu a la fulla del gènere
+  //   de la fitxa, desada a cada toc. Llista oberta i sense arbre: un subgènere no penja de cap branca, però no se'n pot
+  //   desar cap si Àlbum.Gènere no té almenys una branca. Buit no és cap avís (mai taronja). Nom de la columna i número
+  //   d'estructura fixats en la construcció (el §8.3 els deixava per fixar).
+  `
+  ALTER TABLE album ADD COLUMN subgeneres TEXT;
   `
 ];
 

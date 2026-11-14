@@ -12,7 +12,7 @@ const llista = s => { try { return s ? JSON.parse(s) : []; } catch { return []; 
 const json = v => (v && v.length ? JSON.stringify(v) : null);
 const ara = () => new Date().toISOString();
 import * as T from './tags.js?v=1';
-import { SQL_COMPTA, esborraProperSiEsAquest } from './escoltes.js?v=13';
+import { SQL_COMPTA, esborraProperSiEsAquest } from './escoltes.js?v=14';
 
 const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
 
@@ -34,7 +34,7 @@ function carrega(db, on, params = []) {
     SELECT e.id, e.album_id, e.nom_edicio, e.durada_total, e.rotacio_actual, e.app_escolta, e.codi_bandcamp, e.formats, e.tags,
            e.darrera_obertura, e.data_referencia_rotacio, e.portada, e.portada_origen, e.data_darrera_pregunta_puntuacio, e.per_afinar,
            a.titol, a.artista_id, a.tags AS album_tags, a.conjunt, a.posicio, ar.nom_canonic AS art,
-           a.generes, a.llenguatge, a.formacio, a.instrument_solista,
+           a.generes, a.llenguatge, a.formacio, a.instrument_solista, a.subgeneres,
            (SELECT COUNT(*) FROM edicio x WHERE x.album_id = e.album_id) AS n_edicions,
            (SELECT MAX(s.data_hora) FROM escolta s WHERE s.edicio_id = e.id AND ${SQL_COMPTA}) AS darrera_escolta,
            (SELECT MAX(p.listened_at) FROM scrobble p JOIN escolta x ON x.id = p.escolta_id WHERE x.edicio_id = e.id) AS darrer_scrobble
@@ -50,6 +50,7 @@ function carrega(db, on, params = []) {
     e.esperant = e.parts.length > 0 && !e.viva;
     e.formats = llista(e.formats); e.tags = llista(e.tags); e.album_tags = llista(e.album_tags);
     e.generes = llista(e.generes); e.llenguatge = llista(e.llenguatge); e.formacio = llista(e.formacio);   // ACT-684
+    e.subgeneres = llista(e.subgeneres);   // ACT-733
     // L'historial sencer de notes (§5.2): la vigent és l'última.
     e.notes = files(db, 'SELECT id, valor, data FROM puntuacio WHERE edicio_id = ? ORDER BY data, id', [e.id]);
     e.nota = e.notes[e.notes.length - 1] || null;
