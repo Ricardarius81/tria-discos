@@ -3,6 +3,11 @@
 //   node proves/banc.mjs --arxiu X.sqlite   → amb una còpia d'un arxiu real (no es puja mai: és a .gitignore)
 //   node proves/banc.mjs --nomes safata     → només les comprovacions que porten aquesta paraula
 //   node proves/banc.mjs --captures         → desa una captura de cada comprovació a proves/sortida/
+//   node proves/banc.mjs --nomes velocitat  → només la prova de velocitat amb l'arxiu gran (ACT-738)
+//   node proves/banc.mjs --sense-velocitat  → sense la prova de velocitat (per anar de pressa mentre es construeix;
+//                                             abans de publicar, sempre amb ella)
+// Al final, sempre que no es filtri o es filtri per «velocitat», la prova de velocitat (proves/velocitat.mjs): les seves
+// comprovacions compten com les altres, i la taula de temps es diu en cada publicació.
 // Serveix el repositori en local, obre Chromium amb un mòbil de 390 px i fa passar la màquina per un Drive i un
 // ListenBrainz falsos. Cap petició no surt a internet: si n'hi ha cap que ho intenta, la comprovació final falla.
 import http from 'node:http';
@@ -12,11 +17,13 @@ import { createRequire } from 'node:module';
 import { ARREL, arxiu, escoltesLB, motor } from './fixture.mjs';
 import { DriveFals, ListenBrainzFals, GSI_FALS, FontsFalses } from './falsos.mjs';
 import { COMPROVACIONS } from './comprovacions.mjs';
+import { velocitat, taula } from './velocitat.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const arg = n => { const i = process.argv.indexOf(n); return i > 0 ? process.argv[i + 1] : null; };
 const NOMES = arg('--nomes'), ARXIU = arg('--arxiu'), CAPTURES = process.argv.includes('--captures');
+const VELOCITAT = !ARXIU && !process.argv.includes('--sense-velocitat') && (!NOMES || 'velocitat'.includes(NOMES.toLowerCase()));
 const SORTIDA = path.join(ARREL, 'proves/sortida');
 
 // ───────── el servidor local ─────────
@@ -91,6 +98,16 @@ for (const c of triades) {
     ko++; console.log(`✗  ${String(n).padStart(2)} ${c.nom}\n      ${String(e.message || e).split('\n')[0]}`);
   }
   if (CAPTURES) await pagina.screenshot({ path: path.join(SORTIDA, String(n).padStart(2, '0') + '.png') }).catch(() => {});
+}
+if (VELOCITAT) {
+  console.log('\n…la prova de velocitat amb l\'arxiu gran (uns minuts)');
+  const v = await velocitat({ navegador, ORIGEN, ara });
+  for (const c of v.comprovacions) {
+    n++;
+    if (c.ok) { ok++; console.log(`✓  ${String(n).padStart(2)} ${c.nom}`); }
+    else { ko++; console.log(`✗  ${String(n).padStart(2)} ${c.nom}\n      ${c.msg}`); }
+  }
+  console.log('\n' + taula(v.files));
 }
 console.log(`\n${ok} de ${ok + ko} comprovacions bé${ko ? `, ${ko} malament` : ''}.`);
 await navegador.close(); servidor.close();

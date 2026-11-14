@@ -13,7 +13,10 @@
 
 const files = (db, sql, p = []) => {
   const st = db.prepare(sql); st.bind(p);
-  const out = []; while (st.step()) out.push(st.getAsObject());
+  // ACT-738: els noms de les columnes, un sol cop; getAsObject els torna a demanar a cada fila i, amb anys d'escoltes,
+  // llegir era la meitat del temps de la màquina. Mateix resultat que getAsObject.
+  const out = []; let cols = null;
+  while (st.step()) { const v = st.get(); cols ||= st.getColumnNames(); const o = {}; for (let i = 0; i < cols.length; i++) o[cols[i]] = v[i]; out.push(o); }
   st.free(); return out;
 };
 const un = (db, sql, p = []) => files(db, sql, p)[0] || null;

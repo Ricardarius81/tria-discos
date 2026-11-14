@@ -18,7 +18,10 @@ import { treuDelGrup } from './dades.js?v=25';
 
 const files = (db, sql, p = []) => {
   const st = db.prepare(sql); st.bind(p);
-  const out = []; while (st.step()) out.push(st.getAsObject());
+  // ACT-738: els noms de les columnes, un sol cop; getAsObject els torna a demanar a cada fila i, amb anys d'escoltes,
+  // llegir era la meitat del temps de la màquina. Mateix resultat que getAsObject.
+  const out = []; let cols = null;
+  while (st.step()) { const v = st.get(); cols ||= st.getColumnNames(); const o = {}; for (let i = 0; i < cols.length; i++) o[cols[i]] = v[i]; out.push(o); }
   st.free(); return out;
 };
 const un = (db, sql, p = []) => files(db, sql, p)[0] || null;
@@ -49,10 +52,12 @@ export function genere(db, albumId) {
            subgeneres: llista(a.subgeneres) };
 }
 // ───────── els subgèneres (v1.52, ACT-733) ─────────
-// Llista oberta, sense arbre. Un subgènere escrit a mà es neteja (espais) i va en minúscula, com un idioma nou (§6.3); si,
-// normalitzat, ja n'hi ha un d'igual a l'arxiu, es fa servir aquell: és el que redueix els noms dobles («Piano Ambient» i
-// «piano ambient»). Decisió de construcció de Claude, per ratificar. «Ambient piano» és un altre nom: la màquina no ho sap.
-export const subgenereNet = txt => String(txt ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+// Llista oberta, sense arbre. Des de la ACT-742 (2), que substitueix la decisió de construcció 3 de la ACT-740: un
+// subgènere es guarda tal com s'escriu («Piano Ambient»), només sense espais sobrers; per comparar no compten les
+// majúscules ni els espais, i si ja n'hi ha un d'igual a l'arxiu es fa servir el que hi ha. «Ambient piano» és un altre nom:
+// la màquina no ho sap. Camp: Àlbum.Subgèneres.
+export const subgenereNet = txt => String(txt ?? '').replace(/\s+/g, ' ').trim();
+export const clauSubgenere = txt => String(txt ?? '').toLowerCase().replace(/\s+/g, '');
 // Els ja usats, per oferir-los primer a la fulla (ACT-733): tots els de l'arxiu, els més usats primer i, a igualtat,
 // per ordre alfabètic. D'on surt la llista: d'Àlbum.Subgèneres de tots els àlbums (fixat en la construcció).
 export function subgeneresUsats(db) {
@@ -60,10 +65,31 @@ export function subgeneresUsats(db) {
   for (const r of files(db, 'SELECT subgeneres FROM album WHERE subgeneres IS NOT NULL')) for (const s of llista(r.subgeneres)) n.set(s, (n.get(s) || 0) + 1);
   return [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ca')).map(([s]) => s);
 }
+export const albumsAmbSubgenere = (db, nom) => files(db, 'SELECT subgeneres FROM album WHERE subgeneres IS NOT NULL')
+  .filter(a => llista(a.subgeneres).some(s => clauSubgenere(s) === clauSubgenere(nom))).length;
 export function subgenereCanonic(db, txt) {
   const net = subgenereNet(txt); if (!net) return null;
-  return subgeneresUsats(db).find(s => norm(s) === norm(net)) || net;
+  return subgeneresUsats(db).find(s => clauSubgenere(s) === clauSubgenere(net)) || net;
 }
+// Canviar el nom d'un subgènere (ACT-742, 3): a tots els àlbums que el porten (Àlbum.Subgèneres). Si el nom nou ja és un
+// altre subgènere, tots dos es fonen en el que ja hi era; la pantalla ho avisa abans i no hi ha desfés automàtic. Torna el
+// nom que queda, si s'han fos i quants àlbums han canviat.
+export function fusioSubgenere(db, vell, nou) {
+  const net = subgenereNet(nou), kv = clauSubgenere(vell);
+  if (!net) return null;
+  const altre = subgeneresUsats(db).find(s => clauSubgenere(s) === clauSubgenere(net) && clauSubgenere(s) !== kv);
+  return { nom: altre || net, fos: !!altre };
+}
+export const reanomenaSubgenere = (vell, nou) => db => {
+  const r = fusioSubgenere(db, vell, nou); if (!r) throw new Error('Escriu el nom nou.');
+  const kv = clauSubgenere(vell); let n = 0;
+  for (const a of files(db, 'SELECT id, subgeneres FROM album WHERE subgeneres IS NOT NULL')) {
+    const l = llista(a.subgeneres); if (!l.some(s => clauSubgenere(s) === kv)) continue;
+    const nova = [...new Map(l.map(s => clauSubgenere(s) === kv ? r.nom : s).map(s => [clauSubgenere(s), s])).values()];
+    db.run('UPDATE album SET subgeneres = ? WHERE id = ?', [json(nova), a.id]); n++;
+  }
+  return { ...r, albums: n };
+};
 // El que li falta a un àlbum per sortir de L'Afinació (ACT-684): res, el gènere, o els eixos de la clàssica.
 export const falta = g => !g.generes.length ? 'sense gènere'
   : g.generes.includes(CLASSICA) && (!g.llenguatge.length || !g.formacio.length) ? 'falten llenguatge / formació' : null;
@@ -83,7 +109,7 @@ export const desaGenere = (albumId, { generes, llenguatge, formacio, instrument,
   const ins = cl && fo.includes(INSTRUMENT_SOL) && String(instrument || '').trim() ? String(instrument).trim() : null;
   db.run('UPDATE album SET generes = ?, llenguatge = ?, formacio = ?, instrument_solista = ? WHERE id = ?', [json(gs), json(ll), json(fo), ins, albumId]);
   if (subgeneres !== null) {
-    const sub = gs.length ? [...new Map(subgeneres.map(subgenereNet).filter(Boolean).map(x => [norm(x), x])).values()] : [];
+    const sub = gs.length ? [...new Map(subgeneres.map(subgenereNet).filter(Boolean).map(x => [clauSubgenere(x), x])).values()] : [];
     db.run('UPDATE album SET subgeneres = ? WHERE id = ?', [json(sub), albumId]);
   }
 };
@@ -97,7 +123,9 @@ export function escoltesPerEdicio(db) {
   return new Map(files(db, `SELECT s.edicio_id AS id, COUNT(DISTINCT COALESCE(s.unio, s.id)) AS n FROM escolta s WHERE ${SQL_COMPTA} GROUP BY s.edicio_id`)
     .map(r => [r.id, r.n]));
 }
-const perNom = (x, y) => x.art.localeCompare(y.art, 'ca', { sensitivity: 'base' }) || x.titol.localeCompare(y.titol, 'ca', { sensitivity: 'base' }) || x.id - y.id;
+// ACT-738: un sol comparador, com a Tots els discos. Mateix ordre.
+const CA = new Intl.Collator('ca', { sensitivity: 'base' });
+const perNom = (x, y) => CA.compare(x.art, y.art) || CA.compare(x.titol, y.titol) || x.id - y.id;
 
 // ───────── la llista de L'Afinació (ACT-683, ACT-686) ─────────
 // Torna { marcats, resta }. Cada fila diu els seus motius: «per afinar», «durada?» (ACT-696), «sense gènere»,

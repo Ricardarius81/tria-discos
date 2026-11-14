@@ -4,7 +4,10 @@
 
 const files = (db, sql, p = []) => {
   const st = db.prepare(sql); st.bind(p);
-  const out = []; while (st.step()) out.push(st.getAsObject());
+  // ACT-738: els noms de les columnes, un sol cop; getAsObject els torna a demanar a cada fila i, amb anys d'escoltes,
+  // llegir era la meitat del temps de la màquina. Mateix resultat que getAsObject.
+  const out = []; let cols = null;
+  while (st.step()) { const v = st.get(); cols ||= st.getColumnNames(); const o = {}; for (let i = 0; i < cols.length; i++) o[cols[i]] = v[i]; out.push(o); }
   st.free(); return out;
 };
 const un = (db, sql, p = []) => files(db, sql, p)[0] || null;
@@ -14,6 +17,16 @@ const ara = () => new Date().toISOString();
 import * as T from './tags.js?v=1';
 import { SQL_COMPTA, esborraProperSiEsAquest } from './escoltes.js?v=14';
 
+// ACT-738: el que es calcula sobre tot l'arxiu i es demana moltes vegades seguides (cada pintat de la safata ho feia deu
+// vegades) es recorda mentre l'arxiu no canvia. total_changes() puja amb qualsevol fila escrita en aquesta connexió, i
+// cada arxiu obert (també el que torna «Desfés») és un objecte nou: un canvi qualsevol ho torna a calcular.
+const memories = new WeakMap();
+const memo = (db, clau, f) => {
+  const n = db.exec('SELECT total_changes()')[0].values[0][0];
+  let m = memories.get(db); if (!m || m.n !== n) { m = { n, v: new Map() }; memories.set(db, m); }
+  if (!m.v.has(clau)) m.v.set(clau, f());
+  return m.v.get(clau);
+};
 const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, '');
 
 // La puntuació (§5.1): de 5 a 0. «Sense puntuar» no és un valor: és no tenir-ne.
@@ -127,13 +140,19 @@ export function canalPerDefecte(db, artistaId) {
 }
 
 // Busca un artista pel nom o per una variant d'escriptura. No en crea cap.
+// ACT-738: un índex dels noms, recordat mentre l'arxiu no canvia (abans, cada nom recorria tots els artistes). El mateix
+// resultat: el primer artista, per ordre de la taula, amb aquest nom canònic o aquesta variant.
 export function trobaArtista(db, nom) {
   const n = norm(nom);
   if (!n) return null;
-  for (const a of files(db, 'SELECT id, nom_canonic, variants FROM artista')) {
-    if (norm(a.nom_canonic) === n || llista(a.variants).some(v => norm(v) === n)) return a;
-  }
-  return null;
+  const idx = memo(db, 'artistes', () => {
+    const m = new Map();
+    for (const a of files(db, 'SELECT id, nom_canonic, variants FROM artista'))
+      for (const v of [a.nom_canonic, ...llista(a.variants)]) { const k = norm(v); if (k && !m.has(k)) m.set(k, a); }
+    return m;
+  });
+  const a = idx.get(n);
+  return a ? { ...a } : null;
 }
 
 // Si el disc ja té fitxa a l'arxiu (mateix artista i títol), la seva edició. Llavors no cal tornar a escriure la durada.
@@ -345,6 +364,8 @@ export const esborraEdicio = id => db => {
 // Una fila per edició (ACT-637, opció A), amb la seva portada i la seva durada, ordenades per artista (Artista.nom_canonic),
 // títol i edició. Sense filtres (ACT-636). La portada és la mateixa que a la reixa: la de la part viva si en té (ACT-624).
 // Una consulta sola, sense la fitxa sencera de cada disc: la fitxa es carrega en tocar la fila.
+// ACT-738: un sol comparador (localeCompare amb opcions en crea un a cada comparació: deu vegades més lent). Mateix ordre.
+const CA = new Intl.Collator('ca', { sensitivity: 'base' });
 export function totsElsDiscos(db) {
   return files(db, `
     SELECT e.id, e.album_id, e.nom_edicio, e.durada_total, e.rotacio_actual,
@@ -354,7 +375,7 @@ export function totsElsDiscos(db) {
            a.titol, ar.nom_canonic AS art, ar.variants
     FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id`)
     .map(e => ({ ...e, cerca: norm([e.art, ...llista(e.variants), e.titol, e.nom_edicio].join(' ')) }))
-    .sort((x, y) => x.art.localeCompare(y.art, 'ca', { sensitivity: 'base' }) || x.titol.localeCompare(y.titol, 'ca', { sensitivity: 'base' }) || x.id - y.id);
+    .sort((x, y) => CA.compare(x.art, y.art) || CA.compare(x.titol, y.titol) || x.id - y.id);
 }
 
 // ───────── La Prestatgeria · Agrupacions: els grups (§7.5) ─────────

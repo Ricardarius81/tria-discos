@@ -110,8 +110,24 @@ const esPortadaCAA = ref => /^(release|release-group)\//.test(ref || '');
 export const TEXT_PENDENT = 'Portada pendent · MusicBrainz no respon, es tornarà a provar';
 
 // Omple totes les imatges pendents d'un tros de pantalla. Si una no arriba, treu-la i deixa el text.
+// Una llista llarga (ACT-738: Tots els discos, amb deu mil discos, en demanava set mil de cop, i el mòbil es quedava
+// carregant portades que no es veien): passades les MOLTES primeres, cada imatge es demana quan s'acosta a la pantalla.
+// Les pantalles curtes ho fan com sempre.
+const MOLTES = 120;
+let mirador = null;
 export function omple(arrel = document) {
-  arrel.querySelectorAll('img[data-ref]:not([src])').forEach(async im => {
+  const totes = [...arrel.querySelectorAll('img[data-ref]:not([src])')];
+  if (totes.length > MOLTES && typeof IntersectionObserver === 'function') {
+    mirador ||= new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { mirador.unobserve(e.target); carrega(e.target); } }), { rootMargin: '800px 0px' });
+    totes.slice(0, MOLTES).forEach(carrega);
+    totes.slice(MOLTES).forEach(im => mirador.observe(im));
+    return;
+  }
+  totes.forEach(carrega);
+}
+async function carrega(im) {
+  {
+    if (im.getAttribute('src')) return;
     const ref = im.dataset.ref;
     const u = await url(ref);
     if (!im.isConnected) return;
@@ -125,7 +141,7 @@ export function omple(arrel = document) {
     im.onerror = () => falla(im);
     im.onload = () => arriba(im);
     im.src = u;
-  });
+  }
 }
 export function treu(im) {
   const c = im.closest('.coberta'); if (c) c.classList.remove('amb-img');

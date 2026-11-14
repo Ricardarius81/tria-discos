@@ -13,7 +13,14 @@ async function fesUnaAra(pagina) {
   await pagina.waitForFunction(() => /Còpia (de seguretat )?feta|No s'ha/.test(document.getElementById('avisTxt')?.textContent || ''), null, { timeout: 10000 });
   await pagina.click('[data-tornafull]').catch(() => {}); await pagina.waitForTimeout(300);
 }
-async function reobre(pagina) { await pagina.reload(); await pagina.waitForSelector('#s-faristol.activa', { timeout: 10000 }); await pagina.waitForFunction(() => !document.body.classList.contains('desconnectat'), null, { timeout: 8000 }); }
+// Recarregar i tornar a Discos en Rotació. Des de la ACT-743, recarregar es queda on era: aquí es torna a l'inici a mà,
+// perquè les comprovacions de després parteixen d'allà. La que prova la ACT-743 recarrega pel seu compte.
+async function reobre(pagina) {
+  await pagina.reload(); await pagina.waitForSelector('#peu:not([hidden])', { timeout: 10000 });
+  await pagina.waitForFunction(() => !document.body.classList.contains('desconnectat'), null, { timeout: 8000 });
+  await pagina.evaluate(() => { if (document.querySelector('#full.obert')) document.querySelector('#fons')?.click(); document.querySelector('[data-anar="faristol"]')?.click(); document.querySelector('[data-sub="rot"]')?.click(); });
+  await pagina.waitForSelector('#s-faristol.activa', { timeout: 10000 });
+}
 
 export const COMPROVACIONS = [
   // ───────── arrencar i connectar ─────────
@@ -1680,24 +1687,24 @@ export const COMPROVACIONS = [
     await pagina.click('#full [data-genbr="Ambient"]'); await esperaDesat();
     igual(album(fiat.album).generes, '["Ambient"]', 'Àlbum.Gènere desat al primer toc');
     await pagina.click('#full [data-altresub]'); await pagina.fill('#inSub', '  Field   Recordings '); await pagina.click('#full [data-desasub]'); await esperaDesat();
-    igual(album(fiat.album).subgeneres, '["field recordings"]', 'Àlbum.subgeneres després de «＋ Altre»');
-    await pagina.click('#full [data-gensub="field recordings"]'); await esperaDesat();
+    igual(album(fiat.album).subgeneres, '["Field Recordings"]', 'Àlbum.subgeneres després de «＋ Altre» (tal com s\'escriu, sense espais sobrers: ACT-742)');
+    await pagina.click('#full [data-gensub="Field Recordings"]'); await esperaDesat();
     igual(album(fiat.album).subgeneres, null, 'Àlbum.subgeneres després de tornar-lo a tocar (desfés)');
-    await pagina.click('#full [data-gensub="field recordings"]'); await esperaDesat();
+    await pagina.click('#full [data-gensub="Field Recordings"]'); await esperaDesat();
     // treure l'última branca buida els subgèneres a l'arxiu; tornar-la a tocar els recupera (la fulla els recorda)
     await pagina.click('#full [data-gentreu="0"]'); await esperaDesat();
     igual(JSON.stringify(album(fiat.album)), JSON.stringify({ generes: null, subgeneres: null }), 'sense branca, sense subgènere a l\'arxiu');
     await pagina.click('#full [data-genbr="Ambient"]'); await esperaDesat();
-    igual(JSON.stringify(album(fiat.album)), JSON.stringify({ generes: '["Ambient"]', subgeneres: '["field recordings"]' }), 'tornar a tocar la branca torna els subgèneres');
+    igual(JSON.stringify(album(fiat.album)), JSON.stringify({ generes: '["Ambient"]', subgeneres: '["Field Recordings"]' }), 'tornar a tocar la branca torna els subgèneres');
     await pagina.click('#full .torna-full'); await pagina.waitForTimeout(150);
-    cal((await pagina.locator('#full .cel.cel-genere').innerText()).includes('Ambient · field recordings'), 'el botó Gènere no ensenya el subgènere');
+    cal((await pagina.locator('#full .cel.cel-genere').innerText()).includes('Ambient · Field Recordings'), 'el botó Gènere no ensenya el subgènere');
     await pagina.click('[data-tornafull]');
     // un altre disc: el ja usat s'ofereix, i «FIELD recordings» escrit a mà és el mateix
     await obre(peca.id);
     await pagina.click('#full [data-generefitxa]'); await pagina.click('#full [data-genbr="Ambient"]');
-    igual(await pagina.locator('#full [data-gensub="field recordings"]:not(.triat)').count(), 1, 'el subgènere ja usat, ofert sense marcar');
+    igual(await pagina.locator('#full [data-gensub="Field Recordings"]:not(.triat)').count(), 1, 'el subgènere ja usat, ofert sense marcar');
     await pagina.click('#full [data-altresub]'); await pagina.fill('#inSub', 'FIELD recordings'); await pagina.click('#full [data-desasub]'); await esperaDesat();
-    igual(album(peca.album).subgeneres, '["field recordings"]', 'un nom igual normalitzat fa servir el que ja hi és');
+    igual(album(peca.album).subgeneres, '["Field Recordings"]', 'sense comptar majúscules ni espais, fa servir el que ja hi és');
     await pagina.click('#full .torna-full'); await pagina.waitForTimeout(150); await pagina.click('[data-tornafull]');
     await pagina.click('[data-anar="faristol"]');
   } },
@@ -1764,13 +1771,13 @@ export const COMPROVACIONS = [
     await pagina.click('#full [data-escoltesfitxa]');
     igual(await pagina.locator('#full .esc-fila').count(), 1, 'files de la llista');
     igual(await pagina.locator('#full .esc-fila.mitges').count(), 1, 'la fila, «a mitges»');
-    await pagina.click('#full .esc-fila'); await pagina.click('#full [data-corrctx$="|Dormir"]'); await esperaDesat();
+    await pagina.click('#full .esc-fila .modifica'); await pagina.click('#full [data-corrctx$="|Dormir"]'); await esperaDesat();
     igual(JSON.stringify(consulta("SELECT DISTINCT context, atencio, resposta_de FROM scrobble WHERE album = 'Disc Dorm'")),
           JSON.stringify([{ context: 'Dormir', atencio: 'Dormir', resposta_de: 'disc' }]), 'els scrobbles del tros després de corregir');
     igual(await compten(), '1/0', 'després de passar-la a Dormir (el 50 %)');
     igual(await pagina.locator('#full .esc-fila.mitges').count(), 0, 'la llista torna, i la fila ja no és «a mitges»');
     // «A casa» pregunta l'atenció, com la pregunta 4 de la safata
-    await pagina.click('#full .esc-fila'); await pagina.click('#full [data-corrctx$="|A casa"]');
+    await pagina.click('#full .esc-fila .modifica'); await pagina.click('#full [data-corrctx$="|A casa"]');
     await pagina.click('#full [data-corratencio$="|Estudi cant"]'); await esperaDesat();
     igual(JSON.stringify(consulta("SELECT DISTINCT context, atencio FROM scrobble WHERE album = 'Disc Dorm'")), JSON.stringify([{ context: 'A casa', atencio: 'Estudi cant' }]), 'context i atenció després de «A casa» + «Estudi cant»');
     igual(await compten(), '0/1', 'després: ja no compta');
@@ -1824,6 +1831,131 @@ export const COMPROVACIONS = [
     igual(await pagina.locator('#hist [data-histmes]').count(), total > 200 ? 1 : 0, 'el botó, quan ja no en queden');
     igual(consulta("SELECT COUNT(*) AS n FROM escolta s JOIN edicio e ON e.id = s.edicio_id JOIN album a ON a.id = e.album_id WHERE a.titol LIKE 'Banc Hist %'")[0].n, 130, 'escoltes a l\'arxiu: no s\'esborra res');
     await tornaFaristol('rot');
+  } },
+
+  // ───────── 14-11: retocs de la fitxa (ACT-742) i recarregar (ACT-743) ─────────
+  { nom: 'fitxa (ACT-742, 1): «Per afinar» és el primer de la fitxa, damunt de la portada i a tot l\'ample, marcat (Edició.per_afinar) o no', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    const id = consulta("SELECT e.id FROM edicio e JOIN album a ON a.id = e.album_id WHERE a.titol = 'Disc Buit'")[0].id;
+    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="tots"]');
+    await pagina.locator(`#arxiu [data-fitxa="${id}"]`).click(); await pagina.waitForTimeout(250);
+    const lloc = () => pagina.evaluate(() => { const f = document.querySelector('#full'), a = f.querySelector('.afinar'), c = f.querySelector('.fitxa-cap');
+      const fills = [...f.children].filter(x => !x.classList.contains('torna-full'));
+      return { primer: fills[0] === a, damunt: a.getBoundingClientRect().bottom <= c.getBoundingClientRect().top, ample: Math.abs(a.getBoundingClientRect().width - c.getBoundingClientRect().width) <= 2 }; });
+    igual(JSON.stringify(await lloc()), JSON.stringify({ primer: true, damunt: true, ample: true }), '«Per afinar» sense marcar');
+    await pagina.click('#full [data-perafinar]'); await esperaDesat();
+    cal(!!consulta('SELECT per_afinar FROM edicio WHERE id = ?', [id])[0].per_afinar, 'Edició.per_afinar no s\'ha marcat');
+    igual(JSON.stringify(await lloc()), JSON.stringify({ primer: true, damunt: true, ample: true }), '«Per afinar» marcat');
+    cal((await pagina.locator('#full .afinar.marcat').innerText()).includes('toca per «Ja està afinat»'), 'el text del marcat (decisió 5 de la ACT-740, que es conserva)');
+    await pagina.click('#full .afinar.marcat'); await esperaDesat();
+    await pagina.click('[data-tornafull]'); await pagina.click('[data-anar="faristol"]');
+  } },
+  { nom: 'subgèneres (ACT-742, 3): el llapis ✎ canvia el nom a tots els àlbums (Àlbum.subgeneres); si el nom nou ja existeix, primer ho avisa i després els fon, sense «Desfés»', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    const ed = t => consulta('SELECT e.id, a.id AS album FROM edicio e JOIN album a ON a.id = e.album_id WHERE a.titol = ?', [t])[0];
+    const fiat = ed('Disc Fiat'), peca = ed('Disc Una Peça');
+    const subs = id => consulta('SELECT subgeneres FROM album WHERE id = ?', [id])[0].subgeneres;
+    // un segon subgènere només a Disc Fiat, escrit en majúscules: es guarda tal com s'escriu (ACT-742, 2)
+    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="tots"]');
+    await pagina.locator(`#arxiu [data-fitxa="${fiat.id}"]`).click(); await pagina.waitForTimeout(250);
+    await pagina.click('#full [data-generefitxa]');
+    await pagina.click('#full [data-altresub]'); await pagina.fill('#inSub', 'Piano Ambient'); await pagina.click('#full [data-desasub]'); await esperaDesat();
+    igual(subs(fiat.album), '["Field Recordings","Piano Ambient"]', 'Àlbum.subgeneres de Disc Fiat');
+    // canviar el nom: a tots dos àlbums
+    await pagina.click('#full [data-renomsub="Field Recordings"]');
+    cal(await pagina.locator('#full.complet').count() === 1, 'la fulla del nom no és a pantalla completa (ACT-742, 7)');
+    cal((await pagina.locator('#full').innerText()).includes('2 discos el porten'), 'no diu quants discos el porten');
+    await pagina.fill('#inRenomSub', 'Field recordings (camp)'); await pagina.click('#full [data-desarenomsub]'); await esperaDesat();
+    igual(subs(fiat.album), '["Field recordings (camp)","Piano Ambient"]', 'Disc Fiat després de canviar el nom');
+    igual(subs(peca.album), '["Field recordings (camp)"]', 'Disc Una Peça després de canviar el nom');
+    cal(await pagina.locator('#full [data-gensub="Field recordings (camp)"].triat').count() === 1, 'la fulla del gènere torna amb el nom nou marcat');
+    // fondre: «Piano Ambient» → «field recordings (CAMP)», que ja existeix: primer l'avís, i res canviat
+    await pagina.click('#full [data-renomsub="Piano Ambient"]');
+    await pagina.fill('#inRenomSub', 'field recordings (CAMP)'); await pagina.click('#full [data-desarenomsub]'); await pagina.waitForTimeout(200);
+    cal((await pagina.locator('#full').innerText()).includes('ja existeix'), 'no avisa que el nom ja existeix');
+    igual(subs(fiat.album), '["Field recordings (camp)","Piano Ambient"]', 'res canviat abans de confirmar');
+    await pagina.click('#full [data-fonsub]'); await esperaDesat();
+    igual(subs(fiat.album), '["Field recordings (camp)"]', 'Disc Fiat després de fondre');
+    cal(!(await pagina.locator('#avisBt').isVisible()), 'l\'avís porta «Desfés» i no n\'ha de portar');
+    // deixar-ho com estava per a la resta del banc
+    await pagina.click('#full [data-renomsub="Field recordings (camp)"]'); await pagina.fill('#inRenomSub', 'Field Recordings'); await pagina.click('#full [data-desarenomsub]'); await esperaDesat();
+    igual(subs(peca.album), '["Field Recordings"]', 'Disc Una Peça, de tornada');
+    await pagina.click('#full .torna-full'); await pagina.waitForTimeout(150); await pagina.click('[data-tornafull]'); await pagina.click('[data-anar="faristol"]');
+  } },
+  { nom: 'escoltes a la fitxa (ACT-742, 4 a 7): «Escoltes», la darrera (Escolta.data_hora més recent, compti o no) amb «· a mitges», «Modifica» a cada una i les fulles de la fitxa a pantalla completa', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    const id = consulta("SELECT e.id FROM edicio e JOIN album a ON a.id = e.album_id WHERE a.titol = 'Disc Dorm'")[0].id;
+    // una escolta a mitges ahir, més recent que la que ja hi ha
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=20'), E = await import('./js/escoltes.js?v=14');
+      await A.canvia(db => { db.run(`INSERT INTO scrobble (compte, listened_at, artista, pista, album, duration_ms, recording_msid, estat, context, atencio, resposta_de)
+        VALUES ('crimsonnnnfeina', ?, 'Banc Dorm', 'Dorm 0', 'Disc Dorm', 120000, 'msid-banc-dorm-ahir', 'resolt', 'Treballant', 'Efectes plens', 'targeta')`, [new Date(Date.now() - 864e5).toISOString()]);
+        E.recalcula(db); }); });
+    await esperaDesat();
+    const darrera = consulta(`SELECT MAX(data_hora) AS d FROM escolta WHERE edicio_id = ?`, [id])[0].d;
+    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="tots"]');
+    await pagina.locator(`#arxiu [data-fitxa="${id}"]`).click(); await pagina.waitForTimeout(250);
+    cal(await pagina.locator('#full.complet').count() === 1, 'la fitxa no és a pantalla completa');
+    await pagina.click('#full [data-escoltesfitxa]');
+    cal(await pagina.locator('#full.complet').count() === 1, '«Escoltes» no és a pantalla completa');
+    const t = await pagina.locator('#full .esc-total').innerText();
+    cal(/\bescoltes?\b/.test(t) && !t.includes('que compt'), '«Escoltes que compten» havia de passar a «Escoltes»: ' + t);
+    cal(t.includes('la darrera · a mitges') && t.toLowerCase().includes('ahir'), 'la darrera ha de dir «ahir» i «· a mitges»: ' + t);
+    cal(new Date(darrera).getTime() > Date.now() - 2 * 864e5, 'la darrera de l\'arxiu no és la d\'ahir: ' + darrera);
+    igual(await pagina.locator('#full .esc-fila .modifica').count(), await pagina.locator('#full .esc-fila').count(), 'un «Modifica» per escolta');
+    igual(await pagina.locator('#full .esc-fila .barra-c').count(), 0, 'la línia blava ja no hi és');
+    await pagina.locator('#full .esc-fila .modifica').first().click();
+    cal(await pagina.locator('#full.complet').count() === 1 && (await pagina.locator('#full').innerText()).includes('Corregeix l\'escolta'), '«Modifica» no obre la correcció a pantalla completa');
+    await pagina.click('#full .torna-full'); await pagina.waitForTimeout(150);   // torna a «Escoltes»
+    await pagina.click('#full .torna-full'); await pagina.waitForTimeout(150);   // torna a la fitxa
+    for (const [boto, nom] of [['tagsfitxa', 'Tags'], ['notafitxa', 'Nota'], ['mesfitxa', 'Més…'], ['generefitxa', 'Gènere'], ['canviaedicio', 'Canvia l\'edició']]) {
+      await pagina.click(`#full [data-${boto}]`); await pagina.waitForTimeout(150);
+      cal(await pagina.locator('#full.complet').count() === 1, nom + ' no és a pantalla completa');
+      cal(await pagina.locator('#full .torna-full[data-fitxa]').count() === 1, nom + ': «← Tornar» no torna a la fitxa');
+      await pagina.click('#full .torna-full'); await pagina.waitForTimeout(150);
+    }
+    await pagina.click('[data-tornafull]'); await pagina.click('[data-anar="faristol"]');
+    // fora de la fitxa, com abans: una fulla que no ve de la fitxa no és a pantalla completa
+    await pagina.evaluate(() => document.querySelector('#btAfegeixDisc')?.click()); await pagina.waitForTimeout(200);
+    cal(await pagina.locator('#full.obert:not(.complet)').count() === 1, '«Posa un disc en rotació» s\'ha tornat de pantalla completa');
+    await pagina.click('[data-tornafull]');
+  } },
+  { nom: 'recarregar (ACT-743): es queda a la mateixa pestanya, subpantalla i alçada, amb la fitxa oberta; una fulla de la fitxa no torna, torna la fitxa; obrir de nou va a Discos en Rotació', sintetic: true, async fes({ pagina, consulta, ORIGEN }) {
+    const id = consulta("SELECT e.id FROM edicio e JOIN album a ON a.id = e.album_id WHERE a.titol = 'Disc Dorm'")[0].id;
+    const recarrega = async () => { await pagina.reload(); await pagina.waitForSelector('#peu:not([hidden])', { timeout: 10000 }); await pagina.waitForTimeout(400); };
+    // 1. L'Historial, avall
+    await pagina.click('[data-anar="faristol"]'); await pagina.click('[data-sub="hist"]'); await pagina.waitForTimeout(250);
+    await pagina.evaluate(() => window.scrollTo(0, 900)); await pagina.waitForTimeout(150);
+    const y = await pagina.evaluate(() => window.scrollY);
+    await recarrega();
+    igual(await pagina.locator('#s-faristol.activa #p-hist.activa').count(), 1, 'la subpantalla Historial');
+    cal(Math.abs(await pagina.evaluate(() => window.scrollY) - y) <= 40, `l'alçada: era ${y}, és ${await pagina.evaluate(() => window.scrollY)}`);
+    // 2. La Prestatgeria, L'Afinació
+    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="afi"]'); await pagina.waitForTimeout(200);
+    await recarrega();
+    igual(await pagina.locator('#s-prestatgeria.activa #q-afi.activa').count(), 1, 'la pestanya Prestatgeria, a L\'Afinació');
+    // 3. Una fulla oberta des de la fitxa: torna la fitxa, no la fulla
+    await pagina.click('[data-psub="tots"]'); await pagina.locator(`#arxiu [data-fitxa="${id}"]`).click(); await pagina.waitForTimeout(250);
+    await pagina.click('#full [data-tagsfitxa]'); await pagina.waitForTimeout(150);
+    await recarrega();
+    cal(await pagina.locator('#full.obert [data-escoltesfitxa]').count() === 1, 'no torna la fitxa');
+    cal(!(await pagina.locator('#full').innerText()).includes('Instrumental'), 'ha tornat la fulla dels tags, i no havia de tornar');
+    // 4. Obrir l'app de nou (una sessió nova, com amb l'app tancada del tot): Discos en Rotació
+    const nova = await pagina.context().newPage();
+    try {
+      await nova.goto(ORIGEN + '/index.html'); await nova.waitForSelector('#peu:not([hidden])', { timeout: 10000 }); await nova.waitForTimeout(400);
+      igual(await nova.locator('#s-faristol.activa #p-rot.activa').count(), 1, 'obrir de nou va a Discos en Rotació');
+      cal(await nova.locator('#full.obert').count() === 0, 'obrir de nou no obre cap fitxa');
+    } finally { await nova.close(); }
+    await pagina.click('[data-tornafull]'); await pagina.click('[data-anar="faristol"]'); await pagina.click('[data-sub="rot"]');
+  } },
+  { nom: 'velocitat (ACT-738): tot el que el banc ha calculat per trossos és igual que tornant-ho a calcular tot (Escolta, Scrobble.escolta_id, la portada, la part)', sintetic: true, async fes({ arxiuDrive }) {
+    const db = arxiuDrive();
+    try {
+      const E = await import('../js/escoltes.js?v=14');
+      const empremta = () => JSON.stringify([db.exec(`SELECT p.id, x.edicio_id, x.part_id, x.data_hora, x.context, x.atencio, x.completitud, x.compte,
+        (SELECT MIN(y.id) FROM scrobble y WHERE y.escolta_id = x.unio) FROM scrobble p LEFT JOIN escolta x ON x.id = p.escolta_id ORDER BY p.id`)[0]?.values,
+        db.exec('SELECT id, portada, portada_origen FROM edicio ORDER BY id')[0]?.values, db.exec('SELECT id, data_darrera_escolta FROM part ORDER BY id')[0]?.values]);
+      const abans = empremta();
+      db.run('SAVEPOINT v'); E.recalcula(db); db.run('RELEASE v');
+      igual(empremta() === abans, true, 'el càlcul sencer dona el mateix que el que hi ha al Drive');
+    } finally { db.close(); }
   } },
 
   { nom: 'excel: anada i tornada idèntica fila a fila, amb les onze pestanyes (les dues de les llistes, des de l\'estructura 7) i les columnes de càrrega del §3.2', async fes({ pagina, consulta, real }) {

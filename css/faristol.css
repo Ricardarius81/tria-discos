@@ -483,6 +483,9 @@ body.procs-off #btProcs{display:none}
 .ar-fila{display:flex; gap:12px; align-items:center; width:100%; padding:8px 2px; border:0; border-bottom:1px solid var(--vora); background:none;
   color:inherit; text-align:left; cursor:pointer; font-family:var(--sans)}
 .ar-fila .hcob{width:48px; height:48px; flex-basis:48px; border-radius:5px; font-size:12px}
+/* ACT-738: una fila fora de la pantalla no es dibuixa fins que s'hi acosta (Tots els discos té deu mil files). La mida
+   recordada fa que la barra de desplaçament i la posició no salti. */
+#arxiu .ar-fila, #afinacio .ar-fila{content-visibility:auto; contain-intrinsic-size:auto 65px}
 .ar-fila .hcob::after{display:none}
 .ar-fila .m{margin-left:auto; font-family:var(--titol); font-weight:800; font-stretch:72%; font-size:20px; color:var(--os-2)}
 .menu-net .llista-ajust button{font-size:15px; padding:15px 2px}
@@ -735,13 +738,21 @@ body .fitxa-portada .portada-espera .bt{padding:6px 0; color:var(--accent)}
 .mes-ll{flex-direction:column}
 .gen-eix small{font-weight:400; text-transform:none; letter-spacing:0; color:var(--os-3)}
 .chips button.sub.triat{background:transparent; color:var(--accent); border-color:var(--accent)}
+/* el llapis de cada subgènere (ACT-742, 3) */
+.sub-amb-llapis{display:inline-flex; align-items:center; gap:0}
+.chips button.llapis{border:0; padding:6px 7px 6px 3px; color:var(--os-3); font-size:14px; border-radius:8px}
+/* «Per afinar» a dalt de tot de la fitxa, a tot l'ample (ACT-742, 1) */
+.afinar.dalt{margin:2px 0 14px}
+/* «Modifica» a cada escolta (ACT-742, 6) */
+.esc-fila{cursor:default}
+.esc-fila .modifica{border:1px solid var(--vora-2); background:transparent; color:var(--os); border-radius:14px; padding:5px 9px; font:inherit; font-size:12px; font-weight:700; cursor:pointer}
 .desat-toc{font-size:11.5px; margin-top:14px}
 /* «Escoltes» (ACT-736) */
 .esc-total{display:flex; gap:18px; margin:4px 0 8px}
 .esc-total div{font-size:11.5px; color:var(--os-3)}
 .esc-total b{display:block; font-family:var(--titol); font-size:24px; font-weight:800; color:var(--os)}
 .esc-llista{list-style:none; margin:0; padding:0}
-.esc-fila{display:grid; grid-template-columns:70px 1fr 54px; gap:10px; align-items:center; width:100%; text-align:left; padding:10px 0;
+.esc-fila{display:grid; grid-template-columns:70px 1fr auto; gap:10px; align-items:center; width:100%; text-align:left; padding:10px 0;
   border:0; border-bottom:1px solid var(--vora); background:none; color:var(--os); font:inherit; font-size:13px; cursor:pointer}
 .esc-fila .q{font-family:var(--titol); font-weight:700; font-size:14px}
 .esc-fila small{display:block; font-family:var(--sans); font-weight:400; font-size:11px; color:var(--os-3)}

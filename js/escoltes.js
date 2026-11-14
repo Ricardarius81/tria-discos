@@ -28,7 +28,10 @@
 
 const files = (db, sql, p = []) => {
   const st = db.prepare(sql); st.bind(p);
-  const out = []; while (st.step()) out.push(st.getAsObject());
+  // ACT-738: els noms de les columnes, un sol cop; getAsObject els torna a demanar a cada fila i, amb anys d'escoltes,
+  // llegir era la meitat del temps de la màquina. Mateix resultat que getAsObject.
+  const out = []; let cols = null;
+  while (st.step()) { const v = st.get(); cols ||= st.getColumnNames(); const o = {}; for (let i = 0; i < cols.length; i++) o[cols[i]] = v[i]; out.push(o); }
   st.free(); return out;
 };
 const un = (db, sql, p = []) => files(db, sql, p)[0] || null;
@@ -59,6 +62,16 @@ export function esborraProperSiEsAquest(db, edicioId) {
   for (const x of ps) db.run('UPDATE preferent SET proper_titol = NULL WHERE id = ?', [x.id]);
   return ps.length;
 }
+// ACT-738: el que es calcula sobre tot l'arxiu i es demana moltes vegades seguides (cada pintat de la safata ho feia deu
+// vegades) es recorda mentre l'arxiu no canvia. total_changes() puja amb qualsevol fila escrita en aquesta connexió, i
+// cada arxiu obert (també el que torna «Desfés») és un objecte nou: un canvi qualsevol ho torna a calcular.
+const memories = new WeakMap();
+const memo = (db, clau, f) => {
+  const n = db.exec('SELECT total_changes()')[0].values[0][0];
+  let m = memories.get(db); if (!m || m.n !== n) { m = { n, v: new Map() }; memories.set(db, m); }
+  if (!m.v.has(clau)) m.v.set(clau, f());
+  return m.v.get(clau);
+};
 const ms = iso => Date.parse(iso);
 const H = 3600e3, MIN = 60e3;
 
@@ -134,11 +147,16 @@ export const desaScrobbles = llistaS => db => {
 // Una entrada d'Edició.Emparellaments és un release_name confirmat, o «msid:<recording_msid>» per a l'1 % que arriba
 // sense álbum (§3.3): aquest s'agafa a la pista, no al nom.
 export const clauMsid = msid => 'msid:' + msid;
-function mapaEmparellaments(db) {
-  const m = new Map();
+const mapaEmparellaments = db => memo(db, 'mapa', () => mapaEmparellaments_(db));
+function mapaEmparellaments_(db) {
+  const m = new Map(), vistes = new Map();
+  // m.ambigues (ACT-738): les edicions d'un nom confirmat a dues edicions o més. Quina guanya depèn de la rotació (c), i la
+  // rotació canvia sense tornar a calcular: el càlcul per trossos les torna a calcular sempre, com feia el càlcul sencer.
+  m.ambigues = new Set();
   for (const e of files(db, 'SELECT id, emparellaments, rotacio_actual FROM edicio WHERE emparellaments IS NOT NULL ORDER BY id')) {
     for (const nom of llista(e.emparellaments)) {
       const k = nom.startsWith('msid:') ? nom : norm(nom);
+      const v = vistes.get(k); if (v !== undefined && v !== e.id) { m.ambigues.add(v); m.ambigues.add(e.id); } else vistes.set(k, e.id);
       const ja = m.get(k);
       // (c) dues edicions amb el mateix nom: mana la que és en rotació, i si no, la més recent
       if (!ja || (e.rotacio_actual && !ja.rot) || (!!e.rotacio_actual === ja.rot)) m.set(k, { id: e.id, rot: !!e.rotacio_actual });
@@ -147,6 +165,8 @@ function mapaEmparellaments(db) {
   return m;
 }
 const edicioDe = (mapa, s) => (s.album ? mapa.get(norm(s.album)) : null)?.id ?? mapa.get(clauMsid(s.recording_msid))?.id ?? null;
+// Per al banc (velocitat, ACT-738): l'edició amb què casa una pista, amb els emparellaments d'ara.
+export const casaAmbEdicio = db => { const m = mapaEmparellaments(db); return s => edicioDe(m, s); };
 
 // Confirmar la pregunta 2: el nom queda recordat a l'edició i ja no es torna a preguntar.
 export const confirmaEdicio = (edicioId, { album, recording_msid }) => db => {
@@ -161,16 +181,16 @@ export const confirmaEdicio = (edicioId, { album, recording_msid }) => db => {
 // el release_name és exactament el títol (normalitzat), l'artista coincideix, només hi ha un àlbum així i aquest àlbum
 // té una sola edició a l'arxiu. S'escriu a Edició.Emparellaments com si l'hagués confirmat Ricard: cap regla no els
 // distingeix, i «Canvia l'edició» ho corregeix. La pregunta 2 queda per als casos amb dubte. Retorna quants n'ha fet.
-export const emparellaSols = db => {
-  let n = 0;
+export const emparellaSols = (db, cal = null) => {
+  let n = 0; const idx = indexArtistes(db);
   for (const q of preguntes2(db)) {
     if (!q.album) continue;
-    const aid = artistaDe(db, q.artista); if (!aid) continue;
+    const aid = artistaDe(db, q.artista, idx); if (!aid) continue;
     const ok = files(db, `SELECT e.id, a.titol, a.id AS album_id, (SELECT COUNT(*) FROM edicio x WHERE x.album_id = a.id) AS n_eds
                           FROM edicio e JOIN album a ON a.id = e.album_id WHERE a.artista_id = ?`, [aid])
       .filter(e => norm(e.titol) === norm(q.album));
     if (ok.length !== 1 || ok[0].n_eds !== 1) continue;
-    confirmaEdicio(ok[0].id, { album: q.album })(db); n++;
+    confirmaEdicio(ok[0].id, { album: q.album })(db); n++; anota(cal, q.primera);
   }
   return n;
 };
@@ -190,12 +210,27 @@ const sensEdicio = t => String(t || '')
   .replace(/\s*[\(\[][^)\]]*(edition|edició|edicion|deluxe|remaster|anniversary|expanded|version|bonus|reissue|live|en directe)[^)\]]*[\)\]]\s*$/i, '')
   .replace(/\s+-\s+(\d{4}\s+)?remaster(ed)?(\s+\d{4})?\s*$/i, '').trim();
 
-function artistaDe(db, nom) {
+// ACT-738: l'índex dels noms d'artista es fa un cop per consulta, no un cop per nom. Abans, cada nom per identificar
+// recorria tots els artistes, i la pregunta 2 i el disc nou tornaven a llegir totes les edicions per a cada nom: amb deu
+// mil discos, set segons a cada toc. Mateix resultat: el primer artista (per id) que porta el nom, sigui el canònic,
+// la persona o una variant.
+const indexArtistes = db => memo(db, 'artistes', () => indexArtistes_(db));
+function indexArtistes_(db) {
+  const m = new Map();
+  for (const a of files(db, 'SELECT id, nom_canonic, variants, persona FROM artista ORDER BY id'))
+    for (const n of [a.nom_canonic, a.persona, ...llista(a.variants)]) { const k = norm(n); if (k && !m.has(k)) m.set(k, a.id); }
+  return m;
+}
+function artistaDe(db, nom, idx = indexArtistes(db)) {
   const n = norm(nom); if (!n) return null;
-  for (const a of files(db, 'SELECT id, nom_canonic, variants, persona FROM artista')) {
-    if (norm(a.nom_canonic) === n || norm(a.persona) === n || llista(a.variants).some(v => norm(v) === n)) return a.id;
-  }
-  return null;
+  return idx.get(n) ?? null;
+}
+// El que necessiten les candidates, llegit un sol cop per a totes les preguntes d'una passada.
+const contextCandidates = db => memo(db, 'candidates', () => contextCandidates_(db));
+function contextCandidates_(db) {
+  return { idx: indexArtistes(db), eds: files(db, `SELECT e.id, e.nom_edicio, e.durada_total, e.rotacio_actual, a.titol, a.artista_id, ar.nom_canonic AS art
+                                                    FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id`)
+                                     .map(e => ({ ...e, nt: norm(e.titol), ne: norm(e.nom_edicio) })) };
 }
 
 // Les edicions candidates per a un release_name (pregunta 2), de la més probable a la menys.
@@ -204,20 +239,19 @@ function artistaDe(db, nom) {
 // les edicions del mateix artista també són candidates, per sota de les del títol. Abans, sense títol igual no hi havia
 // pregunta 2 i la safata ho donava per «Disc nou», i desar-lo duplicava l'àlbum. Camps: Artista (nom, persona, variants)
 // i Àlbum.artista_id. Una cançó solta d'un artista conegut no hi entra (no té cara de disc): seguiria preguntant a cada llista.
-export function candidates(db, { album, artista, minuts, perArtista = false }) {
-  const nt = norm(album), nb = norm(sensEdicio(album)), aid = artistaDe(db, artista);
-  const eds = files(db, `SELECT e.id, e.nom_edicio, e.durada_total, e.rotacio_actual, a.titol, a.artista_id, ar.nom_canonic AS art
-                         FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id`);
+export function candidates(db, { album, artista, minuts, perArtista = false }, cx = contextCandidates(db)) {
+  const nt = norm(album), nb = norm(sensEdicio(album)), aid = artistaDe(db, artista, cx.idx);
   const out = [];
-  for (const e of eds) {
-    const t = norm(e.titol);
+  for (const e of cx.eds) {
+    const t = e.nt, ne = e.ne;
     let p = 0;
     if (nt && t === nt) p += 100; else if (nb && t === nb) p += 80; else if ((!nt || perArtista) && aid && e.artista_id === aid) p += 10; else continue;
     if (aid && e.artista_id === aid) p += 30;
-    if (e.nom_edicio && nt.includes(norm(e.nom_edicio))) p += 20;
+    if (e.nom_edicio && nt.includes(ne)) p += 20;
     if (minuts && e.durada_total) p += 10 - Math.min(10, Math.abs(minuts - e.durada_total) / 3);
     if (e.rotacio_actual) p += 1;
-    out.push({ ...e, punts: p });
+    const { nt: _t, ne: _e, ...fila } = e;   // només de les que hi entren: fer-ho per a totes les edicions era el lent
+    out.push({ ...fila, punts: p });
   }
   return out.sort((x, y) => y.punts - x.punts);
 }
@@ -276,14 +310,51 @@ export const calRecalcular = db => !!un(db, 'SELECT 1 AS x FROM scrobble LIMIT 1
 // de nous o que es confirma un emparellament. El que Ricard hi ha contestat (context, atenció) i la part de la caixa
 // es conserven: viatgen amb els scrobbles de cada escolta. Les escoltes físiques, sense scrobble, no es toquen.
 // Retorna { escoltes, portades } amb el que ha canviat.
-export const recalcula = db => {
+//
+// LA VELOCITAT (ACT-738, 14-11, Ricard: «Si vemos algo que con el tiempo causara problemas, aunque no sea hoy, lo
+// prevenimos desde ya»). Abans es tornaven a calcular totes les escoltes des del primer scrobble a cada pista nova i a
+// cada resposta de la safata: amb cinc anys d'escoltes, uns sis segons al portàtil. Ara, qui crida diu des de quan ha
+// canviat alguna cosa (desDe: el listened_at més antic de les pistes tocades) i només es torna a calcular el que pot
+// canviar: les pistes de desDe endavant i les escoltes senceres (unions) que encara podien rebre'n alguna, que són les
+// que tenen una pista a menys de 7 dies de desDe (FINESTRA_COMPLETAR, el màxim que una unió pot quedar oberta: la
+// ACT-701, la ACT-719 i la ACT-730). Cada una es torna a calcular sencera, des de la seva primera pista. La resta de
+// pistes d'abans de desDe es queda amb la seva escolta: la decisió de cada pista només depèn de les d'abans del mateix
+// disc i del que va sonar (la pista següent de la mateixa compte), i res d'això ha canviat. Dues unions del mateix disc
+// mai no s'encavalquen, així que les que es tornen a calcular són les últimes de cada disc, i la primera d'elles torna
+// a néixer com a unió nova, com va néixer la primera vegada. El resultat és el mateix que tornant-ho a calcular tot: el
+// banc ho comprova amb l'arxiu gran (velocitat: el càlcul per trossos dona el mateix que el sencer). Sense desDe, o si cal
+// tornar-ho a calcular tot (calRecalcular, ACT-700), es calcula tot, com abans.
+const ISO = t => new Date(t).toISOString();
+function obertesA(db, desDe) {
+  const t = ms(desDe);
+  if (!Number.isFinite(t)) return null;
+  const us = files(db, `SELECT DISTINCT x.unio AS u FROM scrobble p JOIN escolta x ON x.id = p.escolta_id
+                        WHERE p.listened_at >= ? AND x.unio IS NOT NULL`, [ISO(t - FINESTRA_COMPLETAR)]).map(r => r.u);
+  const llista_ = us.map(() => '?').join(',');
+  const primera = us.length ? ms(un(db, `SELECT MIN(p.listened_at) AS m FROM scrobble p JOIN escolta x ON x.id = p.escolta_id
+                                         WHERE x.unio IN (${llista_})`, us)?.m) : t;
+  return { desDe: ISO(t), unions: new Set(us), llista: llista_, us, des: ISO(Math.min(t, primera)) };
+}
+// El listened_at més antic d'unes pistes (ids), o de totes les pistes de les escoltes d'unes edicions: el desDe de recalcula.
+export const desDePistes = (db, ids) => ids.length ? un(db, `SELECT MIN(listened_at) AS m FROM scrobble WHERE id IN (${ids.map(() => '?').join(',')})`, ids)?.m ?? null : null;
+export const desDeEdicions = (db, eds) => {
+  const r = un(db, `SELECT MIN(p.listened_at) AS m FROM scrobble p JOIN escolta x ON x.id = p.escolta_id
+                    WHERE x.edicio_id IN (${eds.map(() => '?').join(',')})`, eds);
+  return r?.m ?? null;
+};
+export const recalcula = (db, { desDe = null } = {}) => {
   const mapa = mapaEmparellaments(db);
-  const scr = files(db, `SELECT s.id, s.compte, s.listened_at, s.duration_ms, s.recording_msid, s.pista, s.album, s.caa_release_mbid,
-                                s.estat, s.escolta_id, s.context, s.atencio, e.part_id
+  if (desDe && mapa.ambigues.size) { const d = desDeEdicions(db, [...mapa.ambigues]); if (d && d < desDe) desDe = d; }
+  const ob = desDe && !calRecalcular(db) ? obertesA(db, desDe) : null;   // null: tot
+  const des = ob ? ob.des : '';   // '' és abans de qualsevol data
+  const llegides = files(db, `SELECT s.id, s.compte, s.listened_at, s.duration_ms, s.recording_msid, s.pista, s.album, s.caa_release_mbid,
+                                s.estat, s.escolta_id, s.context, s.atencio, e.part_id, e.unio
                          FROM scrobble s LEFT JOIN escolta e ON e.id = s.escolta_id
-                         WHERE s.estat != 'ignorat'`)
+                         WHERE s.estat != 'ignorat' AND s.listened_at >= ?`, [des])
     .map(s => ({ ...s, t: ms(s.listened_at) }));
-  cronologia(scr);
+  cronologia(llegides);   // el que va sonar, amb totes les pistes: la següent de la mateixa compte pot ser d'un altre disc
+  // Les que es tornen a calcular: totes, o les de desDe endavant i les de les unions obertes.
+  const scr = ob ? llegides.filter(s => s.listened_at >= ob.desDe || ob.unions.has(s.unio)) : llegides;
   scr.sort((a, b) => a.t - b.t || a.id - b.id);
 
   // Les edicions amb les seves durades i parts.
@@ -367,8 +438,17 @@ export const recalcula = db => {
 
   // Esborrar les escoltes que vénen de scrobbles i tornar-les a escriure.
   // Les físiques, registrades a mà, no tenen cap scrobble lligat i no es toquen.
-  db.run('DELETE FROM escolta WHERE id IN (SELECT DISTINCT escolta_id FROM scrobble WHERE escolta_id IS NOT NULL)');
-  db.run('UPDATE scrobble SET escolta_id = NULL WHERE escolta_id IS NOT NULL');
+  // Per trossos (ACT-738): només les escoltes de les unions obertes, i les pistes de desDe endavant (també les ignorades).
+  if (ob) {
+    if (ob.us.length) {
+      db.run(`UPDATE scrobble SET escolta_id = NULL WHERE escolta_id IN (SELECT id FROM escolta WHERE unio IN (${ob.llista}))`, ob.us);
+      db.run(`DELETE FROM escolta WHERE unio IN (${ob.llista})`, ob.us);
+    }
+    db.run('UPDATE scrobble SET escolta_id = NULL WHERE escolta_id IS NOT NULL AND listened_at >= ?', [ob.desDe]);
+  } else {
+    db.run('DELETE FROM escolta WHERE id IN (SELECT DISTINCT escolta_id FROM scrobble WHERE escolta_id IS NOT NULL)');
+    db.run('UPDATE scrobble SET escolta_id = NULL WHERE escolta_id IS NOT NULL');
+  }
 
   const ins = db.prepare(`INSERT INTO escolta (edicio_id, part_id, data_hora, canal, context, atencio, completitud, compte, unio)
                           VALUES (?, ?, ?, 'App', ?, ?, ?, ?, ?)`);
@@ -392,21 +472,30 @@ export const recalcula = db => {
   }
 
   // La data de la darrera escolta de cada part (§8.5): la mou només una escolta que compta.
-  db.run(`UPDATE part SET data_darrera_escolta = (SELECT MAX(s.data_hora) FROM escolta s WHERE s.part_id = part.id AND ${SQL_COMPTA})
-          WHERE EXISTS (SELECT 1 FROM escolta s WHERE s.part_id = part.id)`);
+  // Per trossos (ACT-738), només les parts que podien canviar: les de les escoltes esborrades i les de les noves. Escolta no
+  // té índex per part, i fer-ho per a totes les parts era el més lent del càlcul per trossos.
+  const partsTocades = ob ? [...new Set([...scr.map(s => s.part_id), ...trossos.map(t => t.u.part)].filter(x => x != null))] : null;
+  if (!partsTocades || partsTocades.length)
+    db.run(`UPDATE part SET data_darrera_escolta = (SELECT MAX(s.data_hora) FROM escolta s WHERE s.part_id = part.id AND ${SQL_COMPTA})
+            WHERE EXISTS (SELECT 1 FROM escolta s WHERE s.part_id = part.id)${partsTocades ? ` AND part.id IN (${partsTocades.map(() => '?').join(',')})` : ''}`,
+           partsTocades || []);
 
   // La portada que arriba amb l'escolta (bloc 3.2): mana sobre la de la sonda i sobre un rebuig, mai sobre la que ha
   // triat o pujat Ricard. Es fa servir la de l'escolta més recent que en porta.
+  // Des de la ACT-738 es llegeix de l'arxiu, i no dels trossos calculats ara: calculant per trossos, una edició pot tenir la
+  // portada en una escolta que no s'ha tornat a calcular. Només les edicions que la poden rebre (sense portada, sonda o rebuig).
   let portades = 0;
-  const cobs = new Map(), quan_ = new Map();
-  for (const t of trossos) for (const s of t.s) if (s.caa_release_mbid && !(quan_.get(t.u.ed) > s.t)) { cobs.set(t.u.ed, s.caa_release_mbid); quan_.set(t.u.ed, s.t); }
-  for (const [ed, mbid] of cobs) {
+  const cobs = files(db, `SELECT e.id, (SELECT p.caa_release_mbid FROM escolta x JOIN scrobble p ON p.escolta_id = x.id
+                                        WHERE x.edicio_id = e.id AND p.caa_release_mbid IS NOT NULL ORDER BY p.listened_at DESC, p.id DESC LIMIT 1) AS mbid
+                          FROM edicio e WHERE e.portada_origen IS NULL OR e.portada_origen IN ('sonda', 'rebutjada')`);
+  for (const { id: ed, mbid } of cobs) {
+    if (!mbid) continue;
     db.run(`UPDATE edicio SET portada = ?, portada_origen = 'escolta'
             WHERE id = ? AND (portada_origen IS NULL OR portada_origen IN ('sonda', 'rebutjada')) `, ['release/' + mbid, ed]);
     portades += db.getRowsModified();
   }
   db.run('INSERT OR REPLACE INTO meta (clau, valor) VALUES (?, ?)', [MARCA, marcaDelCodi(db)]);   // ACT-700
-  return { escoltes: n, portades };
+  return { escoltes: n, portades, des: des || null };
 };
 
 // ───────── el que la màquina sap de les escoltes ─────────
@@ -566,7 +655,11 @@ export function escoltesDeLEdicio(db, edicioId) {
   out.sort((a, b) => b.data.localeCompare(a.data) || b.u - a.u);
   const compten = out.filter(x => x.compta);
   const primera = (compten.length ? compten : out).map(x => x.data).sort()[0] || null;
-  return { escoltes: out, compten: compten.length, mitges: out.length - compten.length, primera };
+  // La darrera (ACT-742, 5): l'escolta més recent de l'edició, compti o no («Aunque sea a mitges, consta»). Consequència dita:
+  // la fitxa pot dir «darrera: ahir» mentre la màquina tracta el disc com a no escoltat, perquè una escolta a mitges no
+  // refreda el rellotge. Camps: Escolta.data_hora (la del primer tros de la unió) i si compta (SQL_COMPTA).
+  const darrera = out[0] ? { data: out[0].data, compta: out[0].compta } : null;
+  return { escoltes: out, compten: compten.length, mitges: out.length - compten.length, primera, darrera };
 }
 // Corregir el context i l'atenció d'un tros des de la fitxa (ACT-736): «Lo corregido se escribe en los scrobbles de ese
 // tramo, que es como viaja lo contestado en la safata, y se recalcula». És contesta() sobre les pistes del tros, com un
@@ -621,24 +714,31 @@ const caraDeDisc = (x, forcats, enLlista = new Set()) => { const p = propies(x, 
 // ───────── la pregunta 2, per a la safata ─────────
 // Els noms d'àlbum que han sonat des de l'Arrencada, no estan confirmats ni rebutjats, i tenen alguna edició candidata.
 // Cada un, una sola vegada (no es repeteix: §8.10). Els que no tenen cap candidata són discos nous (§8.7 bis).
+// ACT-738: només les pistes sense escolta. Una pista emparellada sempre en té després de recalcula (els quatre llocs que
+// canvien Edició.Emparellaments tornen a calcular dins del mateix canvi), així que les altres no poden ser de la pregunta 2
+// ni d'un disc nou; i les que acaben d'arribar, encara sense calcular, passen pel filtre de sempre (edicioDe). Abans es
+// llegien totes les pistes de la història a cada toc.
+// Una pista mai no apunta a una escolta esborrada: recalcula buida Scrobble.escolta_id de les que esborra, dins del mateix
+// canvi. El banc ho comprova (velocitat: cap pista emparellada sense escolta, cap escolta perduda).
+const SENSE_ESCOLTA = `estat != 'ignorat' AND escolta_id IS NULL`;
 export function preguntes2(db) {
   const mapa = mapaEmparellaments(db), rebs = new Set(rebutjats(db));
   const scr = files(db, `SELECT id, compte, listened_at, artista, pista, album, duration_ms, recording_msid FROM scrobble
-                         WHERE estat != 'ignorat' ORDER BY listened_at`);
+                         WHERE ${SENSE_ESCOLTA} ORDER BY listened_at`);
   const per = new Map();
   for (const s of scr) {
     if (edicioDe(mapa, s)) continue;
     const k = s.album ? norm(s.album) : clauMsid(s.recording_msid);
     if (rebs.has(k)) continue;
     const x = per.get(k) || { clau: k, album: s.album || null, recording_msid: s.album ? null : s.recording_msid,
-                              artista: s.artista, pista: s.pista, pistes: new Map(), primera: s.listened_at, darrera: s.listened_at };
-    x.pistes.set(s.recording_msid, s.duration_ms || 0); x.darrera = s.listened_at;
+                              artista: s.artista, pista: s.pista, pistes: new Map(), primera: s.listened_at, darrera: s.listened_at, hores: [] };
+    x.pistes.set(s.recording_msid, s.duration_ms || 0); x.darrera = s.listened_at; x.hores.push(s.listened_at);
     per.set(k, x);
   }
-  const out = [], forcats = new Set(esUnDisc(db)), enLlista = pistesDeLlista(db);
+  const out = [], forcats = new Set(esUnDisc(db)), enLlista = pistesDeLlista(db), cx = per.size ? contextCandidates(db) : null;
   for (const x of per.values()) {
     const minuts = Math.round([...x.pistes.values()].reduce((a, b) => a + b, 0) / MIN) || null;
-    const c = candidates(db, { album: x.album, artista: x.artista, minuts, perArtista: caraDeDisc(x, forcats, enLlista) });
+    const c = candidates(db, { album: x.album, artista: x.artista, minuts, perArtista: caraDeDisc(x, forcats, enLlista) }, cx);
     if (!c.length) continue;
     out.push({ ...x, n: x.pistes.size, minuts, candidates: c.slice(0, 6) });
   }
@@ -677,21 +777,74 @@ const atencioDe = ctx => ctx === 'Dormir' ? 'Dormir' : 'Efectes plens';
 //   'resolta' · tancada i tota contestada.
 // Abans es tallaven només les pendents, i una targeta contestada mentre sonava tornava a sortir amb les pistes que
 // arribaven després (la «mateixa cosa dues vegades» de la prova de l'1-11, Glass Menagerie).
-export function targetes(db, { estat = 'pendent', limit = null, ara = Date.now(), llegit = darreraLectura } = {}) {
+// desDe (ACT-738): només les targetes que acaben a partir d'aquesta hora, senceres. Abans es tallava tota la història a
+// cada toc de la safata. Les targetes es tallen igual: una targeta comença on una pista arrenca més de 30 minuts després
+// del final (listened_at + duration_ms) de totes les d'abans. Per començar a tallar en un lloc segur es busca enrere el
+// començament d'una targeta, amb una finestra prou ampla perquè hi càpiga la pista més llarga de l'arxiu: si no se'n troba
+// cap, la finestra creix fins al principi. Sense desDe, totes, com abans.
+function iniciTargetes(db, desDe) {
+  const fi = ms(desDe); if (!Number.isFinite(fi)) return '';
+  const llarga = un(db, "SELECT MAX(duration_ms) AS m FROM scrobble WHERE estat != 'ignorat'")?.m || 0;
+  const primera = un(db, "SELECT MIN(listened_at) AS m FROM scrobble WHERE estat != 'ignorat'")?.m;
+  if (!primera || primera >= desDe) return '';
+  for (let w = 864e5 + llarga; ; w *= 4) {
+    const des = ISO(fi - w);
+    const l = files(db, `SELECT listened_at, duration_ms FROM scrobble WHERE estat != 'ignorat' AND listened_at >= ? AND listened_at <= ?
+                         ORDER BY listened_at, id`, [des, ISO(fi)]);
+    let maxFi = -Infinity, inici = null;
+    for (const s of l) {
+      const t = ms(s.listened_at);
+      if (t - llarga >= fi - w && t - maxFi > SILENCI_TARGETA) inici = s.listened_at;   // segur: no queda fora cap pista que encara soni
+      maxFi = Math.max(maxFi, t + (s.duration_ms || 0));
+    }
+    if (inici) return inici;
+    if (des <= primera) return '';
+  }
+}
+// On acaba la targeta que comença a «inici» i conté l'hora h: l'inici de la targeta següent (exclòs), o null si és l'última.
+// Tallar endavant des d'un començament segur és exacte: totes les pistes d'abans de cada una ja hi són.
+function fiTargeta(db, inici, h) {
+  let maxFi = -Infinity;
+  for (let des = inici, w = 864e5; ; w *= 4) {
+    const fins = ISO(Math.max(ms(des), ms(h)) + w);
+    const l = files(db, `SELECT listened_at, duration_ms FROM scrobble WHERE estat != 'ignorat' AND listened_at >= ? AND listened_at < ?
+                         ORDER BY listened_at, id`, [des, fins]);
+    for (const s of l) {
+      const t = ms(s.listened_at);
+      if (s.listened_at > h && t - maxFi > SILENCI_TARGETA) return s.listened_at;
+      maxFi = Math.max(maxFi, t + (s.duration_ms || 0));
+    }
+    if (!un(db, "SELECT 1 AS x FROM scrobble WHERE estat != 'ignorat' AND listened_at >= ? LIMIT 1", [fins])) return null;
+    des = fins;
+  }
+}
+// hores (ACT-738): a més de les de desDe endavant, les targetes que contenen aquestes hores (per exemple, les d'un disc per
+// identificar que va sonar fa mesos). Cada una, sencera.
+export function targetes(db, { estat = 'pendent', limit = null, ara = Date.now(), llegit = darreraLectura, desDe = null, hores = [] } = {}) {
   const ref = finsA(ara, llegit);
   const mapa = mapaEmparellaments(db);
+  const trams = [[desDe ? iniciTargetes(db, desDe) : '', null]];
+  for (const h of [...hores].sort()) {
+    if (trams.some(([a, b]) => h >= a && (b === null || h < b))) continue;
+    const a = iniciTargetes(db, h); trams.push([a, fiTargeta(db, a, h)]);
+  }
+  const on = trams.map(([, b]) => b === null ? '(s.listened_at >= ?)' : '(s.listened_at >= ? AND s.listened_at < ?)').join(' OR ');
   const scr = files(db, `SELECT s.id, s.compte, s.listened_at, s.duration_ms, s.artista, s.pista, s.album, s.recording_msid,
                                 s.release_mbid, s.escolta_id, s.context, s.atencio, s.estat, s.resposta_de
-                         FROM scrobble s WHERE s.estat != 'ignorat' ORDER BY s.listened_at, s.id`).map(s => ({ ...s, t: ms(s.listened_at) }));
+                         FROM scrobble s WHERE s.estat != 'ignorat' AND (${on}) ORDER BY s.listened_at, s.id`,
+                        trams.flat().filter(x => x !== null)).map(s => ({ ...s, t: ms(s.listened_at) }));
   const out = []; let cur = null, fi = 0;
   for (const s of scr) {
     if (!cur || s.t - fi > SILENCI_TARGETA) { cur = { scr: [], fiMs: 0 }; out.push(cur); fi = 0; }
     cur.scr.push(s); fi = Math.max(fi, s.t + (s.duration_ms || 0)); cur.fiMs = fi;
   }
-  const eds = new Map(files(db, `SELECT e.id, a.titol, a.conjunt, ar.nom_canonic AS art, e.durada_total, e.portada, e.app_escolta
-                                 FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id`).map(e => [e.id, e]));
-  const partDe = new Map(files(db, `SELECT e.id AS escolta, p.id, p.numero, p.nom, p.durada FROM escolta e JOIN part p ON p.id = e.part_id`)
-    .map(x => [x.escolta, x]));
+  // ACT-738: només les edicions i les escoltes de les pistes llegides (abans, totes les de l'arxiu a cada crida).
+  const idsEd = [...new Set(scr.map(s => edicioDe(mapa, s)).filter(Boolean))], idsEsc = [...new Set(scr.map(s => s.escolta_id).filter(Boolean))];
+  const enLlista = l => l.map(() => '?').join(',');
+  const eds = new Map(idsEd.length ? files(db, `SELECT e.id, a.titol, a.conjunt, ar.nom_canonic AS art, e.durada_total, e.portada, e.app_escolta
+                                 FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id WHERE e.id IN (${enLlista(idsEd)})`, idsEd).map(e => [e.id, e]) : []);
+  const partDe = new Map(idsEsc.length ? files(db, `SELECT e.id AS escolta, p.id, p.numero, p.nom, p.durada FROM escolta e JOIN part p ON p.id = e.part_id
+                                                   WHERE e.id IN (${enLlista(idsEsc)})`, idsEsc).map(x => [x.escolta, x]) : []);
   for (const c of out) {
     c.clau = c.scr[0].id;                         // la targeta es reconeix per la seva primera pista
     c.inici = c.scr[0].listened_at;
@@ -738,6 +891,12 @@ export function targetes(db, { estat = 'pendent', limit = null, ara = Date.now()
   const triades = estat === 'totes' ? out : out.filter(c => c.estat === (estat === 'resolt' ? 'resolta' : estat));
   return limit ? triades.slice(0, limit) : triades;
 }
+// La targeta que comença amb aquesta pista (la clau d'una targeta és la seva primera pista), i les que la segueixen.
+export const targetesDes = (db, idPista) => targetes(db, { estat: 'totes',
+  desDe: un(db, 'SELECT listened_at FROM scrobble WHERE id = ?', [idPista])?.listened_at ?? null });
+export const hiHaAbans = (db, iso) => !!un(db, "SELECT 1 AS x FROM scrobble WHERE estat != 'ignorat' AND listened_at < ? LIMIT 1", [iso]);
+// La pista contestada o no més antiga que encara espera resposta: d'aquí endavant hi ha totes les targetes pendents.
+export const primeraPendent = db => un(db, "SELECT MIN(listened_at) AS m FROM scrobble WHERE estat = 'pendent'")?.m ?? null;
 // Una pista que arriba tard a una targeta ja contestada (un mòbil sense cobertura que envia després) hereta la resposta
 // de la targeta: la del mateix disc si n'hi ha, i si no, la de la pista contestada més propera. Retorna quantes.
 // Una targeta amb respostes diferents per disc és una targeta separada: per això es mira primer el disc.
@@ -745,8 +904,9 @@ export function targetes(db, { estat = 'pendent', limit = null, ara = Date.now()
 // (Scrobble.resposta_de 'targeta' o buit). Un disc que no s'ha contestat i que comparteix sessió amb un disc contestat
 // sol no hereta res: es pregunta.
 function herencies(db, ara) {
-  const out = [];
-  for (const c of targetes(db, { estat: 'totes', ara, llegit: ara })) {   // només es crida just després d'una lectura bona
+  const out = [], desDe = primeraPendent(db);
+  if (!desDe) return out;   // cap pista per contestar: res a heretar (ACT-738: abans es tallava tota la història igualment)
+  for (const c of targetes(db, { estat: 'totes', ara, llegit: ara, desDe })) {   // només es crida just després d'una lectura bona
     if (c.estat === 'oberta') continue;
     const deTargeta = c.scr.filter(s => s.estat === 'resolt' && s.resposta_de !== 'disc');
     for (const s of c.scr.filter(x => x.estat === 'pendent')) {
@@ -761,11 +921,14 @@ function herencies(db, ara) {
   return out;
 }
 export const calHeretar = (db, ara = Date.now()) => herencies(db, ara).length > 0;
-export const heretaRespostes = (ara = Date.now()) => db => {
+// cal (ACT-738): si es passa, s'hi anota des de quan cal tornar a calcular (cal.desDe), per a recalcula.
+const anota = (cal, iso) => { if (cal && iso && (!cal.desDe || iso < cal.desDe)) cal.desDe = iso; };
+export const heretaRespostes = (ara = Date.now(), cal = null) => db => {
   const h = herencies(db, ara);
   const st = db.prepare("UPDATE scrobble SET context = ?, atencio = ?, resposta_de = ?, estat = 'resolt' WHERE id = ? AND estat = 'pendent'");
   for (const x of h) st.run(x);
   st.free();
+  if (h.length) anota(cal, desDePistes(db, h.map(x => x[3])));
   return h.length;
 };
 
@@ -798,16 +961,18 @@ export function veredicte(db, ara = Date.now()) {
 export const contesta = (ids, context, atencioBoto = null, de = 'targeta') => db => {
   let ctx = context, at = atencioBoto ? (ATENCIONS.find(([b]) => b === atencioBoto)?.[1] || atencioBoto) : atencioDe(context);
   if (ctx === 'A casa' && at === 'Dormir') ctx = 'Dormir';
+  const desDe = desDePistes(db, ids);   // ACT-738
   const st = db.prepare("UPDATE scrobble SET context = ?, atencio = ?, resposta_de = ?, estat = 'resolt' WHERE id = ? AND estat != 'ignorat'");
   for (const id of ids) st.run([ctx, at, de, id]);
   st.free();
-  return { ctx, at, ...recalcula(db) };
+  return { ctx, at, ...recalcula(db, { desDe }) };
 };
 // «Canvia»: la targeta torna a la safata, sense resposta.
 export const reobre = ids => db => {
+  const desDe = desDePistes(db, ids);   // ACT-738
   const st = db.prepare("UPDATE scrobble SET context = NULL, atencio = NULL, resposta_de = NULL, estat = 'pendent' WHERE id = ?");
   for (const id of ids) st.run([id]); st.free();
-  return recalcula(db);
+  return recalcula(db, { desDe });
 };
 // «Ignora sempre» (v1.46, ACT-524): els noms d'artista a meta, clau 'ignora-sempre'. Tot el que arriba amb un artista que
 // COMENÇA per un d'aquests noms es marca ignorat sol («Outkast [feat. Killer Mike]» comença per «Outkast»). Camps:
@@ -817,11 +982,11 @@ export const reobre = ids => db => {
 const IGNORA_SEMPRE = 'ignora-sempre';
 export const ignoraSempre = db => { try { return JSON.parse(un(db, 'SELECT valor FROM meta WHERE clau = ?', [IGNORA_SEMPRE])?.valor || '[]'); } catch { return []; } };
 export const esIgnoratSempre = (llistaNoms, artista) => { const a = norm(artista); return !!a && llistaNoms.some(n => norm(n) && a.startsWith(norm(n))); };
-export const aplicaIgnoraSempre = db => {
+export const aplicaIgnoraSempre = (db, cal = null) => {
   const l = ignoraSempre(db); if (!l.length) return 0;
   let n = 0;
   const st = db.prepare("UPDATE scrobble SET estat = 'ignorat', context = NULL, atencio = NULL WHERE id = ?");
-  for (const s of files(db, "SELECT id, artista FROM scrobble WHERE estat = 'pendent'")) if (esIgnoratSempre(l, s.artista)) { st.run([s.id]); n++; }
+  for (const s of files(db, "SELECT id, artista, listened_at FROM scrobble WHERE estat = 'pendent'")) if (esIgnoratSempre(l, s.artista)) { st.run([s.id]); n++; anota(cal, s.listened_at); }
   st.free();
   return n;
 };
@@ -829,8 +994,8 @@ export const afegeixIgnoraSempre = nom => db => {
   const l = ignoraSempre(db), net = String(nom || '').trim(); if (!net) return { n: 0 };
   if (!l.some(x => norm(x) === norm(net))) l.push(net);
   db.run('INSERT OR REPLACE INTO meta (clau, valor) VALUES (?, ?)', [IGNORA_SEMPRE, JSON.stringify(l)]);
-  const n = aplicaIgnoraSempre(db);
-  return { n, ...recalcula(db) };
+  const cal = {}, n = aplicaIgnoraSempre(db, cal);
+  return { n, ...(n ? recalcula(db, { desDe: cal.desDe }) : { escoltes: 0, portades: 0 }) };
 };
 export const treuIgnoraSempre = nom => db => {
   const l = ignoraSempre(db).filter(x => norm(x) !== norm(nom));
@@ -839,9 +1004,10 @@ export const treuIgnoraSempre = nom => db => {
 
 // «Ignora» (ACT-462): un estat del Scrobble, no un esborrat. Rellegir ListenBrainz el reconeix i no torna.
 export const ignora = ids => db => {
+  const desDe = desDePistes(db, ids);   // ACT-738
   const st = db.prepare("UPDATE scrobble SET estat = 'ignorat', context = NULL, atencio = NULL WHERE id = ?");
   for (const id of ids) st.run([id]); st.free();
-  return recalcula(db);
+  return recalcula(db, { desDe });
 };
 
 // ───────── el disc nou (§8.7 bis, ACT-457, ACT-458 i ACT-461) ─────────
@@ -850,20 +1016,20 @@ export const ignora = ids => db => {
 export function discosNous(db, infoMB = new Map()) {
   const mapa = mapaEmparellaments(db), rebs = new Set(rebutjats(db)), forcats = new Set(esUnDisc(db)), enLlista = pistesDeLlista(db);
   const scr = files(db, `SELECT id, listened_at, artista, pista, album, duration_ms, recording_msid, release_mbid FROM scrobble
-                         WHERE estat != 'ignorat' ORDER BY listened_at`);
+                         WHERE ${SENSE_ESCOLTA} ORDER BY listened_at`);
   const per = new Map();
   for (const s of scr) {
     if (edicioDe(mapa, s)) continue;
     const k = s.album ? norm(s.album) : clauMsid(s.recording_msid);
     const x = per.get(k) || { clau: k, album: s.album, artista: s.artista, pista: s.pista, recording_msid: s.recording_msid,
-                              pistes: new Map(), mbids: new Map(), scr: [], darrera: s.listened_at };
+                              pistes: new Map(), mbids: new Map(), scr: [], primera: s.listened_at, darrera: s.listened_at, hores: [] };
     if (!x.pistes.has(s.recording_msid) || !x.pistes.get(s.recording_msid)) x.pistes.set(s.recording_msid, s.duration_ms || 0);
     if (s.release_mbid) x.mbids.set(s.release_mbid, (x.mbids.get(s.release_mbid) || 0) + 1);
-    x.scr.push(s.id); x.darrera = s.listened_at; per.set(k, x);
+    x.scr.push(s.id); x.darrera = s.listened_at; x.hores.push(s.listened_at); per.set(k, x);
   }
-  const nous = [], soltes = [];
+  const nous = [], soltes = [], cx = per.size ? contextCandidates(db) : null;
   for (const x of per.values()) {
-    if (!rebs.has(x.clau) && candidates(db, { album: x.album, artista: x.artista, perArtista: caraDeDisc(x, forcats, enLlista) }).length) continue;   // espera la pregunta 2
+    if (!rebs.has(x.clau) && candidates(db, { album: x.album, artista: x.artista, perArtista: caraDeDisc(x, forcats, enLlista) }, cx).length) continue;   // espera la pregunta 2
     const mbid = [...x.mbids.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
     const mb = mbid ? infoMB.get(mbid) : null;
     // El nombre de pistes de MusicBrainz només es creu si el seu títol és el release_name (ACT-461): si no, el mapeig
@@ -894,6 +1060,10 @@ export const declaraDisc = clau => db => {
 // són dues opcions a part. Cap disc entra sense durada (§2). El nom de l'àlbum queda com a emparellament confirmat.
 export const creaDiscNou = ({ album, artista, recording_msid, minuts, canal, rotacio = false }) => db => {
   if (!(minuts > 0)) throw new Error('Cap disc entra sense durada.');
+  // ACT-738: des de quan tornar a calcular: la primera pista d'aquest nom, que encara no té escolta.
+  const k = album ? norm(album) : null;
+  const desDe = files(db, `SELECT listened_at, album, recording_msid FROM scrobble WHERE ${SENSE_ESCOLTA} ORDER BY listened_at`)
+    .find(s => k ? norm(s.album) === k : s.recording_msid === recording_msid)?.listened_at ?? null;
   const n = norm(artista);
   let a = files(db, 'SELECT id, nom_canonic, variants FROM artista').find(x => norm(x.nom_canonic) === n || llista(x.variants).some(v => norm(v) === n));
   if (!a) { db.run('INSERT INTO artista (nom_canonic) VALUES (?)', [String(artista || 'Desconegut').trim()]); a = { id: un(db, 'SELECT last_insert_rowid() AS id').id }; }
@@ -904,7 +1074,7 @@ export const creaDiscNou = ({ album, artista, recording_msid, minuts, canal, rot
           VALUES (?, ?, ?, ?, ?, ?, 'SAFATA')`, [albumId, minuts, rotacio ? 1 : 0, canal, JSON.stringify([album ? album : clauMsid(recording_msid)]), rotacio ? ara : null]);
   const id = un(db, 'SELECT last_insert_rowid() AS id').id;
   if (rotacio) esborraProperSiEsAquest(db, id);
-  recalcula(db);
+  if (desDe) recalcula(db, { desDe });
   return { id, artista_id: a.id };
 };
 
@@ -915,9 +1085,12 @@ const SIS_MESOS = 182 * 864e5, UN_MES = 30 * 864e5;
 export function preguntesRotacio(db, ara = Date.now()) {
   const arr = arrencada(db); if (!arr) return [];
   const desDe = new Date(ara - SIS_MESOS).toISOString();
+  // ACT-738: les edicions que poden tenir pregunta: les de la rotació (8 i 9) i les que tenen alguna escolta dins dels sis
+  // mesos (7, que en demana tres). Abans, totes. Mateix resultat.
   const eds = files(db, `SELECT e.id, e.rotacio_actual, e.data_referencia_rotacio AS ref, a.titol, ar.nom_canonic AS art, e.durada_total, e.portada,
                                 (SELECT COUNT(*) FROM part p WHERE p.edicio_id = e.id) AS n_parts
-                         FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id`);
+                         FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id
+                         WHERE e.rotacio_actual = 1 OR e.id IN (SELECT edicio_id FROM escolta WHERE data_hora >= ?)`, [desDe]);
   // Una moneda per escolta sencera que compta i que té algun tros d'Efectes plens (ACT-585; decisió de construcció de
   // Claude, per ratificar). Els contextos de la pregunta 8 són els dels seus trossos d'Efectes plens.
   const esc = [...files(db, `SELECT s.edicio_id, (SELECT y.data_hora FROM escolta y WHERE y.id = COALESCE(s.unio, s.id)) AS data_hora, GROUP_CONCAT(s.context, '|') AS contextos FROM escolta s
@@ -996,6 +1169,7 @@ export const creaEdicio = (deId, { nom, minuts, canal }) => db => {
 // emparellaments recordats —i amb ells les escoltes, que se'n calculen— i la nota. Sense correcció, només canvia quina
 // edició és en rotació. En tots dos casos la rotació passa a la nova si la vella hi era.
 export const canviaEdicio = ({ de, a, correccio }) => db => {
+  const desDe = desDeEdicions(db, [de, a]);   // ACT-738: abans de moure res, les pistes de les dues edicions
   if (correccio) {
     const v = un(db, 'SELECT emparellaments FROM edicio WHERE id = ?', [de]), n = un(db, 'SELECT emparellaments FROM edicio WHERE id = ?', [a]);
     const junts = [...llista(n?.emparellaments)];
@@ -1014,5 +1188,5 @@ export const canviaEdicio = ({ de, a, correccio }) => db => {
     db.run('UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ?, darrera_obertura = COALESCE(darrera_obertura, ?) WHERE id = ?',
       [v.data_referencia_rotacio || new Date().toISOString(), v.darrera_obertura, a]);
   }
-  return recalcula(db);
+  return desDe ? recalcula(db, { desDe }) : { escoltes: 0, portades: 0 };
 };
