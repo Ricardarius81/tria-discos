@@ -146,3 +146,5 @@ vite.config.ts.timestamp-*
 proves/sortida/
 *.sqlite
 *.sqlite3
+# La foto de l'arxiu SINTÈTIC per a la comprovació de la marca del càlcul (ACT-750 d): no té cap dada real.
+!proves/foto-estructura.sqlite

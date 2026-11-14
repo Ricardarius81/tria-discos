@@ -13,7 +13,7 @@
 //  · «Un que ja tinc amb un altre nom» (ACT-658 a ACT-664, ACT-670, ACT-680): juntar dues fitxes en una.
 //  · «És part d'un que ja tinc» (ACT-665 a ACT-669, ACT-685): una fitxa passa a ser una Part d'una altra.
 
-import { SQL_COMPTA, norm, recalcula, canviaEdicio, duradesSospitoses } from './escoltes.js?v=14';
+import { SQL_COMPTA, norm, recalcula, canviaEdicio, duradesSospitoses } from './escoltes.js?v=15';
 import { treuDelGrup } from './dades.js?v=25';
 
 const files = (db, sql, p = []) => {
@@ -53,11 +53,13 @@ export function genere(db, albumId) {
 }
 // ───────── els subgèneres (v1.52, ACT-733) ─────────
 // Llista oberta, sense arbre. Des de la ACT-742 (2), que substitueix la decisió de construcció 3 de la ACT-740: un
-// subgènere es guarda tal com s'escriu («Piano Ambient»), només sense espais sobrers; per comparar no compten les
-// majúscules ni els espais, i si ja n'hi ha un d'igual a l'arxiu es fa servir el que hi ha. «Ambient piano» és un altre nom:
-// la màquina no ho sap. Camp: Àlbum.Subgèneres.
+// subgènere es guarda tal com s'escriu («Piano Ambient»), només sense espais sobrers; si ja n'hi ha un d'igual a l'arxiu es
+// fa servir el que hi ha. Per comparar no compten les majúscules, els espais (ACT-742), els accents ni els signes
+// (ACT-746, ACT-749): «Clàssic» i «Classic» són el mateix, i «Post-Rock», «Post Rock» i «Postrock» també. Signe és tot el
+// que no és lletra ni xifra (guió, barra, &, apòstrof, punt…). «Ambient piano» és un altre nom: la màquina no ho sap.
+// Camp: Àlbum.Subgèneres.
 export const subgenereNet = txt => String(txt ?? '').replace(/\s+/g, ' ').trim();
-export const clauSubgenere = txt => String(txt ?? '').toLowerCase().replace(/\s+/g, '');
+export const clauSubgenere = txt => String(txt ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
 // Els ja usats, per oferir-los primer a la fulla (ACT-733): tots els de l'arxiu, els més usats primer i, a igualtat,
 // per ordre alfabètic. D'on surt la llista: d'Àlbum.Subgèneres de tots els àlbums (fixat en la construcció).
 export function subgeneresUsats(db) {
@@ -73,7 +75,10 @@ export function subgenereCanonic(db, txt) {
 }
 // Canviar el nom d'un subgènere (ACT-742, 3): a tots els àlbums que el porten (Àlbum.Subgèneres). Si el nom nou ja és un
 // altre subgènere, tots dos es fonen en el que ja hi era; la pantalla ho avisa abans i no hi ha desfés automàtic. Torna el
-// nom que queda, si s'han fos i quants àlbums han canviat.
+// nom que queda, si s'han fos i quants àlbums han canviat. Un subgènere només es compara amb els altres, mai amb si mateix
+// (ACT-749): «Classic» → «Clàssic» corregeix l'accent, no és una fusió. Si a l'arxiu ja n'hi havia dos d'escrits diferent
+// que ara compten com el mateix («Post-Rock» i «Post Rock»), no es fonen sols: surten tots dos a la llista, i el llapis
+// de qualsevol dels dos els posa tots amb el nom nou.
 export function fusioSubgenere(db, vell, nou) {
   const net = subgenereNet(nou), kv = clauSubgenere(vell);
   if (!net) return null;

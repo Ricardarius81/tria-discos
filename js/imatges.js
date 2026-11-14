@@ -285,13 +285,15 @@ export async function sondaRetrat({ nom }) {
 
 // Passa la sonda per una llista, d'un en un i a poc a poc. Cada tants resultats els lliura (desa)
 // perquè, si es tanca l'app a mitges, no es perdi el que ja s'ha trobat. Torna quants n'ha trobat.
-export async function passa(llista, prova, lliura, { cada = 8 } = {}) {
-  let lot = [], trobats = 0;
+// Es lliura (es desa) cada `cada` trobades o, amb `cadaMs`, quan fa aquesta estona del darrer lliurament (ACT-750 b: la sonda
+// de portades, cada 25 o cada minut). Si es tanca l'app a mitges, com a molt es tornen a buscar les d'un lot.
+export async function passa(llista, prova, lliura, { cada = 8, cadaMs = null, pausa = ESPERA_MB } = {}) {
+  let lot = [], trobats = 0, darrer = Date.now();
   for (const x of llista) {
     if (!navigator.onLine) break;
     try { const r = await prova(x); if (r) { lot.push([x.id, r]); trobats++; } } catch {}
-    if (lot.length >= cada) { await lliura(lot); lot = []; }
-    await espera(ESPERA_MB);
+    if (lot.length >= cada || (cadaMs && lot.length && Date.now() - darrer >= cadaMs)) { await lliura(lot); lot = []; darrer = Date.now(); }
+    if (pausa) await espera(pausa);
   }
   if (lot.length) await lliura(lot);
   return trobats;

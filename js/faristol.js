@@ -8,17 +8,17 @@
 // Pas u: el Scrobble, l'Arrencada, la lectura de les dues comptes, la pregunta 2, les tirades, l'Historial i «Grup».
 // v1.52 (14-11): la fitxa nova de la maqueta v14 (ACT-732 a ACT-736) i l'Historial amb finestra de cent (ACT-737).
 
-import * as A from './arxiu.js?v=20';
+import * as A from './arxiu.js?v=21';
 import * as D from './dades.js?v=25';
-import * as E from './escoltes.js?v=14';
+import * as E from './escoltes.js?v=15';
 import * as LB from './listenbrainz.js?v=2';
-import * as I from './imatges.js?v=4';
+import * as I from './imatges.js?v=5';
 import * as T from './tags.js?v=1';
-import * as C from './copies.js?v=5';
+import * as C from './copies.js?v=6';
 import * as X from './excel.js?v=5';
 import * as L from './llistes.js?v=1';
 import * as V from './discografia.js?v=1';
-import * as F from './afinacio.js?v=3';
+import * as F from './afinacio.js?v=4';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -105,11 +105,15 @@ function tancaFull() {
   }
   f.classList.remove('obert'); $('#fons').classList.remove('obert');
 }
+// «Sense desar» (ACT-750 a): un toc de Ricard que encara espera la calma o la pujada, o una pujada que ha fallat. El que
+// han llegit les lectures automàtiques i espera el rellotge de 30 s no ho és: és a la còpia del mòbil i puja sol.
+const ESPERA_NORMAL = ['obrint', 'en espera'];
 function marcaDesat(r) {
   const pendent = A.estat.pendent;
   if (r && r.motiu === 'sense connectar amb el Drive') document.body.classList.add('desconnectat');
-  $('#desat').classList.toggle('visible', !!pendent);
-  if (r && !r.desat && r.motiu !== 'obrint' && !document.body.classList.contains('desconnectat')) {
+  if (r?.desat) estat.desatFallat = false; else if (r && !ESPERA_NORMAL.includes(r.motiu)) estat.desatFallat = true;
+  $('#desat').classList.toggle('visible', !!pendent && (A.estat.manual || !!estat.desatFallat));
+  if (r && !r.desat && !ESPERA_NORMAL.includes(r.motiu) && !document.body.classList.contains('desconnectat')) {
     // Si el que hi ha pendent són només lectures de la màquina (ListenBrainz, sonda, bústia), no és un conflicte: es torna a
     // obrir l'arxiu del Drive en silenci i es tornen a fer (ACT-492). El sortia en tornar a primer pla amb dos mòbils (3-11).
     if (r.motiu === 'conflicte' && !A.estat.manual) { connecta(false); return; }
@@ -1503,6 +1507,7 @@ function fullCabina() {
     <ul class="llista-ajust">
       <li><button data-connecta="1">${conn ? 'Torna a obrir des del Drive' : 'Connecta amb el Drive'} <small>${conn ? 'baixa la versió del Drive' : 'cal per desar'}</small></button></li>
       ${A.estat.pendent && conn ? `<li><button data-desaara="1">Desa ara <small>prova-ho una altra vegada</small></button></li>` : ''}
+      ${liniaPes()}
       ${(() => { const v = E.veredicte(db()); if (!v) return '';
         const pc = x => Math.round(x * 100) + ' %';
         return `<li><span class="ll-info">Prova de la safata <small>${v.llest
@@ -1518,6 +1523,14 @@ function fullCabina() {
     </ul></div>`, true);
 }
 
+// El pes de l'arxiu a la vista (ACT-750 c1): taronja a 8 MB, vermell a 15 MB, sense frenar res.
+function liniaPes() {
+  const m = A.pes.mida, u = A.pes.pujada; if (!m) return '';
+  const color = m >= A.PES_VERMELL ? 'mal' : m >= A.PES_TARONJA ? 'pes-taronja' : '';
+  const mb = `L'arxiu pesa ${(m / 1e6).toLocaleString('ca', { maximumFractionDigits: 1 })} MB`;
+  return `<li class="linia-pes"><span class="ll-info">Pes de l'arxiu <small>${color ? `<b class="${color}">${mb}</b>` : mb}${u ? ` · l'última pujada va trigar ${(u.ms / 1000).toLocaleString('ca', { maximumFractionDigits: 1 })} s` : ''}</small></span></li>`;
+}
+
 // ───────── la còpia de seguretat (tram 4, §3.5) ─────────
 const diaD = d => d ? dia(d + 'T12:00:00Z') : '—';
 const textBaixades = l => l.map(b => `${b.abans - b.ara} ${C.NOMS[b.taula]} menys`).join(' i ');
@@ -1530,7 +1543,7 @@ function alertaCopia() {
 function liniesCopia() {
   const dv = C.darreraVista(), al = C.alarma(db());
   const propera = dv ? new Date(Date.parse(dv + 'T12:00:00Z') + C.CADA * 864e5).toISOString().slice(0, 10) : null;
-  return `<li><span class="ll-info">Còpia de seguretat <small>${dv ? `la darrera, del ${diaD(dv)} · la propera, sola, a partir del ${diaD(propera)}` : 'encara no n\'hi ha cap'}${C.caducada() ? ' · <b class="mal">fa més de 8 dies</b>' : ''} · se'n guarden ${C.MANTENIR}</small></span></li>
+  return `${copiant ? `<li><span class="ll-info">Fent la còpia… <small>l'arxiu i l'Excel, al Drive</small></span></li>` : ''}<li><span class="ll-info">Còpia de seguretat <small>${dv ? `la darrera, del ${diaD(dv)} · la propera, sola, a partir del ${diaD(propera)}` : 'encara no n\'hi ha cap'}${C.caducada() ? ' · <b class="mal">fa més de 8 dies</b>' : ''} · se'n guarden ${C.MANTENIR}</small></span></li>
     ${al ? `<li><span class="ll-info"><b class="mal">Han desaparegut dades</b><small>A la còpia del ${diaD(al.data)} hi ha ${textBaixades(al.baixades)} que a la del ${diaD(al.anterior)}. Això no hauria de baixar mai. La rotació s'ha aturat: les còpies d'abans són al Drive. Si no ho has fet tu, no toquis res i digues-ho a Claude.</small></span></li>
       <li><button data-alarmaok="1">D'acord, ho he vist <small>la propera còpia torna a rotar</small></button></li>` : ''}
     ${estat.copiaError ? `<li><span class="ll-info"><b class="mal">La darrera còpia no s'ha pogut fer</b><small>${esc(estat.copiaError)}</small></span></li>` : ''}
@@ -1551,17 +1564,35 @@ async function despresDeCopia(r, manual) {
   alertaCopia();
 }
 // La còpia automàtica (ACT-566): en obrir i en tornar a primer pla, una consulta petita al Drive com a molt cada 15 minuts.
-let copiant = false, copiaMirada = 0;
+// Des de la ACT-750 (e), uns 10 s després d'obrir, amb la pantalla ja pintada i cap targeta a mitges (cap fulla oberta ni la
+// pregunta de l'atenció a la safata): si n'hi ha, torna a mirar cada 5 s. Mentre es fa, La Cabina diu «Fent la còpia…».
+// Si es tanca l'app a mitges, aquell dia no hi ha còpia i es torna a provar en obrir. El seu temps, a la prova de velocitat.
+export const ESPERA_COPIA = 10e3;
+let copiant = false, copiaMirada = 0, copiaEnEspera = null;
+const aMitges = () => $('#full').classList.contains('obert') || !!document.querySelector('#s-safata.activa [data-sfatencio]');
 async function copiaAuto() {
+  if (copiaEnEspera || copiant || Date.now() - copiaMirada < 15 * 60e3) return;
+  // primer, mirar (una consulta petita): l'exclamació es posa al dia de seguida, i si no toca còpia no s'espera res
+  try { const cal = await C.toca(); alertaCopia(); if (!cal) { copiaMirada = Date.now(); return; } } catch { return; }
+  if (copiaEnEspera || copiant) return;
+  const prova = () => {
+    if (aMitges()) { copiaEnEspera = setTimeout(prova, 5e3); return; }
+    copiaEnEspera = null; copiaAutoAra();
+  };
+  copiaEnEspera = setTimeout(prova, +(sessionStorage.getItem('tria-banc-espera-copia') ?? ESPERA_COPIA));
+}
+async function copiaAutoAra() {
   if (copiant || Date.now() - copiaMirada < 15 * 60e3) return;
-  copiaMirada = Date.now(); copiant = true;
+  copiaMirada = Date.now(); copiant = 'auto'; refrescaCabina();
   try { await despresDeCopia(await C.siToca(), false); }
   catch (e) { estat.copiaError = 'no s\'ha pogut fer: ' + e.message; alertaCopia(); }
-  finally { copiant = false; }
+  finally { copiant = false; refrescaCabina(); }
 }
+// La Cabina oberta es torna a pintar (la línia de la còpia).
+function refrescaCabina() { if ($('#full').classList.contains('obert') && $('#full .menu-net')) fullCabina(); }
 async function copiaAra() {
   if (copiant) { avisa('Ja s\'està fent una còpia.'); return; }
-  copiant = true; avisa('Fent la còpia…');
+  copiant = 'ara'; avisa('Fent la còpia…');
   try { await despresDeCopia(await C.fes(), true); }
   catch (e) { estat.copiaError = 'no s\'ha pogut fer: ' + e.message; alertaCopia(); avisa('No s\'ha pogut fer la còpia: ' + e.message); }
   finally { copiant = false; if ($('#full').classList.contains('obert') && $('#full .menu-net')) fullCabina(); }
@@ -1666,13 +1697,19 @@ document.addEventListener('click', e => {
   if (d.tornafull) { tancaFull(); return; }
   if (t.id === 'avisBt') { const f = estat.ultima; estat.ultima = null; $('#avis').classList.remove('obert'); if (f) f(); return; }
   if (t.id === 'btConnecta' || d.connecta) { tancaFull(); connecta(true); return; }
-  if (d.desaara) { tancaFull(); A.desa().then(r => { marcaDesat(r); if (r.desat) avisa('Desat al Drive.'); }); return; }
+  if (d.desaara) { tancaFull(); A.desaJa().then(r => { marcaDesat(r); if (r.desat) avisa('Desat al Drive.'); }); return; }
   if (t.id === 'btAjustos') { if (A.estat.db) fullCabina(); return; }
   if (t.id === 'btLloc') { fullLloc(); return; }
   if (d.lloc) { estat.gps = 'Triat a mà.'; posaLloc(d.lloc); tancaFull(); return; }
   if (d.gps) { estat.gps = 'Mirant…'; detectaLloc(true); return; }
   if (t.id === 'btSafata') { if (!A.estat.db) return; if (estat.superficie !== 'safata') estat.abansSafata = estat.superficie; tancaFull(); vesA('safata'); pintaSafata(); llegeixEscoltes(); return; }
-  if (d.tornasafata) { vesA(estat.abansSafata || 'faristol'); return; }
+  if (d.tornasafata) { vesA(estat.abansSafata || 'faristol');
+    if (estat.sotaSensePintar) {   // tornar a la pantalla de sota d'una safata recarregada (ACT-748): encara no s'ha pintat
+      if (estat.superficie === 'prestatgeria') pintaPrestatgeria();
+      if (estat.superficie === 'artista' && estat.artista) pintaArtista(estat.artista);
+      I.omple(); delete estat.sotaSensePintar;
+    }
+    return; }
   if (d.anar) { vesA(d.anar); if (d.anar === 'prestatgeria') pintaPrestatgeria(); return; }
   if (d.psub) { if ($('#full').classList.contains('obert')) tancaFull(); psub(d.psub); return; }
   if (d.sub) { if ($('#full').classList.contains('obert')) tancaFull(); sub(d.sub); return; }
@@ -2030,7 +2067,7 @@ const PANTALLA = 'tria-pantalla';
 function recordaPantalla() {
   if (estat.superficie === 'entrada') return;
   const f = $('#full'), fitxa = f.classList.contains('obert') ? +f.dataset.cadena || null : null;
-  try { sessionStorage.setItem(PANTALLA, JSON.stringify({ sup: estat.superficie, sub: estat.sub, psub: estat.psub || 'tots', artista: estat.artista,
+  try { sessionStorage.setItem(PANTALLA, JSON.stringify({ sup: estat.superficie, abansSafata: estat.abansSafata || null, sub: estat.sub, psub: estat.psub || 'tots', artista: estat.artista,
                                                           histMax: estat.histMax || null, y: Math.round(window.scrollY), fitxa, t: Date.now() })); } catch {}
 }
 addEventListener('pagehide', recordaPantalla);
@@ -2043,17 +2080,22 @@ let pantallaTornada = false;
 function tornaPantalla() {
   if (pantallaTornada) return false; pantallaTornada = true;
   let p = null; try { p = JSON.parse(sessionStorage.getItem(PANTALLA) || 'null'); } catch {}
-  if (!p || !esRecarrega(p) || !['faristol', 'prestatgeria', 'gramola', 'artista'].includes(p.sup)) return false;
-  if (p.sup === 'artista' && !p.artista) return false;
+  // La safata també (ACT-748, 14-11: «al recargar en la safata vuelve a Discos en rotació»), amb la pantalla d'on s'havia
+  // obert a sota, perquè «← Tornar» hi torni. Camp: el mateix estat de pantalla a sessionStorage, amb abansSafata.
+  const LLOCS = ['faristol', 'prestatgeria', 'gramola', 'artista'];
+  if (!p || !esRecarrega(p) || ![...LLOCS, 'safata'].includes(p.sup)) return false;
+  const sota = p.sup === 'safata' ? (LLOCS.includes(p.abansSafata) ? p.abansSafata : 'faristol') : p.sup;
+  if (sota === 'artista' && !p.artista) return false;
   if (p.histMax) estat.histMax = p.histMax;
-  if (p.sup === 'artista') estat.artista = p.artista;
+  if (sota === 'artista') estat.artista = p.artista;
+  if (p.sup === 'safata') { estat.abansSafata = sota; estat.sotaSensePintar = sota; }   // pinta() només pinta la de dalt
   vesA(p.sup);
   sub(SUBS.includes(p.sub) ? p.sub : 'rot');
-  if (p.sup === 'prestatgeria') {   // com psub(), sense pintar: mostraMaquina pinta tot just després
+  if (sota === 'prestatgeria') {   // com psub(), sense pintar: mostraMaquina pinta tot just després
     estat.psub = PSUBS.includes(p.psub) ? p.psub : 'tots';
     PSUBS.forEach(k => { $('#ptab-' + k).setAttribute('aria-selected', estat.psub === k); $('#q-' + k).classList.toggle('activa', estat.psub === k); });
   }
-  const x = p.fitxa ? D.edicio(db(), p.fitxa) || D.fitxa(db(), p.fitxa) : null;
+  const x = p.fitxa && p.sup !== 'safata' ? D.edicio(db(), p.fitxa) || D.fitxa(db(), p.fitxa) : null;
   if (x) fullFitxa(x);
   // l'alçada, quan la pantalla ja és pintada
   requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, p.y || 0)));
@@ -2173,16 +2215,17 @@ async function sondes() {
     const arts = D.artistesSenseRetrat(db()).filter(x => fresc('a' + x.id));
     if (!discos.length && !arts.length) return;
     const n1 = await I.passa(discos, async x => { const r = await I.sondaPortada(x); if (!r) apunta('e' + x.id); return r; },
-      lot => fes(D.posaPortadaSonda(lot), null, { desfes: false, auto: true }), { cada: 2 });
+      lot => fes(D.posaPortadaSonda(lot), null, { desfes: false, auto: true }), { cada: 25, cadaMs: 60e3 });   // ACT-750 (b)
     const n2 = await I.passa(arts, async x => { const r = await I.sondaRetrat(x); if (!r) apunta('a' + x.id); return r; },
-      lot => fes(D.posaRetratSonda(lot), null, { desfes: false, auto: true }), { cada: 2 });
+      lot => fes(D.posaRetratSonda(lot), null, { desfes: false, auto: true }), { cada: 25, cadaMs: 60e3 });
     avisa(`La sonda: ${n1} portades de ${discos.length} i ${n2} fotos de ${arts.length}.`);
   } finally { sondant = false; }
 }
 
 A.vigilaPendents(r => {
   if (document.body.classList.contains('desconnectat')) return;
-  marcaDesat(r); if (r.desat) avisa('Desat al Drive.');
+  // «Desat al Drive» només quan torna a funcionar després d'una fallada: el rellotge puja les lectures cada 30 s (ACT-750 a).
+  const fallava = estat.desatFallat; marcaDesat(r); if (r.desat && fallava) avisa('Desat al Drive.');
 });
 lliscar($('#s-faristol'));
 lliscar($('#s-prestatgeria'), PSUBS, () => estat.psub || 'tots', psub);

@@ -15,7 +15,7 @@ const llista = s => { try { return s ? JSON.parse(s) : []; } catch { return []; 
 const json = v => (v && v.length ? JSON.stringify(v) : null);
 const ara = () => new Date().toISOString();
 import * as T from './tags.js?v=1';
-import { SQL_COMPTA, esborraProperSiEsAquest } from './escoltes.js?v=14';
+import { SQL_COMPTA, esborraProperSiEsAquest } from './escoltes.js?v=15';
 
 // ACT-738: el que es calcula sobre tot l'arxiu i es demana moltes vegades seguides (cada pintat de la safata ho feia deu
 // vegades) es recorda mentre l'arxiu no canvia. total_changes() puja amb qualsevol fila escrita en aquesta connexió, i

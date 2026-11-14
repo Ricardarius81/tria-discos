@@ -9,6 +9,7 @@
 // Les xifres del navegador són del portàtil on corre el banc; al mòbil, unes quantes vegades més.
 import { arxiuGran, motor, ARREL } from './fixture.mjs';
 import { DriveFals, ListenBrainzFals, GSI_FALS } from './falsos.mjs';
+import { esperaALaPagina } from './comprovacions.mjs';
 import { pathToFileURL } from 'node:url';
 import path from 'node:path';
 
@@ -18,7 +19,7 @@ const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQ
 
 // L'empremta de les escoltes: el que cada pista diu de la seva escolta i de la seva unió, i el que en surt a l'edició i a la
 // part. Dues empremtes iguals són dos càlculs iguals, encara que els id de les escoltes no ho siguin.
-const empremta = db => JSON.stringify([
+export const empremta = db => JSON.stringify([
   db.exec(`SELECT p.id, x.edicio_id, x.part_id, x.data_hora, x.context, x.atencio, x.completitud, x.compte,
            (SELECT MIN(y.id) FROM scrobble y WHERE y.escolta_id = x.unio) FROM scrobble p LEFT JOIN escolta x ON x.id = p.escolta_id ORDER BY p.id`)[0]?.values,
   db.exec('SELECT COUNT(*) FROM escolta')[0].values, db.exec('SELECT id, portada, portada_origen FROM edicio ORDER BY id')[0]?.values,
@@ -132,10 +133,16 @@ export async function velocitat({ navegador, ORIGEN, ara = Date.now() }) {
     if (u.host === 'coverartarchive.org') { portades++; return route.fulfill({ status: 200, contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: PIXEL }); }
     return route.abort('blockedbyclient');
   });
+  // La còpia setmanal no es fa mentre es mesuren les pantalles: es mesura a part, al final (ACT-750 e).
+  // El rellotge de les lectures automàtiques, el de veritat (30 s): un de curt pujaria l'arxiu gran cada mig segon enmig
+  // de les mesures. Els tocs, amb la calma curta, perquè cada mesura comenci amb l'arxiu desat.
+  await context.addInitScript(() => { localStorage.setItem('tria-banc-ritme', JSON.stringify({ calma: 150, rellotge: 30000 })); sessionStorage.setItem('tria-banc-espera-copia', '600000'); });
   const p = await context.newPage();
   const errors = []; p.on('pageerror', e => errors.push(e.message));
   const pintat = () => p.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
-  const desat = async () => { await p.waitForFunction(() => !document.getElementById('desat')?.classList.contains('visible'), null, { timeout: 120000 }); };
+  // Desat: cap toc de Ricard per pujar (el que han llegit les lectures automàtiques puja amb el rellotge, com al mòbil).
+  const desat = () => esperaALaPagina(p, async () => { const A = await import('/js/arxiu.js?v=21');
+    return !document.getElementById('desat')?.classList.contains('visible') && !(A.estat.pendent && A.estat.manual); }, null, { timeout: 120000, msg: 'l\'arxiu gran no acaba de desar-se' });
   // PERFIL=1: un perfil de CPU de cada pantalla a proves/sortida/ (per buscar què és lent; no es puja).
   const cdp = process.env.PERFIL ? await context.newCDPSession(p) : null;
   if (cdp) await cdp.send('Profiler.enable');
@@ -165,10 +172,10 @@ export async function velocitat({ navegador, ORIGEN, ara = Date.now() }) {
     else files.push(['Contestar una targeta', null, 'no hi havia cap targeta per contestar']);
     await desat();
     // una pista nova que arriba en tocar la safata
-    const ult = await p.evaluate(async () => { const A = await import('/js/arxiu.js?v=20'); return A.estat.db.exec("SELECT album, recording_msid, pista, duration_ms FROM scrobble WHERE escolta_id IS NOT NULL ORDER BY listened_at DESC LIMIT 1")[0].values[0]; });
+    const ult = await p.evaluate(async () => { const A = await import('/js/arxiu.js?v=21'); return A.estat.db.exec("SELECT album, recording_msid, pista, duration_ms FROM scrobble WHERE escolta_id IS NOT NULL ORDER BY listened_at DESC LIMIT 1")[0].values[0]; });
     lb.escoltes.push({ listened_at: Math.floor((ara - MIN) / 1000), recording_msid: ult[1], compte: 'crimsonnnn',
                        track_metadata: { artist_name: 'Artista', track_name: ult[2], release_name: ult[0], additional_info: { duration_ms: ult[3] } } });
-    const nPistes = () => p.evaluate(async () => { const A = await import('/js/arxiu.js?v=20'); return A.estat.db.exec('SELECT COUNT(*) FROM scrobble')[0].values[0][0]; });
+    const nPistes = () => p.evaluate(async () => { const A = await import('/js/arxiu.js?v=21'); return A.estat.db.exec('SELECT COUNT(*) FROM scrobble')[0].values[0][0]; });
     const n0 = await nPistes();
     await p.click('[data-tornasafata]').catch(() => {}); await p.waitForTimeout(300);
     await pantalla('Una pista nova (lectura de ListenBrainz, fins que es repinta)', async () => {
@@ -183,8 +190,13 @@ export async function velocitat({ navegador, ORIGEN, ara = Date.now() }) {
     await p.click('[data-psub="tots"]'); await p.waitForTimeout(300);
     await pantalla('Obrir la fitxa d\'un disc', async () => { await p.evaluate(() => document.querySelectorAll('#arxiu [data-fitxa]')[5].click()); await p.waitForSelector('#full.obert'); });
     await p.click('#fons').catch(() => {}); await p.waitForTimeout(300);
-    const exp = await p.evaluate(async () => { const A = await import('/js/arxiu.js?v=20'); const t = performance.now(); const b = A.estat.db.export(); return [Math.round(performance.now() - t), b.length]; });
+    const exp = await p.evaluate(async () => { const A = await import('/js/arxiu.js?v=21'); const t = performance.now(); const b = A.estat.db.export(); return [Math.round(performance.now() - t), b.length]; });
     files.push(['Exportar l\'arxiu (cada desat ho fa tres vegades i el puja sencer)', exp[0], (exp[1] / 1e6).toFixed(1) + ' MB a pujar al Drive a cada canvi']);
+    // La còpia setmanal (ACT-750 e): el que costa fer l'Excel i la foto de l'arxiu (sense pujar-los).
+    await repos();
+    const cp = await p.evaluate(async () => { const A = await import('/js/arxiu.js?v=21'), X = await import('/js/excel.js?v=5');
+      const t = performance.now(); const xl = await X.xlsx(A.estat.db); const b = A.estat.db.export(); return [Math.round(performance.now() - t), xl.length, b.length]; });
+    files.push(['La còpia setmanal (l\'Excel i l\'arxiu, sense pujar)', cp[0], `Excel de ${(cp[1] / 1e6).toFixed(1)} MB i arxiu de ${(cp[2] / 1e6).toFixed(1)} MB`]);
     const final = new S.Database(new Uint8Array(drive.per('la-meva-discoteca.sqlite').bytes));
     comprova('velocitat: l\'arxiu gran acaba al Drive íntegre i sense pistes que apuntin a una escolta esborrada', () => {
       cal(final.exec('PRAGMA integrity_check')[0].values[0][0] === 'ok', 'integritat');
@@ -194,6 +206,41 @@ export async function velocitat({ navegador, ORIGEN, ara = Date.now() }) {
   } catch (e) {
     comprovacions.push({ nom: 'velocitat: les pantalles amb l\'arxiu gran', ok: false, msg: e.message.split('\n')[0] });
   } finally { await context.close(); }
+  // ───────── d'aquí a 10 i 20 anys (ACT-750 c2): només obrir i desar ─────────
+  // Ricard: «ahora y dentro de 10 y 20 años» (ACT-747). Els mateixos 10.000 discos, amb 10 i 20 anys d'escoltes.
+  for (const anys of [10, 20]) {
+    try {
+      const { bytes: b, n: nn } = await arxiuGran(ara, { anys });
+      const dv = new DriveFals();
+      const cv = dv.afegeix({ name: 'La Meva Discoteca', mimeType: 'application/vnd.google-apps.folder' });
+      dv.afegeix({ name: 'la-meva-discoteca.sqlite', mimeType: 'application/x-sqlite3', parents: [cv.id], bytes: b });
+      const lbv = new ListenBrainzFals([]);
+      const ctx = await navegador.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, locale: 'ca-ES', timezoneId: 'Europe/Madrid' });
+      await ctx.route('**/*', async route => {
+        const u = new URL(route.request().url());
+        if (u.origin === ORIGEN) return route.continue();
+        if (u.host === 'accounts.google.com' && u.pathname.startsWith('/gsi/client')) return route.fulfill({ status: 200, contentType: 'text/javascript', body: GSI_FALS });
+        if (u.host === 'www.googleapis.com') return dv.atén(route);
+        if (u.host === 'api.listenbrainz.org') return lbv.atén(route);
+        if (u.host === 'coverartarchive.org') return route.fulfill({ status: 200, contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: PIXEL });
+        return route.abort('blockedbyclient');
+      });
+      await ctx.addInitScript(() => { localStorage.setItem('tria-banc-ritme', JSON.stringify({ calma: 150, rellotge: 30000 })); sessionStorage.setItem('tria-banc-espera-copia', '600000'); });
+      const q = await ctx.newPage();
+      let caiguda = null; q.on('crash', () => { caiguda = 'la pàgina s\'ha penjat (memòria)'; });
+      try {
+        await q.goto(ORIGEN + '/index.html'); await q.waitForSelector('#entra', { timeout: 20000 });
+        const to = await temps(async () => { await q.click('#entra'); await q.waitForSelector('#s-faristol.activa', { timeout: 180000 }); });
+        await esperaALaPagina(q, async () => { const A = await import('/js/arxiu.js?v=21'); return !(A.estat.pendent && A.estat.manual); }, null, { timeout: 180000 });
+        await q.waitForTimeout(1500);
+        const td = await q.evaluate(async () => { const A = await import('/js/arxiu.js?v=21'); const t = performance.now();
+          const r = await A.canvia(db => db.run("INSERT OR REPLACE INTO meta (clau, valor) VALUES ('velocitat', ?)", [String(Date.now())]));
+          return [Math.round(performance.now() - t - A.RITME.calma), r.desat]; });
+        files.push([`Obrir l'arxiu de ${anys} anys`, to, `${nn.scrobbles} pistes · ${(b.length / 1e6).toFixed(0)} MB`]);
+        files.push([`Desar l'arxiu de ${anys} anys (un toc, fins al Drive)`, td[0], td[1] ? 'sense la calma de 2 s' : 'no s\'ha desat']);
+      } catch (e) { throw new Error(caiguda || e.message); } finally { await ctx.close().catch(() => {}); }
+    } catch (e) { files.push([`L'arxiu de ${anys} anys`, null, 'no s\'ha pogut mesurar: ' + (globalThis.__caiguda || e.message.split('\n')[0])]); }
+  }
   comprova('velocitat: cap error a la consola amb l\'arxiu gran', () => cal(!errors.length, errors.slice(0, 3).join(' | ')));
   return { files, comprovacions };
 }

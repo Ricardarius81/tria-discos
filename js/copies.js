@@ -14,7 +14,7 @@
 //  · Una segona còpia el mateix dia substitueix la primera (la vella, a la paperera): les cinc són cinc dies.
 //  · Quan salta la vermella, la còpia es fa però no va res a la paperera, ni la del mateix dia: les d'abans són les bones.
 
-import * as A from './arxiu.js?v=20';
+import * as A from './arxiu.js?v=21';
 import * as X from './excel.js?v=5';
 
 const PATRO = /· còpia de seguretat (\d{4}-\d{2}-\d{2})\.(sqlite|xlsx)$/;
@@ -86,10 +86,30 @@ export async function fes({ copies = null } = {}) {
   return { feta: true, data, anterior: anterior ? dataDe(anterior) : null, vermelles, nota: deNota, paperera: fora.length };
 }
 
+// La parella entra junta o no entra (ACT-571, ACT-750 e). Si l'app es tanca entre les dues pujades, al Drive queda una
+// meitat: no compta com a còpia, i a la propera obertura va a la paperera i la còpia es torna a fer. Una meitat de fa
+// menys de 10 minuts pot ser una còpia que un altre dispositiu està fent ara mateix: es deixa.
+export function meitats(copies, ara = Date.now()) {
+  const per = new Map();
+  for (const f of copies) { const m = PATRO.exec(f.name); if (m) (per.get(m[1]) || per.set(m[1], []).get(m[1])).push(f); }
+  return [...per.values()].filter(l => !(l.some(f => f.name.endsWith('.sqlite')) && l.some(f => f.name.endsWith('.xlsx'))))
+    .flat().filter(f => ara - Date.parse(f.modifiedTime || 0) > 10 * 60e3);
+}
+// Només mirar (ACT-750 e): l'última còpia del Drive, per posar al dia l'exclamació de seguida, i si en toca una. La còpia
+// es fa després, uns 10 s més tard (siToca).
+export async function toca() {
+  if (!A.estat.db || !A.tePermis() || !navigator.onLine) return false;
+  const copies = await A.llistaCopies(), darrera = darreraDelDrive(copies.filter(f => !meitats(copies).includes(f)));
+  try { if (darrera) localStorage.setItem(VISTA, darrera); else localStorage.removeItem(VISTA); } catch {}
+  return !darrera || diesEntre(darrera, avui()) >= CADA;
+}
 // En obrir (i en tornar a primer pla): si fa 7 dies o més de l'última còpia, manual o automàtica, se'n fa una.
 export async function siToca() {
   if (!A.estat.db || !A.tePermis() || !navigator.onLine) return null;
-  const copies = await A.llistaCopies();
+  let copies = await A.llistaCopies();
+  const orfes = meitats(copies);
+  for (const f of orfes) await A.aLaPaperera(f.id);
+  if (orfes.length) copies = copies.filter(f => !orfes.includes(f));
   const darrera = darreraDelDrive(copies);
   if (darrera) apunta(darrera);
   // La vista d'aquest dispositiu es posa al dia amb el Drive, encara que el Drive digui una data més vella

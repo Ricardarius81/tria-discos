@@ -331,7 +331,8 @@ body[data-estil="ricard"][data-lloc="Fora"]{--c1:#7FC0CF; --tinta:#04202B;
 body[data-estil="ricard"] .ambient{display:none}
 /* el bloc de color del Lloc: capçalera, safata i cap del Faristol */
 body[data-estil="ricard"] header.barra{background:var(--c1); border-bottom:0; transition:background .45s ease}
-body[data-estil="ricard"] .marca{color:var(--tinta); font-family:var(--titol); font-weight:800; font-stretch:88%; font-size:16.5px}
+/* «La Meva Discoteca» (ACT-752, opció 4): fina i més gran, en antracita, el contrapunt lleuger dels títols gruixuts */
+body[data-estil="ricard"] .marca{color:#3B3F44; font-family:var(--titol); font-weight:400; font-stretch:92%; font-size:21px; letter-spacing:.01em}
 body[data-estil="ricard"] .lloc{background:var(--tinta); color:var(--c1); border-color:var(--tinta); font-weight:700; font-size:12px; padding:4px 11px}
 body[data-estil="ricard"] .icona-btn{border-color:rgba(0,0,0,.45); color:var(--tinta)}
 body[data-estil="ricard"] .icona-btn[aria-pressed="true"]{background:var(--tinta); color:var(--c1); border-color:var(--tinta)}
@@ -422,7 +423,7 @@ body[data-estil="ricard"] .enrere{display:inline-flex; align-items:center; gap:6
 /* ---------- v11: capçalera amb icones, safata ---------- */
 header.barra{gap:6px}
 .marca{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0}
-body[data-estil="ricard"] .marca{font-size:15.5px}
+body[data-estil="ricard"] .marca{font-size:21px}   /* ACT-752, opció 4 (abans 15,5 px) */
 .ic-safata{position:relative; display:grid; place-items:center; width:38px; height:32px}
 /* ---------- v13 ---------- */
 #btAjustos{position:relative}
@@ -502,7 +503,7 @@ body.desconnectat .conn-tira{display:flex}
 .dades-arxiu{list-style:none; margin:0 0 14px; padding:0; font-size:13px}
 .dades-arxiu li{display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-bottom:1px solid var(--vora); color:var(--os-2)}
 .dades-arxiu li span:last-child{color:var(--os); text-align:right}
-.ok{color:#8FD49E} .mal{color:#FF7A66}
+.ok{color:#8FD49E} .mal{color:#FF7A66} .pes-taronja{color:#FFB347}
 .canals-tria{display:flex; flex-wrap:wrap; gap:7px; margin:0 0 12px}
 .canals-tria button{border:1px solid var(--vora-2); background:var(--fons-3); color:var(--os); border-radius:18px; padding:8px 12px; font:500 13.5px var(--sans); cursor:pointer}
 .canals-tria button.triat{background:var(--accent); border-color:var(--accent); color:var(--tinta,#111); font-weight:700}
@@ -771,3 +772,6 @@ body .fitxa-portada .portada-espera .bt{padding:6px 0; color:var(--accent)}
 #full.nota-sortida .escala button:hover{border-color:var(--taronja); color:var(--taronja)}
 /* l'Historial amb finestra (ACT-737) */
 .barra-accions.hmes{position:static; padding:14px 0 4px; justify-content:center}
+/* La safata dins la franja de color, amb el mateix títol que les altres seccions (ACT-752); «← Tornar», en la tinta */
+body[data-estil="ricard"] .cap-safata{padding-bottom:2px}
+body[data-estil="ricard"] .cap-safata .enrere{background:none; border:0; color:var(--tinta); padding:0 0 10px; margin:0; font-weight:600; box-shadow:none}

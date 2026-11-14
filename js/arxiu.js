@@ -167,9 +167,23 @@ export const estat = {
 let obrint = false;
 
 async function desaLocal() {
-  await local('put', { bytes: estat.db.export(), fitxerId: estat.fitxerId, carpetaId: estat.carpetaId,
+  const bytes = estat.db.export(); pes.mida = bytes.length;
+  await local('put', { bytes, fitxerId: estat.fitxerId, carpetaId: estat.carpetaId,
                        base: estat.base, pendent: estat.pendent, manual: estat.manual, desat: new Date().toISOString() });
 }
+
+// ───────── el ritme dels desats i el pes a la vista (ACT-750, 14-11) ─────────
+// Ricard: «Yo solo quiero que la app se mantenga siempre agil y rapida, ahora y dentro de 10 y 20 años» (ACT-747).
+// (a) Els tocs de Ricard pugen al Drive després de 2 s de calma: cinc tocs seguits, una pujada. Les lectures automàtiques
+// (ListenBrainz, la sonda, la bústia) es desen al mòbil i pugen amb el rellotge de 30 s o en sortir de l'app. Si el mòbil
+// s'apaga abans, el canvi és a la còpia del mòbil i puja en obrir. El banc fa servir un ritme curt (tria-banc-ritme a la
+// memòria del navegador); una comprovació prova el de veritat.
+export const RITME = (() => { const r = { calma: 2000, rellotge: 30000 };
+  try { Object.assign(r, JSON.parse(localStorage.getItem('tria-banc-ritme') || '{}')); } catch {} return r; })();
+// (c1) El pes de l'arxiu i el que va trigar l'última pujada, per a La Cabina: avisa en taronja a 8 MB i en vermell a 15,
+// sense frenar res. L'última pujada es recorda en aquest mòbil.
+export const PES_TARONJA = 8e6, PES_VERMELL = 15e6;
+export const pes = { mida: null, pujada: (() => { try { return JSON.parse(localStorage.getItem('tria-darrera-pujada') || 'null'); } catch { return null; } })() };
 
 // Resultat d'obrir: { cas: 'obert' } o un cas que demana decisió de Ricard.
 export async function obre() {
@@ -297,8 +311,24 @@ export async function canvia(fn, { auto = false } = {}) {
   estat.pendent = true; versio++;
   if (!auto) estat.manual = true;
   await desaLocal();
-  return desa();
+  if (auto) return { desat: false, motiu: 'en espera' };   // ACT-750 (a): puja amb el rellotge o en sortir de l'app
+  return desaAmbCalma();
 }
+// Els tocs de Ricard, agrupats: cada toc torna a comptar els 2 s, i tots els que esperen reben el resultat de la pujada.
+let calma = null, esperen = [];
+function desaAmbCalma() {
+  return new Promise(res => {
+    esperen.push(res); clearTimeout(calma);
+    calma = setTimeout(desaElsQueEsperen, RITME.calma);
+  });
+}
+function desaElsQueEsperen() {
+  clearTimeout(calma); calma = null;
+  const qui = esperen; esperen = [];
+  return desa().then(r => { qui.forEach(f => f(r)); return r; });
+}
+// Pujar ara el que hi hagi pendent, sense esperar la calma ni el rellotge: en sortir de l'app i amb «Desa ara».
+export function desaJa() { return esperen.length ? desaElsQueEsperen() : desa(); }
 // Quants canvis s'han fet (14-11, trobat construint la ACT-732): un desat que puja una foto de l'arxiu presa abans d'un
 // canvi no pot donar aquest canvi per desat. Abans, «pendent» es buidava en acabar la pujada encara que entremig s'hagués
 // fet un altre toc, i el desat següent de la fila trobava que no hi havia res pendent: el toc quedava al mòbil i no
@@ -332,8 +362,10 @@ async function desaAra({ forca = false, intern = false } = {}) {
     const ara = await metadades(estat.fitxerId);
     if (ara.trashed) return { desat: false, motiu: 'l\'arxiu del Drive és a la paperera' };
     if (!forca && ara.modifiedTime !== estat.base) return { desat: false, motiu: 'conflicte', drive: ara };
-    const v = versio;
-    const r = await sobreescriu(estat.fitxerId, estat.db.export());
+    const v = versio, bytes = estat.db.export(), t = Date.now();
+    const r = await sobreescriu(estat.fitxerId, bytes);
+    pes.mida = bytes.length; pes.pujada = { ms: Date.now() - t, bytes: bytes.length, quan: new Date().toISOString() };
+    try { localStorage.setItem('tria-darrera-pujada', JSON.stringify(pes.pujada)); } catch {}
     if (r.modifiedTime === ara.modifiedTime) return { desat: false, motiu: 'el Drive no ha canviat la data' };
     estat.base = r.modifiedTime;
     if (versio === v) { estat.pendent = false; estat.manual = false; }   // si entremig hi ha hagut un toc, continua pendent
@@ -348,6 +380,7 @@ let rellotge = null, provant = false;
 export function vigilaPendents(avisa) {
   const prova = async (esperes = [0]) => {
     if (provant || obrint || !estat.pendent || !estat.db) return;
+    if (esperen.length) return;   // uns tocs esperen la calma (ACT-750 a): pujaran tots junts d'aquí a un moment
     provant = true;
     try {
       for (const ms of esperes) {
@@ -361,8 +394,13 @@ export function vigilaPendents(avisa) {
   };
   window.addEventListener('online', () => prova([1500, 4000, 10000]));
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') prova(); });
+  // En sortir de l'app (ACT-750 a): el que esperava la calma o el rellotge puja ara. Si el sistema talla la pujada, el canvi
+  // ja és a la còpia del mòbil i puja en obrir.
+  const surt = () => { if (estat.pendent && estat.db && !obrint && navigator.onLine) desaJa().then(avisa).catch(() => {}); };
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') surt(); });
+  window.addEventListener('pagehide', surt);
   clearInterval(rellotge);
-  rellotge = setInterval(() => { if (navigator.onLine) prova(); }, 30_000);
+  rellotge = setInterval(() => { if (navigator.onLine) prova(); }, RITME.rellotge);
 }
 
 // Desfés (tram 3): torna l'arxiu a l'estat d'abans d'un canvi, i ho desa com un canvi més.
@@ -370,7 +408,7 @@ export async function restaura(bytes) {
   obreBytes(bytes);
   estat.pendent = true; estat.manual = true; versio++;
   await desaLocal();
-  return desa();
+  return desaAmbCalma();
 }
 
 // Obrir sense esperar el Drive (tram 3): la còpia d'aquest navegador, si n'hi ha, per pintar de seguida.

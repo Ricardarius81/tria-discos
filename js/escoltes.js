@@ -291,17 +291,23 @@ export const SQL_COMPTA = `(CASE WHEN s.unio IS NULL THEN (s.completitud >= ${LL
 // en publicar regles noves (5050801, estructura 9), les escoltes ja fetes es quedaven amb les velles fins a la pista
 // següent, i el Chuck Berry va sortir «a mitges» a la prova. Ara, si la marca de l'arxiu no és la d'aquest codi, la
 // lectura de ListenBrainz les torna a calcular totes un cop, encara que no n'arribi cap de nova.
-// CALCUL s'ha de pujar quan canviï una regla de recalcula sense estructura nova; amb estructura nova, la marca ja canvia sola.
+// Des de la ACT-750 (d), la marca és només CALCUL: abans era «estructura·CALCUL» i feia dos treballs, de manera que cada
+// estructura nova tornava a calcular tota la història encara que no toqués res del càlcul. Ara CALCUL s'ha de pujar quan
+// canviï una regla de recalcula, i també quan una migració canviï alguna cosa que recalcula llegeix (la migració el puja
+// ella mateixa, al mateix canvi). El banc ho vigila: migra una foto de l'arxiu sintètic feta amb l'estructura anterior,
+// ho torna a calcular tot i, si surt diferent i CALCUL no ha pujat, falla.
 export const CALCUL = 4;   // 2: ACT-701, completar una escolta a mitges · 3: ACT-719, la que ja compta sense ser sencera
                            // 4: ACT-730, l'última pista comptada de fiat es pot reprendre 7 dies
 const MARCA = 'calcul-escoltes';
-const marcaDelCodi = db => db.exec('PRAGMA user_version')[0].values[0][0] + '·' + CALCUL;
+const marcaDelCodi = () => String(CALCUL);
 export const marcaDeLArxiu = db => un(db, 'SELECT valor FROM meta WHERE clau = ?', [MARCA])?.valor ?? null;
+// Una marca d'abans de la ACT-750 («10·4») val pel seu CALCUL: canviar la forma de la marca no ha de recalcular res.
+export const calculDeLaMarca = m => m == null ? null : String(m).split('·').pop();
 
 // Que cal tornar a calcular les escoltes sense que arribin pistes noves: falta la unió (un arxiu que acaba de passar a
 // l'estructura 6) o la marca del càlcul no és la d'aquest codi (ACT-700). Només si hi ha scrobbles: sense, no hi ha res a calcular.
 export const calRecalcular = db => !!un(db, 'SELECT 1 AS x FROM scrobble LIMIT 1') && (
-  marcaDeLArxiu(db) !== marcaDelCodi(db) ||
+  calculDeLaMarca(marcaDeLArxiu(db)) !== marcaDelCodi() ||
   !!un(db, `SELECT 1 AS x FROM escolta s WHERE s.unio IS NULL
             AND EXISTS (SELECT 1 FROM scrobble p WHERE p.escolta_id = s.id) LIMIT 1`));
 
@@ -494,7 +500,7 @@ export const recalcula = (db, { desDe = null } = {}) => {
             WHERE id = ? AND (portada_origen IS NULL OR portada_origen IN ('sonda', 'rebutjada')) `, ['release/' + mbid, ed]);
     portades += db.getRowsModified();
   }
-  db.run('INSERT OR REPLACE INTO meta (clau, valor) VALUES (?, ?)', [MARCA, marcaDelCodi(db)]);   // ACT-700
+  db.run('INSERT OR REPLACE INTO meta (clau, valor) VALUES (?, ?)', [MARCA, marcaDelCodi()]);   // ACT-700, ACT-750 (d)
   return { escoltes: n, portades, des: des || null };
 };
 
