@@ -194,7 +194,7 @@ export async function velocitat({ navegador, ORIGEN, ara = Date.now() }) {
     files.push(['Exportar l\'arxiu (cada desat ho fa tres vegades i el puja sencer)', exp[0], (exp[1] / 1e6).toFixed(1) + ' MB a pujar al Drive a cada canvi']);
     // La còpia setmanal (ACT-750 e): el que costa fer l'Excel i la foto de l'arxiu (sense pujar-los).
     await repos();
-    const cp = await p.evaluate(async () => { const A = await import('/js/arxiu.js?v=21'), X = await import('/js/excel.js?v=5');
+    const cp = await p.evaluate(async () => { const A = await import('/js/arxiu.js?v=21'), X = await import('/js/excel.js?v=6');
       const t = performance.now(); const xl = await X.xlsx(A.estat.db); const b = A.estat.db.export(); return [Math.round(performance.now() - t), xl.length, b.length]; });
     files.push(['La còpia setmanal (l\'Excel i l\'arxiu, sense pujar)', cp[0], `Excel de ${(cp[1] / 1e6).toFixed(1)} MB i arxiu de ${(cp[2] / 1e6).toFixed(1)} MB`]);
     const final = new S.Database(new Uint8Array(drive.per('la-meva-discoteca.sqlite').bytes));

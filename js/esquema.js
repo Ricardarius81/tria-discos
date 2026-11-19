@@ -219,12 +219,44 @@ export const MIGRACIONS = [
   //   d'estructura fixats en la construcció (el §8.3 els deixava per fixar).
   `
   ALTER TABLE album ADD COLUMN subgeneres TEXT;
+  `,
+  // v11 · Les Piles de L'Aparador (v1.51 i v1.53, ACT-707 a ACT-714 i ACT-744). Les regles són a piles.js.
+  //   pila: nom i contextos (la llista de Escolta.context que en treuen un disc, ACT-327 i ACT-707). Les tres d'entrada, amb
+  //     el nom del seu context: Gimnàs = «Al gimnàs»; Avió/Tren/Bus = «Avió / Tren / Bus»; Cotxe = els dos de conduir.
+  //   pila_entrada: artista i títol escrits; album_id, l'ÀLBUM amb què es casa (ACT-711, no l'edició); data_alta (ACT-708,
+  //     ACT-713) i data_sortida, el camp nou de la estructura 11 (ACT-744): buida mentre hi és.
+  //   La llavor (llavor.js, APARADOR): The Fat of the Land a Gimnàs, del «car pendent», entra ara, com a text.
+  //   Noms de les taules i de les columnes fixats en la construcció (el §8.3 els deixava per fixar).
+  `
+  CREATE TABLE pila (
+    id        INTEGER PRIMARY KEY,
+    nom       TEXT NOT NULL,
+    contextos TEXT NOT NULL,
+    posicio   INTEGER
+  );
+  CREATE TABLE pila_entrada (
+    id           INTEGER PRIMARY KEY,
+    pila_id      INTEGER NOT NULL REFERENCES pila(id),
+    artista      TEXT,
+    titol        TEXT,
+    album_id     INTEGER REFERENCES album(id),
+    data_alta    TEXT NOT NULL,
+    data_sortida TEXT
+  );
+  CREATE INDEX pila_entrada_pila ON pila_entrada(pila_id, data_sortida);
+  CREATE INDEX pila_entrada_album ON pila_entrada(album_id);
+  INSERT INTO pila (id, nom, contextos, posicio) VALUES
+    (1, 'Gimnàs', '["Al gimnàs"]', 1),
+    (2, 'Avió/Tren/Bus', '["Avió / Tren / Bus"]', 2),
+    (3, 'Cotxe', '["Conduint (sol)","Conduint (acompanyat)"]', 3);
+  INSERT INTO pila_entrada (pila_id, artista, titol, data_alta) VALUES
+    (1, 'The Prodigy', 'The Fat of the Land', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
   `
 ];
 
 // Les taules de les Llistes de reproducció (v7). No són a TAULES: treure una cançó o esborrar una llista és normal,
 // i la còpia de seguretat no ha d'avisar quan baixen. Sí que van a l'Excel i a la comparació de l'anada i tornada.
-export const TAULES_LLISTES = ['llista', 'llista_canco'];
+export const TAULES_LLISTES = ['llista', 'llista_canco', 'pila', 'pila_entrada'];   // v11: les Piles, pel mateix motiu
 
 // Les taules on una baixada de files és sospitosa. Les escoltes i els scrobbles només poden créixer (§3.5).
 export const TAULES = ['artista', 'album', 'edicio', 'puntuacio', 'part', 'escolta', 'preferent', 'scrobble'];

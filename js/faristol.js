@@ -16,10 +16,11 @@ import * as LB from './listenbrainz.js?v=2';
 import * as I from './imatges.js?v=5';
 import * as T from './tags.js?v=1';
 import * as C from './copies.js?v=6';
-import * as X from './excel.js?v=5';
+import * as X from './excel.js?v=6';
 import * as L from './llistes.js?v=1';
 import * as V from './discografia.js?v=1';
 import * as F from './afinacio.js?v=4';
+import * as P from './piles.js?v=1';
 import * as N from './navegacio.js?v=1';
 import * as FX from './fitxa.js?v=1';
 
@@ -129,7 +130,8 @@ function marcaDesat(r) {
 async function fes(fn, text, { desfes = true, abans = null, auto = false } = {}) {
   abans = abans || A.estat.db.export();
   let res;
-  const p = A.canvia(d => { res = fn(d); }, { auto });
+  // Les Piles (ACT-707, ACT-744): dins de cada canvi, les entrades que una escolta nova ha tret de la seva Pila.
+  const p = A.canvia(d => { res = fn(d); P.sortides(d); }, { auto });
   pinta();
   if (text) avisa(typeof text === 'function' ? text(res) : text,
     desfes ? async () => { delete $('#full').dataset.encaraNo; if ($('#full').classList.contains('obert')) tancaFull();
@@ -147,7 +149,8 @@ function recalculaEdicio(y, id) { const d = E.desDeEdicions(y, [id]); return d ?
 function pinta() {
   if (!A.estat.db) return;
   sincroCanals();
-  pintaReixa(); pintaFiles(); pintaHistorial(); pintaSafata(); alertaCopia(); programaPunt();
+  try { estat.enPiles = P.edicionsEnPiles(db()); } catch { estat.enPiles = null; }
+  pintaReixa(); pintaFiles(); pintaHistorial(); pintaSafata(); alertaCopia(); programaPunt(); pintaPiles();
   if (estat.superficie === 'prestatgeria') pintaPrestatgeria();
   if (estat.superficie === 'artista' && estat.artista) pintaArtista(estat.artista);
   I.omple();
@@ -257,7 +260,7 @@ function pintaReixa() {
       : `<button class="escoltar" data-escoltar="${d.id}" aria-label="Escoltar ara ${esc(tit)}">▶</button>`);
     return `<div class="disc${prefs.has(d.artista_id) ? ' pref' : ''}">
       <button class="coberta ${d.portada ? 'amb-img' : ''}" data-fitxa="${d.id}" aria-label="Fitxa de ${esc(tit)}">
-        ${d.portada ? IMG(d.portada) : ''}<span class="a">${esc(d.art)}</span><span class="t">${esc(tit)}</span><span class="filet"></span>${dur}
+        ${d.portada ? IMG(d.portada) : ''}${icoPila(d.id)}<span class="a">${esc(d.art)}</span><span class="t">${esc(tit)}</span><span class="filet"></span>${dur}
       </button>${play}
       <button class="nom-sota" data-fitxa="${d.id}" tabindex="-1"><span><b>${esc(tit)}</b><i>${esc(d.art)}</i></span></button>
       <div class="peu">${part}${tags}</div>
@@ -441,7 +444,7 @@ function pintaHistorial() {
     const d = f.d, fons = d.portada && I.adreca(d.portada) ? `--img:url('${esc(I.adreca(d.portada))}')` : '';
     h += `<div class="hfila" style="${fons}">
       <button class="hcap" data-fitxa="${d.id}" aria-label="Fitxa de ${esc(d.titol)}">
-        <span class="hcob">${esc(inicials(d.art))}${d.portada ? IMG(d.portada) : ''}</span>
+        <span class="hcob">${esc(inicials(d.art))}${d.portada ? IMG(d.portada) : ''}${icoPila(d.id)}</span>
         <span class="htxt"><span class="htit">${esc(d.titol)}</span><span class="hart">${esc(d.art)}</span>
           <span class="hmeta"><u>${quan(f.darrera)}</u> · ${n}</span></span>
       </button>
@@ -484,12 +487,94 @@ function pintaArxiu() {
   $('#arxiuCompte').textContent = f ? `${ll.length} de ${tots.length} discos` : `${tots.length} discos, per artista`;
   // Dues edicions del mateix àlbum: el nom de l'edició, si en té, i sempre la durada (ACT-637).
   caixa.innerHTML = ll.map(x => `<button class="ar-fila" data-fitxa="${x.id}">
-      <span class="hcob">${esc(inicials(x.art))}${x.portada ? IMG(x.portada) : ''}</span>
+      <span class="hcob">${esc(inicials(x.art))}${x.portada ? IMG(x.portada) : ''}${icoPila(x.id)}</span>
       <span class="htxt"><span class="htit">${esc(x.titol)}</span><span class="hart">${esc(x.art)}${x.n_edicions > 1 && x.nom_edicio ? ' · ' + esc(x.nom_edicio) : ''}${x.n_parts ? ` · <i>${x.n_parts} parts</i>` : ''}${x.rotacio_actual ? ' · <i>en rotació</i>' : ''}</span></span>
       <span class="m">${x.durada_total}′</span></button>`).join('')
     || `<p class="subtitol" style="margin:14px 0 0">${tots.length ? 'Res amb aquest nom.' : 'L\'arxiu encara és buit.'}</p>`;
   I.omple(caixa);
 }
+// ───────── Les Piles de Discos per escoltar (ACT-706, ACT-710 a ACT-714, ACT-720, ACT-744) ─────────
+// La Pila és només la llista, sense portades (ACT-712), la més recent a dalt i sense «fa X dies» (ACT-713); no es distingeix
+// una casada d'una de text (ACT-714 g). Cada fila obre, i el ▶ va a part a la dreta (ACT-714 e, ACT-720). La darrera Pila
+// triada és estat de pantalla (ACT-706): tria-pila, al navegador, i no va a l'arxiu.
+const PILA = 'tria-pila';
+// ACT-773: la icona de Pila a la cantonada de la portada, quan l'àlbum té una entrada casada sense data_sortida. Es calcula un
+// cop per pintada (estat.enPiles) i es fa servir a Discos en rotació, a l'Historial i a La Prestatgeria.
+const icoPila = edId => { const l = estat.enPiles?.get(edId); return l ? `<span class="ico-pila" data-icopila="${esc(l.map(x => x.nom).join(' · '))}">${l.map(x => `<i title="${esc(x.nom)}">${esc(P.figura(x.nom))}</i>`).join('')}</span>` : ''; };
+const edDe = id => D.edicio(db(), +id) || D.fitxa(db(), +id);
+const darreraPila = ps => { let v = null; try { v = +localStorage.getItem(PILA); } catch {} return ps.find(p => p.id === v) || ps[0] || null; };
+function pintaPiles() {
+  const caixa = $('#piles'); if (!caixa) return;
+  const ps = P.piles(db()), p = darreraPila(ps);
+  if (!p) { caixa.innerHTML = ''; return; }
+  const ents = P.entrades(db(), p.id), ja = P.jaEscoltats(db(), p.id);
+  caixa.innerHTML = `<div class="apar-tabs pila-tabs" role="tablist">${ps.map(x => `<button role="tab" data-pila="${x.id}" aria-selected="${x.id === p.id}">${esc(x.nom)}</button>`).join('')}</div>
+    <button class="afegeix" data-afegeixpila="${p.id}">＋ Afegeix</button>
+    <div class="llista-grup pila-llista">${ents.map(filaPila).join('') || '<p class="subtitol" style="margin:14px 0 0">La Pila és buida.</p>'}</div>
+    ${ja.length ? `<button class="ar-fila pila-ja" data-jaescoltats="${p.id}"><span class="htxt"><span class="htit">Ja escoltats</span></span><span class="m">${ja.length}</span></button>` : ''}`;
+}
+const filaPila = x => `<div class="membre pila-fila" data-entrada="${x.id}">
+    <button class="txt" data-tocaentrada="${x.id}"><b>${esc(x.titol)}</b><small>${esc(x.artista)}</small></button>${playEntrada(x)}</div>`;
+// El ▶ (ACT-714 e): casada amb una edició, la llança; amb diverses, obre les edicions; de text, cerca al canal de l'artista
+// (D.canalPerDefecte, com el ▶ del proper disc) i, sense artista a l'arxiu, a Amazon (ACT-712).
+function playEntrada(x) {
+  if (x.album_id && x.n_edicions === 1) { const d = D.fitxa(db(), x.edicio_id); if (d) return botoPlay(d, 'play'); }
+  if (x.album_id && x.n_edicions > 1) return `<button class="play" data-edicionspila="${x.id}" aria-label="Edicions de ${esc(x.titol)}">▶</button>`;
+  const a = D.trobaArtista(db(), x.artista), e = enllac(D.canalPerDefecte(db(), a?.id), { art: x.artista, tit: x.titol });
+  return `<a class="play" ${aAttrs(e)} aria-label="Escoltar ${esc(x.titol)}">▶</a>`;
+}
+// Tocar la fila (ACT-712, ACT-714 d): casada amb una edició, la seva fitxa; amb diverses, les edicions; de text, la fulla.
+function tocaEntrada(id) {
+  const x = P.entrades(db(), P.entrada(db(), id)?.pila_id).find(e => e.id === id); if (!x) return;
+  if (x.album_id && x.n_edicions === 1) { const d = edDe(x.edicio_id); if (d) fullFitxa(d); return; }
+  if (x.album_id && x.n_edicions > 1) { fullEdicionsPila(x); return; }
+  fullEntradaText(x);
+}
+function fullEdicionsPila(x) {
+  const eds = (db().exec('SELECT id FROM edicio WHERE album_id = ? ORDER BY id', [x.album_id])[0]?.values || []).map(v => D.fitxa(db(), v[0])).filter(Boolean);
+  obreFull(`<h3>${esc(x.titol)}</h3><p>${esc(x.artista)} · ${eds.length} edicions a l'arxiu. Tria la que et vagi millor.</p>
+    <div class="llista-grup pila-edicions">${eds.map(d => `<div class="membre">
+        <button class="mini" data-fitxa="${d.id}">${d.portada ? IMG(d.portada) : ''}</button>
+        <button class="txt" data-fitxa="${d.id}"><b>${esc(d.nom_edicio || 'sense nom')}</b><small>${d.min ? d.min + '′' : 'falta la durada'}</small></button>
+        ${botoPlay(d, 'play')}</div>`).join('')}</div>`);
+}
+// Una entrada de text (ACT-712 (2), ACT-714 f): els altres canals, sense recordar quin es tria, i «Treu de la Pila».
+function fullEntradaText(x) {
+  const canals = Object.keys(CANALS).filter(k => !CANALS[k].propi && k !== 'aimp');
+  obreFull(`<h3>${esc(x.titol)}</h3><p>${esc(x.artista)}</p>
+    <div class="barra-accions" style="position:static;padding:0 0 10px">${canals.map(k => `<a class="bt" ${aAttrs(enllac(k, { art: x.artista, tit: x.titol }))}>${esc(CANALS[k].nom)}</a>`).join('')}</div>
+    <div class="barra-accions" style="position:static;padding:0 0 10px"><button class="bt" data-treuentrada="${x.id}">Treu de la Pila</button></div>`);
+}
+function fullAfegeixPila(pilaId) {
+  const p = P.piles(db()).find(x => x.id === pilaId); if (!p) return;
+  obreFull(`<h3>Afegeix a ${esc(p.nom)}</h3>
+    <input class="cerca" id="pilaArt" placeholder="Artista" autocomplete="off">
+    <input class="cerca" id="pilaTit" placeholder="Títol" autocomplete="off">
+    <div class="llista-grup" id="pilaSug"></div>
+    <div class="barra-accions" style="position:static;padding:8px 0 10px"><button class="bt principal" data-afegeixtext="${p.id}">Afegeix</button></div>`);
+  const sug = () => { const s = P.suggeriments(db(), $('#pilaArt').value, $('#pilaTit').value);
+    $('#pilaSug').innerHTML = s.map(a => `<div class="membre"><button class="txt" data-afegeixalbum="${p.id}:${a.id}"><b>${esc(a.titol)}</b><small>${esc(a.art)}</small></button></div>`).join(''); };
+  $('#pilaArt').addEventListener('input', sug); $('#pilaTit').addEventListener('input', sug);
+}
+function fullJaEscoltats(pilaId) {
+  const ja = P.jaEscoltats(db(), pilaId);
+  obreFull(`<h3>Ja escoltats</h3><p>La sortida més recent primer. «Torna a la Pila» la torna a dalt de tot.</p>
+    <div class="llista-grup">${ja.map(x => `<div class="membre"><span class="txt"><b>${esc(x.titol)}</b><small>${esc(x.artista)}</small></span>
+      <button class="treu" data-tornapila="${x.id}">Torna a la Pila</button></div>`).join('')}</div>`);
+}
+// A la fitxa (ACT-710, ACT-744): «A la Pila Gimnàs · Treu» per cada Pila on és l'àlbum, i «Afegeix a una Pila».
+function pilesFitxa(d) {
+  const ps = P.pilesDeLAlbum(db(), d.album_id);
+  return `<div class="fitxa-piles">${ps.map(x => `<span class="a-pila">A la Pila ${esc(x.nom)} · <button class="sf-link" data-treuentrada="${x.id}" data-fitxaed="${d.id}">Treu</button></span>`).join(' ')}
+    <button class="bt" data-afegeixapila="${d.id}">Afegeix a una Pila</button></div>`;
+}
+function fullTriaPila(edId) {
+  const d = edDe(edId); if (!d) return;
+  const ja = new Set(P.pilesDeLAlbum(db(), d.album_id).map(x => x.pila_id)), ps = P.piles(db()).filter(p => !ja.has(p.id));
+  obreFull(`<h3>Afegeix a una Pila</h3><p>${esc(d.titol)} · ${esc(d.art)}</p>
+    <div class="barra-accions" style="position:static;padding:0 0 10px">${ps.map(p => `<button class="bt" data-posaapila="${p.id}:${d.id}">${esc(p.nom)}</button>`).join('') || 'Ja és a totes les Piles.'}</div>`);
+}
+
 // L'Afinació (ACT-683, ACT-686): una fila per edició, que obre la seva fitxa. A dalt les marcades «Per afinar», de la més
 // recent a la més antiga, amb «marcat fa X»; a sota les que no tenen gènere o els falten els eixos de la clàssica, per
 // escoltes que compten. Cada fila diu el seu motiu.
@@ -1076,6 +1161,7 @@ function fullFitxa(d) {
       ${d.esperant ? `<button class="bt principal" data-repren="${d.id}">Reprèn</button>` : `<button class="bt principal" data-escoltar="${d.id}">▶ Escoltar ara</button>`}
       ${d.rotacio_actual ? `<button class="bt" data-treure="${d.id}">Treu de rotació</button>` : `<button class="bt" data-hrot="${d.id}">Posa'l en rotació</button>`}
     </div>
+    ${pilesFitxa(d)}
     <div class="graella">
       ${cel('generefitxa', d.id, (gen.falta ? 'falta' : 'ple') + ' cel-genere', 'Gènere', esc(gen.txt))}
       ${cel('tagsfitxa', d.id, tg.falta ? 'falta' : 'ple', 'Tags', esc(tg.txt))}
@@ -1775,6 +1861,21 @@ document.addEventListener('click', e => {
   if (d.gps) { estat.gps = 'Mirant…'; detectaLloc(true); return; }
   if (t.id === 'btAfinacio') { if (!A.estat.db) return; tancaFull(); vesA('prestatgeria'); if (estat.psub === 'afi') pintaPrestatgeria(); else psub('afi'); return; }
   if (d.asub) { aparador(d.asub); return; }
+  if (d.pila) { try { localStorage.setItem(PILA, d.pila); } catch {} pintaPiles(); return; }
+  if (d.tocaentrada) { tocaEntrada(+d.tocaentrada); return; }
+  if (d.edicionspila) { const x = P.entrades(db(), P.entrada(db(), +d.edicionspila)?.pila_id).find(e => e.id === +d.edicionspila); if (x) fullEdicionsPila(x); return; }
+  if (d.afegeixpila) { fullAfegeixPila(+d.afegeixpila); return; }
+  if (d.jaescoltats) { fullJaEscoltats(+d.jaescoltats); return; }
+  if (d.afegeixtext) { const art = $('#pilaArt').value.trim(), tit = $('#pilaTit').value.trim();
+    if (!art && !tit) { avisa('Escriu l\'artista i el títol.'); return; }
+    tancaFull(); fes(P.afegeix(+d.afegeixtext, art, tit), r => r.album_id ? 'Afegit: és a l\'arxiu.' : 'Afegit com a text.'); return; }
+  if (d.afegeixalbum) { const [pila, alb] = d.afegeixalbum.split(':').map(Number); tancaFull(); fes(P.afegeix(pila, null, null, alb), 'Afegit a la Pila.'); return; }
+  if (d.afegeixapila) { fullTriaPila(+d.afegeixapila); return; }
+  if (d.posaapila) { const [pila, ed] = d.posaapila.split(':').map(Number), x = rot(ed);
+    if (x) fes(P.afegeix(pila, null, null, x.album_id), 'Afegit a la Pila.').then(() => { const y = rot(ed); if (y) fullFitxa(y); }); return; }
+  if (d.treuentrada) { const ed = +d.fitxaed;
+    fes(P.treu(+d.treuentrada), 'Tret de la Pila.', { desfes: false }).then(() => { const y = ed && rot(ed); if (y) fullFitxa(y); else tancaFull(); }); return; }
+  if (d.tornapila) { tancaFull(); fes(P.tornaALaPila(+d.tornapila), 'Torna a ser a la Pila, a dalt de tot.'); return; }
   if (t.id === 'btSafata') { if (!A.estat.db) return; if (estat.superficie !== 'safata') { estat.abansSafata = estat.superficie; N.apuntaAlcada('safata', { sup: estat.superficie }); } tancaFull(); vesA('safata'); pintaSafata(); llegeixEscoltes(); return; }
   if (d.tornasafata) { vesA(estat.abansSafata || 'faristol');
     if (estat.sotaSensePintar) {   // tornar a la pantalla de sota d'una safata recarregada (ACT-748): encara no s'ha pintat
