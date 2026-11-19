@@ -43,6 +43,8 @@
       <div class="panell activa" id="q-tots">
         <input class="cerca" id="cercaArxiu" type="search" placeholder="Cerca a tot l'arxiu" autocomplete="off">
         <p class="subtitol" id="arxiuCompte" style="margin:8px 0 0"></p>
+        <div class="rajoles" id="rajoles"></div>
+        <div class="rajola-cap" id="rajolaCap" hidden></div>
         <div id="arxiu"></div>
       </div>
       <div class="panell" id="q-agr"><div id="agrupacions"></div></div>
@@ -80,7 +82,7 @@
         </div>
         <div class="apanell activa" id="a-pref">
           <button class="afegeix" id="btAfegeixArtista">＋ Afegeix un artista</button>
-          <div class="eina"><button id="btOrdena" aria-pressed="false">Ordena la llista</button></div>
+          <div class="eina"><label class="ordre-pref">Ordre <select id="ordrePref" aria-label="Ordre dels preferents"></select></label><button id="btOrdena" aria-pressed="false">Ordena la llista</button></div>
           <div class="files" id="files"></div>
         </div>
         <div class="apanell" id="a-esc">

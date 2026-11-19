@@ -184,10 +184,11 @@ export async function velocitat({ navegador, ORIGEN, ara = Date.now() }) {
     });
     await desat();
     await p.click('[data-tornasafata]').catch(() => {}); await p.waitForTimeout(300);
-    await pantalla('Prestatgeria · Tots els discos', async () => { await p.click('[data-anar="prestatgeria"]'); await p.waitForSelector('#s-prestatgeria.activa'); });
+    await pantalla('Prestatgeria · les rajoles (obra 6)', async () => { await p.click('[data-anar="prestatgeria"]'); await p.waitForSelector('#s-prestatgeria.activa'); await p.waitForSelector('#rajoles [data-rajola]'); });
+    await pantalla('Prestatgeria · Tots els discos', async () => { await p.click('[data-rajola="tots"]'); await p.waitForSelector('#arxiu [data-fitxa]'); });
     await pantalla('Prestatgeria · Agrupacions', () => p.click('[data-psub="agr"]'));
     await pantalla('L\'Afinació', () => p.click('[data-psub="afi"]'));
-    await p.click('[data-psub="tots"]'); await p.waitForTimeout(300);
+    await p.click('[data-psub="tots"]'); await p.click('[data-rajola="tots"]'); await p.waitForTimeout(300);
     await pantalla('Obrir la fitxa d\'un disc', async () => { await p.evaluate(() => document.querySelectorAll('#arxiu [data-fitxa]')[5].click()); await p.waitForSelector('#full.obert'); });
     await p.click('#fons').catch(() => {}); await p.waitForTimeout(300);
     const exp = await p.evaluate(async () => { const A = await import('/js/arxiu.js?v=21'); const t = performance.now(); const b = A.estat.db.export(); return [Math.round(performance.now() - t), b.length]; });

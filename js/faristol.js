@@ -23,6 +23,7 @@ import * as F from './afinacio.js?v=4';
 import * as P from './piles.js?v=1';
 import * as N from './navegacio.js?v=1';
 import * as FX from './fitxa.js?v=1';
+import * as R from './rajoles.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -278,6 +279,10 @@ function playPreferent(p) {
 function pintaFiles() {
   let ps = D.preferents(db());
   if (estat.ordena && estat.ordreTmp) ps = estat.ordreTmp.map(id => ps.find(p => p.id === id)).filter(Boolean);
+  else ps = R.ordenaPreferents(db(), ps);   // ACT-775: l'ordre triat; només Manual s'arrossega
+  const manual = R.ordrePref() === 'manual', sel = $('#ordrePref');
+  if (sel && sel.value !== R.ordrePref()) sel.value = R.ordrePref();
+  $('#btOrdena').hidden = !manual && !estat.ordena;
   $('#files').classList.toggle('ordenant', estat.ordena);
   $('#files').innerHTML = ps.map((p, i) => {
     const r = p.rot, foto = p.retrat || r?.portada || null;
@@ -480,17 +485,37 @@ function pintaPrestatgeria() {
   if (!A.estat.db) return;
   if (estat.psub === 'agr') pintaAgrupacions(); else if (estat.psub === 'afi') pintaAfinacio(); else pintaArxiu();
 }
-function pintaArxiu() {
-  const caixa = $('#arxiu'); if (!caixa) return;
-  const tots = D.totsElsDiscos(db()), f = norm($('#cercaArxiu')?.value);
-  const ll = f ? tots.filter(x => x.cerca.includes(f)) : tots;
-  $('#arxiuCompte').textContent = f ? `${ll.length} de ${tots.length} discos` : `${tots.length} discos, per artista`;
-  // Dues edicions del mateix àlbum: el nom de l'edició, si en té, i sempre la durada (ACT-637).
-  caixa.innerHTML = ll.map(x => `<button class="ar-fila" data-fitxa="${x.id}">
+// Obra 6 (ACT-774): Tots els discos és una pantalla de rajoles (rajoles.js), amb el cercador a dalt. «Tots» obre la llista
+// d'abans; cercar sense rajola triada busca a tot l'arxiu. estat.rajola: la rajola oberta (null, les rajoles).
+function filaArxiu(x, clau) {
+  const extra = clau === 'escoltes' ? ` · ${escoltesTxt(x.escoltes)}` : '';
+  return `<button class="ar-fila" data-fitxa="${x.id}">
       <span class="hcob">${esc(inicials(x.art))}${x.portada ? IMG(x.portada) : ''}</span>
-      <span class="htxt"><span class="htit">${esc(x.titol)}</span><span class="hart">${esc(x.art)}${x.n_edicions > 1 && x.nom_edicio ? ' · ' + esc(x.nom_edicio) : ''}${x.n_parts ? ` · <i>${x.n_parts} parts</i>` : ''}${x.rotacio_actual ? ' · <i>en rotació</i>' : ''}</span></span>
-      ${icoPila(x.id)}<span class="m">${x.durada_total}′</span></button>`).join('')
-    || `<p class="subtitol" style="margin:14px 0 0">${tots.length ? 'Res amb aquest nom.' : 'L\'arxiu encara és buit.'}</p>`;
+      <span class="htxt"><span class="htit">${esc(x.titol)}</span><span class="hart">${esc(x.art)}${x.n_edicions > 1 && x.nom_edicio ? ' · ' + esc(x.nom_edicio) : ''}${x.n_parts ? ` · <i>${x.n_parts} parts</i>` : ''}${x.rotacio_actual ? ' · <i>en rotació</i>' : ''}${extra}</span></span>
+      ${icoPila(x.id)}<span class="m">${x.durada_total}′</span></button>`;
+}
+function pintaArxiu() {
+  const caixa = $('#arxiu'), rj = $('#rajoles'), cap = $('#rajolaCap'); if (!caixa || !rj) return;
+  const f = norm($('#cercaArxiu')?.value), clau = estat.rajola || (f ? 'tots' : null);
+  if (!clau) {
+    const c = R.comptes(db());
+    cap.hidden = true; cap.innerHTML = ''; caixa.innerHTML = ''; rj.hidden = false;
+    $('#arxiuCompte').textContent = c.tots ? '' : 'L\'arxiu encara és buit.';
+    rj.innerHTML = R.RAJOLES.map(r => `<button class="rajola${r.clau === 'tots' ? ' rj-tots' : ''}" data-rajola="${r.clau}"><b>${esc(r.nom)}</b><span class="rj-n">${esc(R.textCompte(r.clau, c))}</span></button>`).join('');
+    return;
+  }
+  rj.hidden = true; rj.innerHTML = '';
+  const nom = R.RAJOLES.find(r => r.clau === clau)?.nom || '';
+  cap.hidden = !estat.rajola;
+  cap.innerHTML = estat.rajola ? `<button class="torna-rajoles" data-rajoles="1">‹ Rajoles</button><b>${esc(nom)}</b>` : '';
+  const ss = R.seccions(db(), clau), tots = ss.reduce((a, s) => a + s.files.length, 0);
+  const fs = ss.map(s => ({ ...s, files: f ? s.files.filter(x => x.cerca.includes(f)) : s.files }));
+  const n = fs.reduce((a, s) => a + s.files.length, 0);
+  $('#arxiuCompte').textContent = f ? `${n} de ${tots} discos` : (clau === 'tots' ? `${tots} discos, per artista` : `${tots} ${tots === 1 ? 'disc' : 'discos'}`);
+  const titol = s => clau === 'canal' ? nomCanal(s.clau) : clau === 'nota' ? `${s.titol} ★` : s.titol;
+  caixa.innerHTML = fs.filter(s => s.files.length || (clau === 'durada' && !f)).map(s => (s.titol ? `<h2 class="ag-cap rj-cap"${clau === 'canal' ? ` data-canal="${esc(s.clau)}"` : ''}>${esc(titol(s))}${clau === 'durada' ? ' · ' + s.files.length : ''}</h2>` : '')
+      + s.files.map(x => filaArxiu(x, clau)).join('')).join('')
+    || `<p class="subtitol" style="margin:14px 0 0">${f ? 'Res amb aquest nom.' : (clau === 'dia' ? 'Cap escolta d\'aquest dia en anys anteriors.' : 'Encara cap disc aquí.')}</p>`;
   I.omple(caixa);
 }
 // ───────── Les Piles de Discos per escoltar (ACT-706, ACT-710 a ACT-714, ACT-720, ACT-744) ─────────
@@ -1886,7 +1911,9 @@ document.addEventListener('click', e => {
     N.tornaAlcada('safata', { sup: estat.superficie });   // ACT-691: a la mateixa alçada
     return; }
   if (d.anar) { vesA(d.anar); if (d.anar === 'prestatgeria') pintaPrestatgeria(); return; }
-  if (d.psub) { if ($('#full').classList.contains('obert')) tancaFull(); psub(d.psub); return; }
+  if (d.psub) { if ($('#full').classList.contains('obert')) tancaFull(); if (d.psub === 'tots') estat.rajola = null; psub(d.psub); return; }
+  if (d.rajola) { estat.rajola = d.rajola; if (d.rajola === 'atzar') R.remena(); window.scrollTo(0, 0); pintaArxiu(); return; }
+  if (d.rajoles) { estat.rajola = null; window.scrollTo(0, 0); pintaArxiu(); return; }
   if (d.sub) { if ($('#full').classList.contains('obert')) tancaFull(); sub(d.sub); return; }
   if (d.tornar) { vesA('faristol'); sub('pref'); aparador('pref'); N.tornaAlcada('artista', { sup: 'faristol', sub: 'pref' }); return; }   // ACT-691
 
@@ -2252,7 +2279,7 @@ const PANTALLA = 'tria-pantalla';
 function recordaPantalla() {
   if (estat.superficie === 'entrada') return;
   const f = $('#full'), fitxa = f.classList.contains('obert') ? +f.dataset.cadena || null : null;
-  N.desaPantalla({ sup: estat.superficie, abansSafata: estat.abansSafata || null, sub: estat.sub, psub: estat.psub || 'tots', artista: estat.artista,
+  N.desaPantalla({ sup: estat.superficie, abansSafata: estat.abansSafata || null, sub: estat.sub, psub: estat.psub || 'tots', rajola: estat.rajola || null, artista: estat.artista,
                    asub: estat.asub || 'pref', histMax: estat.histMax || null, y: Math.round(window.scrollY), fitxa, t: Date.now() });
 }
 addEventListener('pagehide', recordaPantalla);
@@ -2280,6 +2307,7 @@ function tornaPantalla() {
   if (p.asub) aparador(p.asub);
   if (sota === 'prestatgeria') {   // com psub(), sense pintar: mostraMaquina pinta tot just després
     estat.psub = PSUBS.includes(p.psub) ? p.psub : 'tots';
+    estat.rajola = R.esRajola(p.rajola) ? p.rajola : null;
     PSUBS.forEach(k => { $('#ptab-' + k).setAttribute('aria-selected', estat.psub === k); $('#q-' + k).classList.toggle('activa', estat.psub === k); });
   }
   const x = p.fitxa && p.sup !== 'safata' ? D.edicio(db(), p.fitxa) || D.fitxa(db(), p.fitxa) : null;
@@ -2418,6 +2446,9 @@ lliscar($('#s-faristol'));
 aparador(N.darrerAparador());
 lliscar($('#s-prestatgeria'), PSUBS, () => estat.psub || 'tots', psub);
 $('#cercaArxiu').addEventListener('input', () => pintaArxiu());
+$('#ordrePref').innerHTML = R.ORDRES.map(([k, n]) => `<option value="${k}">${n}</option>`).join('');
+$('#ordrePref').value = R.ordrePref();
+$('#ordrePref').addEventListener('change', e => { R.posaOrdrePref(e.target.value); pintaFiles(); });
 document.addEventListener('input', e => { if (e.target.id === 'inLlista') estat.nomLlistaTxt = e.target.value; });
 try { const l = localStorage.getItem('tria-lloc'); if (l === 'Lleida' || l === 'Fora') posaLloc(l, false); } catch {}
 try { navigator.permissions?.query({ name: 'geolocation' }).then(r => { if (r.state === 'granted') detectaLloc(false); }).catch(() => {}); } catch {}
