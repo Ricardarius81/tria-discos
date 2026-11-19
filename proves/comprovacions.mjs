@@ -2,6 +2,7 @@
 // { nom, fes(ctx), sintetic?: només amb l'arxiu sintètic }. Les marques { bloc: 'nom', prepara?(ctx), senseArrencada?, guarda? }
 // tallen la llista en blocs: cada bloc arrenca d'una còpia neta de l'arxiu sintètic (ACT-749, ACT-753; vegeu banc.mjs).
 // Una comprovació falla llançant un error amb una frase que digui què s'esperava i què hi ha.
+import { OBRA1 } from './obra1.mjs';
 const cal = (cond, msg) => { if (!cond) throw new Error(msg); };
 const igual = (a, b, msg) => cal(a === b, `${msg}: s'esperava ${JSON.stringify(b)} i hi ha ${JSON.stringify(a)}`);
 
@@ -2289,6 +2290,8 @@ export const COMPROVACIONS = [
     igual(JSON.stringify(m), '["2026-01-02.xlsx"]', 'meitats (una de fa menys de 10 minuts es deixa: la pot estar fent un altre dispositiu)');
     await pagina.evaluate(() => sessionStorage.removeItem('tria-ritme-real')); await reobre(pagina);
   } },
+
+  ...OBRA1,   // l'obra 1 (ACT-763 a ACT-768), en fitxer propi
 
   // ───────── el que no ha de passar mai ─────────
   { bloc: 'el que no ha de passar mai', guarda: true },

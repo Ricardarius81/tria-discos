@@ -572,7 +572,7 @@ body[data-estil="ricard"].desconnectat .conn-tira .tanca{color:#fff}
 /* Els discos en rotació d'un artista preferent (o de la seva Persona), amb marc daurat (petició de Ricard, 31-10) */
 .disc.pref .coberta,
 body[data-estil="ricard"] .reixa .disc.pref .coberta{outline:2.5px solid #E2B44A; outline-offset:0; box-shadow:0 8px 18px rgba(0,0,0,.5), 0 0 16px rgba(226,180,74,.35)}
-.disc.pref .nom-sota b::before{content:'★ '; color:#E2B44A}
+.disc.pref .nom-sota i::before{content:'★ '; color:#E2B44A}   /* ACT-768 (b): davant de l'artista */
 
 /* Historial (blocs 3.3–3.5): la fila d'un grup porta la portada combinada de l'última tirada, petita. */
 .hcob.collage::after{display:none}
@@ -775,3 +775,12 @@ body .fitxa-portada .portada-espera .bt{padding:6px 0; color:var(--accent)}
 /* La safata dins la franja de color, amb el mateix títol que les altres seccions (ACT-752); «← Tornar», en la tinta */
 body[data-estil="ricard"] .cap-safata{padding-bottom:2px}
 body[data-estil="ricard"] .cap-safata .enrere{background:none; border:0; color:var(--tinta); padding:0 0 10px; margin:0; font-weight:600; box-shadow:none}
+
+/* ---------- obra 1 (ACT-767, ACT-766, ACT-768 c) ---------- */
+/* ACT-768 (c): un títol llarg sense espais feia la fitxa més ampla que la pantalla (h3 i .cap-txt, trobat al banc) */
+.fitxa-cap .cap-txt{min-width:0}
+.full h3, .full p, .full .cap-txt{overflow-wrap:anywhere}
+/* «Enganxa l'enllaç» de Bandcamp a la fitxa */
+.enllac-bc{margin:2px 0 16px}
+.enllac-bc input{width:100%}
+.enllac-bc .avis-bc{border-left:3px solid var(--taronja); padding-left:10px; color:var(--os)}
