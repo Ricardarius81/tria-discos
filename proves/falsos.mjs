@@ -92,7 +92,7 @@ export const GSI_FALS = `window.google = { accounts: { oauth2: { initTokenClient
 // com sempre, perquè la sonda de portades i fotos no canviï de comportament.
 const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 export class FontsFalses {
-  constructor() { this.actiu = false; this.wp = { cerques: {}, pagines: {} }; this.mb = { artistes: {}, grups: {} }; this.caa = {}; this.crides = []; }
+  constructor() { this.actiu = false; this.wp = { cerques: {}, pagines: {} }; this.mb = { artistes: {}, grups: {}, releases: {} }; this.caa = {}; this.crides = []; }
   async atén(route) {
     if (!this.actiu) return false;
     const u = new URL(route.request().url()), q = u.searchParams;
@@ -128,6 +128,9 @@ export class FontsFalses {
         const l = this.mb.grups[q.get('artist')]; this.crides.push('mb grups ' + q.get('artist'));
         await json({ 'release-group-count': l.length, 'release-groups': l }); return true;
       }
+      // ACT-777: una edició amb les seves pistes (inc=recordings), per al disc nou de la safata.
+      const rel = u.pathname.match(/^\/ws\/2\/release\/([^/]+)$/);
+      if (rel && this.mb.releases[rel[1]]) { this.crides.push('mb release ' + rel[1]); await json(this.mb.releases[rel[1]]); return true; }
     }
     return false;
   }

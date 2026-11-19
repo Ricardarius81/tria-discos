@@ -26,6 +26,7 @@
 //      si no el diu, (d) com abans. Camps: Scrobble.album, Part.numero.
 //      Des de la ACT-665 (v1.49), abans del número: si el nom de l'àlbum és, normalitzat, el Part.Nom d'una part, hi va.
 
+import { numeroDActe } from './actes.js?v=1';
 const files = (db, sql, p = []) => {
   const st = db.prepare(sql); st.bind(p);
   // ACT-738: els noms de les columnes, un sol cop; getAsObject els torna a demanar a cada fila i, amb anys d'escoltes,
@@ -296,8 +297,8 @@ export const SQL_COMPTA = `(CASE WHEN s.unio IS NULL THEN (s.completitud >= ${LL
 // canviï una regla de recalcula, i també quan una migració canviï alguna cosa que recalcula llegeix (la migració el puja
 // ella mateixa, al mateix canvi). El banc ho vigila: migra una foto de l'arxiu sintètic feta amb l'estructura anterior,
 // ho torna a calcular tot i, si surt diferent i CALCUL no ha pujat, falla.
-export const CALCUL = 4;   // 2: ACT-701, completar una escolta a mitges · 3: ACT-719, la que ja compta sense ser sencera
-                           // 4: ACT-730, l'última pista comptada de fiat es pot reprendre 7 dies
+export const CALCUL = 5;   // 2: ACT-701, completar una escolta a mitges · 3: ACT-719, la que ja compta sense ser sencera
+                           // 4: ACT-730, l'última pista comptada de fiat es pot reprendre 7 dies · 5: ACT-777, l'acte del nom de la pista
 const MARCA = 'calcul-escoltes';
 const marcaDelCodi = () => String(CALCUL);
 export const marcaDeLArxiu = db => un(db, 'SELECT valor FROM meta WHERE clau = ?', [MARCA])?.valor ?? null;
@@ -417,8 +418,12 @@ export const recalcula = (db, { desDe = null } = {}) => {
     // ACT-665 (v1.49): primer, la part que es diu com l'àlbum que arriba (Part.Nom, normalitzat); després, el número
     // del nom (ACT-625); després, la viva. És el que fa que «És part d'un que ja tinc» no es desfaci a la pista següent.
     const perNomPart = s.album && ps.length ? ps.find(p => p.nom && norm(p.nom) === norm(s.album)) : null;
-    const nPart = ps.length && !perNomPart ? numeroDePart(s.album, eds.get(ed).titol) : null;
-    const perNom = perNomPart || (nPart !== null ? ps.find(p => p.numero === nPart) : null);       // ACT-625
+    // ACT-777 (Obra 4, òperes per actes): després del nom de la part, l'acte que diu el nom de la pista (Scrobble.pista →
+    // Part.numero), abans que el número del nom de l'àlbum: la caixa va per actes i el CD no hi mana.
+    const nActe = ps.length && !perNomPart ? numeroDActe(s.pista) : null;
+    const perActe = nActe !== null ? ps.find(p => p.numero === nActe) || null : null;
+    const nPart = ps.length && !perNomPart && !perActe ? numeroDePart(s.album, eds.get(ed).titol) : null;
+    const perNom = perNomPart || perActe || (nPart !== null ? ps.find(p => p.numero === nPart) : null);       // ACT-625
     const part = perNom ? perNom.id : (s.escolta_id ? (s.part_id ?? null) : (viva?.id ?? null));   // (d)
     const ku = ed + '|' + part;
     let u = oberta.get(ku);
@@ -1051,6 +1056,8 @@ export function discosNous(db, infoMB = new Map()) {
     const gran = Math.max(0, ...durs);
     if (durs.length > 2 && Math.abs(gran - (sonat - gran)) <= Math.max(60e3, 0.05 * gran)) suma = sonat - gran;
     const prop = mbBo && mb.minuts ? { minuts: mb.minuts, font: 'segons MusicBrainz' } : { minuts: Math.max(1, Math.round(suma / MIN)), font: 'el que ha sonat' };
+    // ACT-777: una òpera que MusicBrainz té per actes entra com a caixa, una part per acte (actes.js, partsPerActe).
+    if (mbBo && mb.actes?.length) prop.parts = mb.actes;
     (neix ? nous : soltes).push({ ...x, n: x.pistes.size, mbid, proposta: prop });
   }
   return { nous, soltes };
@@ -1064,7 +1071,7 @@ export const declaraDisc = clau => db => {
 };
 // Crear la fitxa del disc nou. Per defecte només entra a l'arxiu i a l'Historial (ACT-458); la rotació i els preferents
 // són dues opcions a part. Cap disc entra sense durada (§2). El nom de l'àlbum queda com a emparellament confirmat.
-export const creaDiscNou = ({ album, artista, recording_msid, minuts, canal, rotacio = false }) => db => {
+export const creaDiscNou = ({ album, artista, recording_msid, minuts, canal, rotacio = false, parts = null }) => db => {
   if (!(minuts > 0)) throw new Error('Cap disc entra sense durada.');
   // ACT-738: des de quan tornar a calcular: la primera pista d'aquest nom, que encara no té escolta.
   const k = album ? norm(album) : null;
@@ -1079,6 +1086,10 @@ export const creaDiscNou = ({ album, artista, recording_msid, minuts, canal, rot
   db.run(`INSERT INTO edicio (album_id, durada_total, rotacio_actual, app_escolta, emparellaments, data_referencia_rotacio, lot_carrega)
           VALUES (?, ?, ?, ?, ?, ?, 'SAFATA')`, [albumId, minuts, rotacio ? 1 : 0, canal, JSON.stringify([album ? album : clauMsid(recording_msid)]), rotacio ? ara : null]);
   const id = un(db, 'SELECT last_insert_rowid() AS id').id;
+  // ACT-777: la caixa d'una òpera, una part per acte (Part.Numero, Part.Nom, Part.Durada). Viva, la primera si entra a la
+  // rotació (decisió de construcció POR RATIFICAR).
+  for (const p of parts || []) db.run('INSERT INTO part (edicio_id, numero, nom, durada, rotacio_actual) VALUES (?, ?, ?, ?, ?)',
+                                      [id, p.numero, p.nom, p.durada ?? null, rotacio && p === parts[0] ? 1 : 0]);
   if (rotacio) esborraProperSiEsAquest(db, id);
   if (desDe) recalcula(db, { desDe });
   return { id, artista_id: a.id };

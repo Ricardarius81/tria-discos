@@ -1780,8 +1780,8 @@ export const COMPROVACIONS = [
       return { h: E.historial(db).find(x => x.edicio_id === ed('Disc Fiat')) || null, calcul: E.CALCUL };
     });
     cal(res.h && res.h.n === 1 && !res.h.mitges, 'l\'Historial del Disc Fiat: s\'esperava «1 escolta» sense «a mitges» i hi ha ' + JSON.stringify(res.h));
-    igual(res.calcul, 4, 'CALCUL');
-    igual(consulta("SELECT valor FROM meta WHERE clau = 'calcul-escoltes'")[0].valor, '4', 'la marca del càlcul');
+    cal(res.calcul >= 4, 'CALCUL: s\'esperava 4 o més (la regla de l\'ACT-730 hi és des del 4; el 5 és l\'ACT-777) i hi ha ' + res.calcul);
+    igual(consulta("SELECT valor FROM meta WHERE clau = 'calcul-escoltes'")[0].valor, String(res.calcul), 'la marca del càlcul (la de CALCUL)');
   } },
   { nom: 'subgèneres (ACT-732, ACT-733): neixen a la fulla del gènere, a Àlbum.subgeneres, desats a cada toc; sense branca no n\'hi ha; els ja usats s\'ofereixen primer i un nom igual normalitzat és el mateix', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
     const ed = t => consulta('SELECT e.id, a.id AS album FROM edicio e JOIN album a ON a.id = e.album_id WHERE a.titol = ?', [t])[0];
@@ -2410,6 +2410,69 @@ export const COMPROVACIONS = [
   } },
 
   // ───────── el que no ha de passar mai ─────────
+  { bloc: 'obra 4: Parsifal, les òperes per actes (ACT-777)' },
+  { nom: 'actes (ACT-777): el número d\'acte es llegeix del nom de la pista, i «Act Naturally» no és cap acte', sintetic: true, async fes({ pagina }) {
+    const r = await pagina.evaluate(async () => {
+      const { numeroDActe } = await import('./js/actes.js?v=1');
+      return ['Parsifal, WWV 111 / Act 1: Vorspiel', 'Parsifal: Akt II - Amfortas!', 'Erster Aufzug: Vorspiel', 'Dritter Aufzug: Karfreitagszauber',
+        'Aufzug 3', 'Acte III, scène 1', 'Atto secondo: Ah!', '2. Akt: Szene', 'Act Naturally', 'Dog Act', 'Act 2', 'Interlude'].map(numeroDActe);
+    });
+    igual(JSON.stringify(r), JSON.stringify([1, 2, 1, 3, 3, 3, 2, 2, null, null, 2, null]), 'numeroDActe de cada nom de pista');
+  } },
+  { nom: 'actes (ACT-777): la pista d\'una caixa d\'òpera va a la part de l\'acte que diu el seu nom, no a la viva; en tornar a calcular, també', sintetic: true, async fes({ pagina, lb, consulta, esperaDesat, obreSafata }) {
+    const r0 = await pagina.evaluate(async () => {
+      const A = await import('./js/arxiu.js?v=21');
+      return A.canvia(db => {
+        db.run("INSERT INTO artista (id, nom_canonic) VALUES (940, 'Banc Wagner')");
+        db.run("INSERT INTO album (id, titol, artista_id) VALUES (941, 'Banc Parsifal', 940)");
+        db.run(`INSERT INTO edicio (id, album_id, durada_total, rotacio_actual, app_escolta, emparellaments, data_referencia_rotacio) VALUES (942, 941, 248, 1, 'amazon', ?, ?)`,
+               [JSON.stringify(['Banc Parsifal (Live)']), new Date(Date.now() - 3 * 864e5).toISOString()]);
+        db.run(`INSERT INTO part (id, edicio_id, numero, nom, durada, rotacio_actual) VALUES (951, 942, 1, 'Acte 1', 105, 1), (952, 942, 2, 'Acte 2', 65, 0), (953, 942, 3, 'Acte 3', 78, 0)`);
+      });
+    });
+    cal(r0.desat, 'no s\'ha desat la caixa: ' + r0.motiu);
+    const t = Date.now() - 16 * 3600e3, m = 60e3;
+    const pista = (t, msid, nom, min) => ({ compte: 'crimsonnnnfeina', listened_at: Math.floor(t / 1000), recording_msid: msid,
+      track_metadata: { artist_name: 'Banc Wagner', track_name: nom, release_name: 'Banc Parsifal (Live)', additional_info: { duration_ms: min * m } } });
+    // l'acte 2 sona amb la part 1 viva: el nom de la pista mana
+    lb.escoltes.push(pista(t, 'msid-banc-pa1', 'Banc Parsifal, WWV 111 / Act 2: Vorspiel', 10), pista(t + 10 * m, 'msid-banc-pa2', 'Zweiter Aufzug: Klingsor', 20));
+    await obreSafata();
+    await esperaALaPagina(pagina, async () => { const A = await import('./js/arxiu.js?v=21');
+      return A.estat.db.exec("SELECT COUNT(*) FROM scrobble WHERE recording_msid LIKE 'msid-banc-pa%' AND escolta_id IS NOT NULL")[0].values[0][0] === 2; }, null, { msg: 'les dues pistes de Banc Parsifal no tenen escolta' });
+    await pagina.waitForTimeout(1500); await esperaDesat();
+    const partDe = msid => consulta(`SELECT e.part_id FROM scrobble s JOIN escolta e ON e.id = s.escolta_id WHERE s.recording_msid = '${msid}'`)[0]?.part_id;
+    igual(partDe('msid-banc-pa1'), 952, 'Escolta.part_id de «Act 2» (la part 2, no la viva)');
+    igual(partDe('msid-banc-pa2'), 952, 'Escolta.part_id de «Zweiter Aufzug» (la part 2)');
+    const r = await pagina.evaluate(async () => {
+      const A = await import('./js/arxiu.js?v=21'), E = await import('./js/escoltes.js?v=15');
+      return A.canvia(db => { db.run("UPDATE escolta SET part_id = 951 WHERE id IN (SELECT escolta_id FROM scrobble WHERE recording_msid LIKE 'msid-banc-pa%')"); E.recalcula(db); });
+    });
+    cal(r.desat, 'no s\'ha desat el recàlcul: ' + r.motiu);
+    igual(partDe('msid-banc-pa1'), 952, 'Escolta.part_id de «Act 2» després de tornar a calcular');
+    await pagina.click('[data-tornasafata]').catch(() => {});
+  } },
+  { nom: 'actes (ACT-777): el disc nou d\'una òpera proposa una part per acte amb la seva durada, segons MusicBrainz, i en desar-lo neixen les parts', sintetic: true, async fes({ pagina, lb, consulta, esperaDesat, obreSafata, fonts }) {
+    fonts.actiu = true;
+    const tr = (title, min) => ({ title, length: min * 60e3 });
+    fonts.mb.releases['mb-banc-parsifal'] = { title: 'Banc Parsifal Nou', media: [
+      { tracks: [tr('Act 1: Vorspiel', 50), tr('Act 1: Titurel, der fromme Held', 55)] },
+      { tracks: [tr('Act 2: Vorspiel', 30), tr('Act 2: Komm! Holder Knabe!', 35)] },
+      { tracks: [tr('Act 3: Vorspiel', 40), tr('Act 3: Karfreitagszauber', 38)] }] };
+    const t = Date.now() - 16 * 3600e3, m = 60e3, noms = ['Act 1: Vorspiel', 'Act 1: Titurel, der fromme Held', 'Act 2: Vorspiel', 'Act 2: Komm! Holder Knabe!', 'Act 3: Vorspiel', 'Act 3: Karfreitagszauber'];
+    noms.forEach((nom, i) => lb.escoltes.push({ compte: 'crimsonnnnfeina', listened_at: Math.floor((t + i * 3 * m) / 1000), recording_msid: 'msid-banc-pn' + i,
+      track_metadata: { artist_name: 'Banc Wagner Nou', track_name: nom, release_name: 'Banc Parsifal Nou', additional_info: { duration_ms: 3 * m },
+        mbid_mapping: { release_mbid: 'mb-banc-parsifal' } } }));
+    await obreSafata();
+    const sel = '[data-nou="bancparsifalnou"]';
+    await pagina.waitForSelector(sel + ' [data-sfparts]', { timeout: 15000 }).catch(() => {});
+    const text = await pagina.locator(sel).innerText().catch(() => '');
+    cal(/3 parts/.test(text) && /105/.test(text) && /65/.test(text) && /78/.test(text), 'la safata havia de proposar 3 parts (105′, 65′, 78′): ' + text.slice(0, 300));
+    await pagina.click(sel + ' [data-sfnou$="|arxiu"]');
+    await esperaDesat();
+    const p = consulta(`SELECT p.numero, p.nom, p.durada FROM part p JOIN edicio e ON e.id = p.edicio_id JOIN album a ON a.id = e.album_id WHERE a.titol = 'Banc Parsifal Nou' ORDER BY p.numero`);
+    igual(JSON.stringify(p), JSON.stringify([{ numero: 1, nom: 'Acte 1', durada: 105 }, { numero: 2, nom: 'Acte 2', durada: 65 }, { numero: 3, nom: 'Acte 3', durada: 78 }]), 'Part.Numero, Part.Nom i Part.Durada de la caixa nova');
+    igual(consulta(`SELECT e.durada_total FROM edicio e JOIN album a ON a.id = e.album_id WHERE a.titol = 'Banc Parsifal Nou'`)[0]?.durada_total, 248, 'Edició.Durada_total de la caixa nova');
+  } },
   { bloc: 'el que no ha de passar mai', guarda: true },
   { nom: 'cap petició no surt a internet', async fes({ fugides }) {
     const fora = fugides.filter(h => !/musicbrainz|coverartarchive|wikipedia|wikimedia|wikidata|bandcamp/.test(h));

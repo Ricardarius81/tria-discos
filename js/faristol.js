@@ -11,6 +11,7 @@
 import * as A from './arxiu.js?v=21';
 import * as D from './dades.js?v=25';
 import * as E from './escoltes.js?v=15';
+import { partsPerActe } from './actes.js?v=1';
 import * as LB from './listenbrainz.js?v=2';
 import * as I from './imatges.js?v=5';
 import * as T from './tags.js?v=1';
@@ -697,6 +698,8 @@ function blocNou(x) {
     <label class="camp"><span>Durada en minuts <small class="gris">· ${x.proposta.font}</small></span>
       <input data-sfdur="${esc(x.clau)}" type="number" inputmode="numeric" min="1" value="${x.proposta.minuts}"></label>
     ${x.proposta.font === 'el que ha sonat' ? `<p class="sf-pre">Només és la del disc si l'has sentit sencer.</p>` : ''}
+    ${x.proposta.parts ? `<p class="sf-q" data-sfparts="${esc(x.clau)}">Una caixa de ${x.proposta.parts.length} parts, una per acte <small class="gris">· segons MusicBrainz</small></p>
+      <p class="sf-pre">${x.proposta.parts.map(p => `${esc(p.nom)} · ${p.durada}′`).join('<br>')}</p>` : ''}
     <p class="sf-q">Per on l'escoltes?</p>
     <div class="sf-chips">${Object.keys(CANALS).map(k => `<button class="${canal === k ? 'triat' : ''}" data-sfcanal="${esc(x.clau)}|${esc(k)}">${esc(CANALS[k].nom)}</button>`).join('')}
       ${altreCanal(estat.altreCanalDe === 'nou:' + x.clau, 'nou', x.clau)}</div>
@@ -850,7 +853,8 @@ async function consultaMB(nous) {
         if (!r.ok) { mbCache.set(x.mbid, null); continue; }
         const j = await r.json(), pistes = (j.media || []).flatMap(m => m.tracks || []);
         const ms_ = pistes.reduce((a, t) => a + (t.length || 0), 0);
-        mbCache.set(x.mbid, { titol: j.title, pistes: pistes.length, minuts: pistes.every(t => t.length) ? Math.round(ms_ / 60000) : null });
+        // ACT-777: si totes les pistes diuen el seu acte, les parts per acte amb la seva durada (actes.js).
+        mbCache.set(x.mbid, { titol: j.title, pistes: pistes.length, minuts: pistes.every(t => t.length) ? Math.round(ms_ / 60000) : null, actes: partsPerActe(pistes) });
       } catch { mbCache.set(x.mbid, null); }
       await new Promise(r => setTimeout(r, 1100));          // MusicBrainz demana una consulta per segon
     }
@@ -1960,7 +1964,7 @@ document.addEventListener('click', e => {
     const min = parseInt(document.querySelector(`[data-sfdur="${CSS.escape(k)}"]`)?.value, 10);
     if (!min || min < 1) { avisa('Cap disc entra sense durada.'); return; }
     const a = D.trobaArtista(db(), x.artista), canal = estat.nouCanalDe?.[k] || D.canalPerDefecte(db(), a?.id), pref = estat.nouPrefDe?.[k];
-    fes(y => { const r = E.creaDiscNou({ album: x.album || x.pista, artista: x.artista, recording_msid: x.recording_msid, minuts: min, canal, rotacio: on === 'rotacio' })(y);
+    fes(y => { const r = E.creaDiscNou({ album: x.album || x.pista, artista: x.artista, recording_msid: x.recording_msid, minuts: min, canal, rotacio: on === 'rotacio', parts: x.proposta.parts })(y);
                if (pref) D.afegeixPreferentId(r.artista_id)(y); return r; },
       `${x.album || x.pista} entra a l'arxiu${on === 'rotacio' ? ' i a la rotació' : ''}${pref ? ', i l\'artista a preferents' : ''}`); return; }
   // les preguntes 7, 8 i 9
