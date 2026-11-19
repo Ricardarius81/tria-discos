@@ -2072,7 +2072,9 @@ export const COMPROVACIONS = [
     await recarrega();
     cal(await pagina.locator('#full.obert [data-escoltesfitxa]').count() === 1, 'no torna la fitxa');
     cal(!(await pagina.locator('#full').innerText()).includes('Instrumental'), 'ha tornat la fulla dels tags, i no havia de tornar');
-    // 4. Obrir l'app de nou (una sessió nova, com amb l'app tancada del tot): Discos en Rotació
+    // 4. Obrir l'app de nou (una sessió nova, com amb l'app tancada del tot): Discos en Rotació. Des de la ACT-770, només si
+    //    han passat més de 15 minuts des de l'últim ús (tria-pantalla.t); el cas de menys de 15 el prova l'obra 2.
+    await pagina.evaluate(() => { for (const m of [localStorage, sessionStorage]) { const p = JSON.parse(m.getItem('tria-pantalla') || 'null'); if (p) { p.t = Date.now() - 16 * 60e3; m.setItem('tria-pantalla', JSON.stringify(p)); } } });
     const nova = await pagina.context().newPage();
     try {
       await nova.goto(ORIGEN + '/index.html'); await nova.waitForSelector('#peu:not([hidden])', { timeout: 10000 }); await nova.waitForTimeout(400);
@@ -2288,6 +2290,123 @@ export const COMPROVACIONS = [
         { name: 'la-meva-discoteca · còpia de seguretat 2026-01-02.xlsx', modifiedTime: vell }, { name: 'la-meva-discoteca · còpia de seguretat 2026-01-03.sqlite', modifiedTime: fresc }], ara).map(f => f.name.slice(-15)); });
     igual(JSON.stringify(m), '["2026-01-02.xlsx"]', 'meitats (una de fa menys de 10 minuts es deixa: la pot estar fent un altre dispositiu)');
     await pagina.evaluate(() => sessionStorage.removeItem('tria-ritme-real')); await reobre(pagina);
+  } },
+
+  // ───────── obra 2 (19-11): la navegació, L'Aparador, les icones fixes i l'OPPO (ACT-769, ACT-770, ACT-705, ACT-706, ACT-691, ACT-692) ─────────
+  { bloc: 'obra 2: navegació, L\'Aparador, icones fixes i OPPO (ACT-769, ACT-770, ACT-705, ACT-706, ACT-691, ACT-692)' },
+  { nom: 'icones de dalt (ACT-769): la safata i L\'Afinació es veuen i es poden tocar a totes les pestanyes i subpantalles, també avall; la fitxa a pantalla completa les tapa', sintetic: true, async fes({ pagina, obreSafata }) {
+    const visibles = async on => {
+      await pagina.evaluate(() => window.scrollTo(0, 600)); await pagina.waitForTimeout(120);
+      for (const id of ['btSafata', 'btAfinacio']) {
+        const ok = await pagina.evaluate(id => { const b = document.getElementById(id); if (!b) return false; const r = b.getBoundingClientRect();
+          if (!r.width) return false; const e = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return !!e && b.contains(e); }, id);
+        cal(ok, `${id} no es veu o no es pot tocar a ${on}`);
+      }
+      await pagina.evaluate(() => window.scrollTo(0, 0));
+    };
+    await pagina.click('[data-anar="faristol"]');
+    for (const s of ['rot', 'pref', 'hist']) { await pagina.click(`[data-sub="${s}"]`); await pagina.waitForTimeout(150); await visibles('Faristol › ' + s); }
+    await pagina.click('[data-sub="pref"]'); await pagina.click('[data-asub="esc"]'); await visibles('L\'Aparador › Discos per escoltar'); await pagina.click('[data-asub="pref"]');
+    await pagina.locator('#files [data-artista]').first().click(); await pagina.waitForTimeout(200); await visibles('la pantalla de l\'artista');
+    await pagina.click('[data-anar="prestatgeria"]');
+    for (const s of ['tots', 'agr', 'afi']) { await pagina.click(`[data-psub="${s}"]`); await pagina.waitForTimeout(150); await visibles('Prestatgeria › ' + s); }
+    await pagina.click('[data-anar="gramola"]'); await visibles('la Gramola');
+    await obreSafata(); await visibles('la safata'); await pagina.click('[data-tornasafata]');
+    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="tots"]'); await pagina.locator('#arxiu [data-fitxa]').first().click(); await pagina.waitForTimeout(250);
+    const tapada = await pagina.evaluate(() => { const b = document.getElementById('btAfinacio').getBoundingClientRect(); const e = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return !document.getElementById('btAfinacio').contains(e); });
+    cal(tapada, 'la fitxa a pantalla completa no tapa les icones');
+    await pagina.click('[data-tornafull]');
+  } },
+  { nom: 'punt de L\'Afinació (ACT-769, opció A): taronja i sense número, encès quan llistaAfinacio no és buida; la safata continua amb el seu número', sintetic: true, async fes({ pagina }) {
+    await pagina.waitForTimeout(400);
+    const n = await pagina.evaluate(async () => { const F = await import('./js/afinacio.js?v=4'); const A = await import('./js/arxiu.js?v=21');
+      const l = F.llistaAfinacio(A.estat.db); return { n: l.marcats.length + l.resta.length }; });
+    const punt = await pagina.evaluate(() => { const p = document.getElementById('afiPunt'); return p && { vist: !p.hidden && p.getBoundingClientRect().width > 0, text: p.textContent, color: getComputedStyle(p).backgroundColor }; });
+    cal(punt, 'no hi ha punt');
+    igual(punt.vist, n.n > 0, `el punt amb ${n.n} discos a L'Afinació`);
+    igual(punt.text, '', 'el punt porta text');
+    igual(punt.color, 'rgb(255, 107, 61)', 'el color del punt');
+    cal(/^\d+$/.test((await pagina.locator('#safataNum').textContent()).trim()), 'la safata ha perdut el número');
+  } },
+  { nom: 'icona de L\'Afinació (ACT-769): obre La Prestatgeria a L\'Afinació, també des de la safata', sintetic: true, async fes({ pagina, obreSafata }) {
+    await pagina.click('[data-anar="faristol"]'); await pagina.click('[data-sub="rot"]');
+    await pagina.click('#btAfinacio'); await pagina.waitForTimeout(200);
+    igual(await pagina.locator('#s-prestatgeria.activa #q-afi.activa').count(), 1, 'des del Faristol');
+    await pagina.click('[data-psub="tots"]'); await obreSafata();
+    await pagina.click('#btAfinacio'); await pagina.waitForTimeout(200);
+    igual(await pagina.locator('#s-prestatgeria.activa #q-afi.activa').count(), 1, 'des de la safata');
+  } },
+  { nom: 'L\'Aparador (ACT-705): la pestanya del mig es diu L\'Aparador i té Artistes Preferents i Discos per escoltar', sintetic: true, async fes({ pagina }) {
+    await pagina.click('[data-anar="faristol"]'); await pagina.click('[data-sub="pref"]'); await pagina.waitForTimeout(150);
+    igual((await pagina.locator('#tab-pref').innerText()).replace(/\s+/g, ' ').trim(), 'L\'Aparador', 'el nom de la pestanya');
+    await pagina.click('[data-asub="pref"]');
+    cal(await pagina.locator('#a-pref.activa #files [data-artista]').count() > 0, 'Artistes Preferents no ensenya els preferents');
+    await pagina.click('[data-asub="esc"]'); await pagina.waitForTimeout(100);
+    igual(await pagina.locator('#a-esc.activa').count(), 1, 'Discos per escoltar no s\'obre');
+    cal(!(await pagina.locator('#files').isVisible()), 'a Discos per escoltar es veuen els preferents');
+  } },
+  { nom: 'L\'Aparador recorda la darrera subpantalla (ACT-706, tria-aparador), també després de recarregar', sintetic: true, async fes({ pagina }) {
+    await pagina.click('[data-anar="faristol"]'); await pagina.click('[data-sub="pref"]'); await pagina.click('[data-asub="esc"]');
+    await pagina.click('[data-sub="rot"]'); await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-anar="faristol"]'); await pagina.click('[data-sub="pref"]'); await pagina.waitForTimeout(150);
+    igual(await pagina.locator('#a-esc.activa').count(), 1, 'en tornar a L\'Aparador');
+    igual(await pagina.evaluate(() => localStorage.getItem('tria-aparador')), 'esc', 'tria-aparador');
+    await reobre(pagina); await pagina.click('[data-sub="pref"]'); await pagina.waitForTimeout(150);
+    igual(await pagina.locator('#a-esc.activa').count(), 1, 'després de recarregar');
+    await pagina.click('[data-asub="pref"]');
+    igual(await pagina.evaluate(() => localStorage.getItem('tria-aparador')), 'pref', 'tria-aparador després de triar Artistes Preferents');
+  } },
+  { nom: 'tornar de la fitxa d\'un preferent (ACT-691): torna a la mateixa alçada, no a dalt', sintetic: true, async fes({ pagina }) {
+    const mida = pagina.viewportSize(); await pagina.setViewportSize({ width: mida.width, height: 300 });
+    try {
+      await pagina.click('[data-anar="faristol"]'); await pagina.click('[data-sub="pref"]'); await pagina.click('[data-asub="pref"]'); await pagina.waitForTimeout(150);
+      const art = pagina.locator('#files [data-artista]').last(); await art.scrollIntoViewIfNeeded(); await pagina.waitForTimeout(150);
+      const y = await pagina.evaluate(() => window.scrollY); cal(y > 30, `la llista no baixa prou per provar-ho (y = ${y})`);
+      await art.click(); await pagina.waitForTimeout(250);
+      igual(await pagina.locator('#s-artista.activa').count(), 1, 'no s\'obre la pantalla de l\'artista');
+      await pagina.locator('#s-artista [data-tornar]').first().click(); await pagina.waitForTimeout(300);
+      const y2 = await pagina.evaluate(() => window.scrollY);
+      cal(Math.abs(y2 - y) <= 5, `l'alçada: era ${y}, és ${y2}`);
+    } finally { await pagina.setViewportSize(mida); }
+  } },
+  { nom: 'tornar de la safata (ACT-691): la pantalla de sota, a la mateixa alçada', sintetic: true, async fes({ pagina, obreSafata }) {
+    const mida = pagina.viewportSize(); await pagina.setViewportSize({ width: mida.width, height: 300 });
+    try {
+      await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="tots"]'); await pagina.waitForTimeout(150);
+      await pagina.locator('#arxiu [data-fitxa]').last().scrollIntoViewIfNeeded(); await pagina.waitForTimeout(150);
+      const y = await pagina.evaluate(() => window.scrollY); cal(y > 30, `la llista no baixa prou per provar-ho (y = ${y})`);
+      await obreSafata(); await pagina.click('[data-tornasafata]'); await pagina.waitForTimeout(300);
+      const y2 = await pagina.evaluate(() => window.scrollY);
+      cal(Math.abs(y2 - y) <= 5, `l'alçada: era ${y}, és ${y2}`);
+    } finally { await pagina.setViewportSize(mida); }
+  } },
+  { nom: 'tornar d\'una fitxa a L\'Afinació (ACT-692 a): la llista es torna a pintar i queda a la mateixa alçada', sintetic: true, async fes({ pagina }) {
+    const mida = pagina.viewportSize(); await pagina.setViewportSize({ width: mida.width, height: 300 });
+    try {
+      await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="afi"]'); await pagina.waitForTimeout(150);
+      const files = pagina.locator('#afinacio [data-fitxa]'); const n = await files.count(); cal(n > 1, 'L\'Afinació té menys de dues files');
+      await files.nth(n - 1).scrollIntoViewIfNeeded(); await pagina.waitForTimeout(150);
+      const y = await pagina.evaluate(() => window.scrollY);
+      await files.nth(n - 1).click(); await pagina.waitForTimeout(250); await pagina.click('[data-tornafull]');
+      await pagina.evaluate(() => document.querySelector('[data-psub="afi"]').click()); await pagina.waitForTimeout(250);
+      const y2 = await pagina.evaluate(() => window.scrollY);
+      cal(Math.abs(y2 - y) <= 5, `l'alçada: era ${y}, és ${y2}`);
+    } finally { await pagina.setViewportSize(mida); }
+  } },
+  { nom: 'obrir l\'app abans de 15 minuts (ACT-770): torna on era (tria-pantalla a localStorage, amb t); passats 15 minuts, a Discos en Rotació', sintetic: true, async fes({ pagina, ORIGEN }) {
+    await pagina.click('[data-anar="faristol"]'); await pagina.click('[data-sub="hist"]'); await pagina.waitForTimeout(200);
+    await pagina.evaluate(() => { sessionStorage.clear(); document.dispatchEvent(new Event('visibilitychange')); dispatchEvent(new Event('pagehide')); });
+    const p = await pagina.evaluate(() => JSON.parse(localStorage.getItem('tria-pantalla') || 'null'));
+    igual(JSON.stringify([p?.sup, p?.sub]), '["faristol","hist"]', 'tria-pantalla a localStorage');
+    const obre = async () => { const nova = await pagina.context().newPage();
+      try { await nova.goto(ORIGEN + '/index.html'); await nova.waitForSelector('#peu:not([hidden])', { timeout: 10000 }); await nova.waitForTimeout(400);
+            return { hist: await nova.locator('#s-faristol.activa #p-hist.activa').count(), rot: await nova.locator('#s-faristol.activa #p-rot.activa').count() }; }
+      finally { await nova.close(); } };
+    const a = await obre();
+    igual(a.hist, 1, 'abans de 15 minuts, a l\'Historial');
+    await pagina.evaluate(() => { const p = JSON.parse(localStorage.getItem('tria-pantalla')); p.t = Date.now() - 16 * 60e3; localStorage.setItem('tria-pantalla', JSON.stringify(p)); });
+    const b = await obre();
+    igual(b.rot, 1, 'passats 15 minuts, a Discos en Rotació');
+    await pagina.click('[data-sub="rot"]');
   } },
 
   // ───────── el que no ha de passar mai ─────────

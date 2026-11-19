@@ -18,6 +18,7 @@
     <span class="desat" id="desat">sense desar</span>
     <button class="lloc" id="btLloc" aria-label="On ets"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 21s-6.5-6.1-6.5-11.2A6.5 6.5 0 0 1 18.5 9.8C18.5 14.9 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.3"/></svg><span id="llocTxt"></span></button>
     <button class="icona-btn ic-safata" id="btSafata" aria-label="La safata"><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><path d="M3 13.5 5.4 5.6A1.5 1.5 0 0 1 6.8 4.5h10.4a1.5 1.5 0 0 1 1.4 1.1L21 13.5V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18z"/><path d="M3 13.5h5l1.3 2.4h5.4l1.3-2.4h5"/></svg><span class="pastilla zero" id="safataNum">0</span></button>
+    <button class="icona-btn ic-afi" id="btAfinacio" aria-label="L'Afinació" title="L'Afinació"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 3v7a3.5 3.5 0 0 0 7 0V3"/><path d="M12 13.5V21"/></svg><span class="punt" id="afiPunt" hidden></span></button>
     <button class="icona-btn" id="btAjustos" title="La Cabina" aria-label="La Cabina">≡<span class="alerta" aria-hidden="true">!</span></button>
   </header>
 
@@ -64,7 +65,7 @@
         <h1>El Faristol</h1>
         <div class="subpestanyes" role="tablist">
           <button id="tab-rot" role="tab" aria-selected="true" data-sub="rot">Discos<br>en Rotació</button>
-          <button id="tab-pref" role="tab" aria-selected="false" data-sub="pref">Artistes<br>Preferents</button>
+          <button id="tab-pref" role="tab" aria-selected="false" data-sub="pref">L'Aparador</button>
           <button id="tab-hist" role="tab" aria-selected="false" data-sub="hist">Historial</button>
         </div>
       </div>
@@ -73,9 +74,18 @@
         <div class="reixa" id="reixa"></div>
       </div>
       <div class="panell" id="p-pref">
-        <button class="afegeix" id="btAfegeixArtista">＋ Afegeix un artista</button>
-        <div class="eina"><button id="btOrdena" aria-pressed="false">Ordena la llista</button></div>
-        <div class="files" id="files"></div>
+        <div class="apar-tabs" role="tablist">
+          <button id="atab-pref" role="tab" aria-selected="true" data-asub="pref">Artistes Preferents</button>
+          <button id="atab-esc" role="tab" aria-selected="false" data-asub="esc">Discos per escoltar</button>
+        </div>
+        <div class="apanell activa" id="a-pref">
+          <button class="afegeix" id="btAfegeixArtista">＋ Afegeix un artista</button>
+          <div class="eina"><button id="btOrdena" aria-pressed="false">Ordena la llista</button></div>
+          <div class="files" id="files"></div>
+        </div>
+        <div class="apanell" id="a-esc">
+          <div class="marcador"><p class="cita">Encara no construïda.</p><p>Les Piles (Gimnàs, Avió/Tren/Bus, Cotxe) arriben amb l'obra 3.</p></div>
+        </div>
       </div>
       <div class="panell" id="p-hist">
         <input class="cerca" id="cerca" type="search" placeholder="Cerca a l'historial" autocomplete="off">
@@ -112,7 +122,7 @@
   setTimeout(() => { const m = document.getElementById('entradaTxt'); if (m && m.textContent === 'Obrint…') { m.className = 'mal'; m.textContent = 'La màquina no ha arrencat. Tanca la pestanya, espera un minut i torna-la a obrir.'; } }, 10000);
 </script>
 <script src="vendor/sqljs/sql-wasm.js?v=1"></script>
-<script type="module" src="js/faristol.js?v=31"></script>
+<script type="module" src="js/faristol.js?v=32"></script>
 <script>
   // El codi de l'app es guarda al mòbil perquè s'obri sense connexió (ACT-581). Si el navegador no en sap, tot va com abans.
   if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

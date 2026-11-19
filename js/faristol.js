@@ -19,6 +19,7 @@ import * as X from './excel.js?v=5';
 import * as L from './llistes.js?v=1';
 import * as V from './discografia.js?v=1';
 import * as F from './afinacio.js?v=4';
+import * as N from './navegacio.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -144,7 +145,7 @@ function recalculaEdicio(y, id) { const d = E.desDeEdicions(y, [id]); return d ?
 function pinta() {
   if (!A.estat.db) return;
   sincroCanals();
-  pintaReixa(); pintaFiles(); pintaHistorial(); pintaSafata(); alertaCopia();
+  pintaReixa(); pintaFiles(); pintaHistorial(); pintaSafata(); alertaCopia(); programaPunt();
   if (estat.superficie === 'prestatgeria') pintaPrestatgeria();
   if (estat.superficie === 'artista' && estat.artista) pintaArtista(estat.artista);
   I.omple();
@@ -1648,6 +1649,22 @@ function detectaLloc(manual) {
 }
 
 // ───────── navegació ─────────
+// El punt taronja de L'Afinació (ACT-769, opció A): sense número, encès sempre que la llista no és buida. Es calcula una mica
+// després de pintar, una sola vegada per tanda de canvis, perquè la llista sencera no frena el toc.
+let puntEnEspera = null;
+function programaPunt() {
+  clearTimeout(puntEnEspera);
+  puntEnEspera = setTimeout(() => { const p = $('#afiPunt'); if (!p || !A.estat.db) return;
+    try { p.hidden = !N.hiHaPerAfinar(db()); } catch { p.hidden = true; } }, 120);
+}
+// L'Aparador (ACT-705): la pestanya del mig del Faristol, amb Artistes Preferents i Discos per escoltar. Obre la darrera
+// subpantalla usada (ACT-706).
+function aparador(v) {
+  if (!N.SUBS_APARADOR.includes(v)) v = 'pref';
+  if (estat.asub && estat.asub !== v) window.scrollTo(0, 0);
+  estat.asub = v; N.apuntaAparador(v);
+  N.SUBS_APARADOR.forEach(k => { $('#atab-' + k)?.setAttribute('aria-selected', v === k); $('#a-' + k)?.classList.toggle('activa', v === k); });
+}
 function vesA(sup) {
   estat.superficie = sup;
   document.querySelectorAll('.superficie').forEach(s => s.classList.toggle('activa', s.id === 's-' + sup));
@@ -1702,18 +1719,21 @@ document.addEventListener('click', e => {
   if (t.id === 'btLloc') { fullLloc(); return; }
   if (d.lloc) { estat.gps = 'Triat a mà.'; posaLloc(d.lloc); tancaFull(); return; }
   if (d.gps) { estat.gps = 'Mirant…'; detectaLloc(true); return; }
-  if (t.id === 'btSafata') { if (!A.estat.db) return; if (estat.superficie !== 'safata') estat.abansSafata = estat.superficie; tancaFull(); vesA('safata'); pintaSafata(); llegeixEscoltes(); return; }
+  if (t.id === 'btAfinacio') { if (!A.estat.db) return; tancaFull(); vesA('prestatgeria'); if (estat.psub === 'afi') pintaPrestatgeria(); else psub('afi'); return; }
+  if (d.asub) { aparador(d.asub); return; }
+  if (t.id === 'btSafata') { if (!A.estat.db) return; if (estat.superficie !== 'safata') { estat.abansSafata = estat.superficie; N.apuntaAlcada('safata', { sup: estat.superficie }); } tancaFull(); vesA('safata'); pintaSafata(); llegeixEscoltes(); return; }
   if (d.tornasafata) { vesA(estat.abansSafata || 'faristol');
     if (estat.sotaSensePintar) {   // tornar a la pantalla de sota d'una safata recarregada (ACT-748): encara no s'ha pintat
       if (estat.superficie === 'prestatgeria') pintaPrestatgeria();
       if (estat.superficie === 'artista' && estat.artista) pintaArtista(estat.artista);
       I.omple(); delete estat.sotaSensePintar;
     }
+    N.tornaAlcada('safata', { sup: estat.superficie });   // ACT-691: a la mateixa alçada
     return; }
   if (d.anar) { vesA(d.anar); if (d.anar === 'prestatgeria') pintaPrestatgeria(); return; }
   if (d.psub) { if ($('#full').classList.contains('obert')) tancaFull(); psub(d.psub); return; }
   if (d.sub) { if ($('#full').classList.contains('obert')) tancaFull(); sub(d.sub); return; }
-  if (d.tornar) { vesA('faristol'); sub('pref'); return; }
+  if (d.tornar) { vesA('faristol'); sub('pref'); aparador('pref'); N.tornaAlcada('artista', { sup: 'faristol', sub: 'pref' }); return; }   // ACT-691
 
   // Discos en Rotació
   if (t.id === 'btAfegeixDisc') { fullAfegeixDisc(); return; }
@@ -2016,7 +2036,7 @@ document.addEventListener('click', e => {
   }
   if (d.mou) { const [i, dir] = d.mou.split(':').map(Number), j = i + dir, o = estat.ordreTmp;
     if (!o || j < 0 || j >= o.length) return; const [a] = o.splice(i, 1); o.splice(j, 0, a); pintaFiles(); return; }
-  if (d.artista) { estat.artista = +d.artista; pintaArtista(estat.artista); vesA('artista'); return; }
+  if (d.artista) { N.apuntaAlcada('artista', { sup: estat.superficie, sub: estat.sub }); estat.artista = +d.artista; pintaArtista(estat.artista); vesA('artista'); return; }
   if (d.vei) { const [pid, dir] = d.vei.split(':'); fullVei(+pid, dir); return; }
   if (d.veides) { const [pid, dir, i] = d.veides.split(':'); fullVei(+pid, dir, +i); return; }
   if (d.discografia) { fullDiscografia(+d.discografia); return; }
@@ -2067,19 +2087,20 @@ const PANTALLA = 'tria-pantalla';
 function recordaPantalla() {
   if (estat.superficie === 'entrada') return;
   const f = $('#full'), fitxa = f.classList.contains('obert') ? +f.dataset.cadena || null : null;
-  try { sessionStorage.setItem(PANTALLA, JSON.stringify({ sup: estat.superficie, abansSafata: estat.abansSafata || null, sub: estat.sub, psub: estat.psub || 'tots', artista: estat.artista,
-                                                          histMax: estat.histMax || null, y: Math.round(window.scrollY), fitxa, t: Date.now() })); } catch {}
+  N.desaPantalla({ sup: estat.superficie, abansSafata: estat.abansSafata || null, sub: estat.sub, psub: estat.psub || 'tots', artista: estat.artista,
+                   asub: estat.asub || 'pref', histMax: estat.histMax || null, y: Math.round(window.scrollY), fitxa, t: Date.now() });
 }
 addEventListener('pagehide', recordaPantalla);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') recordaPantalla(); });
 // Si el navegador no ho diu (a vegades la llista de navegacions és buida), es dona per recàrrega un estat desat fa menys de
 // dos minuts: lliscar avall torna en segons, i amb l'app tancada la memòria de la sessió ja no hi és.
 const tipusNavegacio = (() => { try { return performance.getEntriesByType?.('navigation')?.[0]?.type || null; } catch { return null; } })();
-const esRecarrega = p => tipusNavegacio ? tipusNavegacio === 'reload' : Date.now() - (p.t || 0) < 120e3;
+// ACT-770 (canvia el punt 3): també obrir l'app abans de 15 minuts des de l'últim ús (t) torna on era.
+const esRecarrega = p => tipusNavegacio === 'reload' || N.recent(p);
 let pantallaTornada = false;
 function tornaPantalla() {
   if (pantallaTornada) return false; pantallaTornada = true;
-  let p = null; try { p = JSON.parse(sessionStorage.getItem(PANTALLA) || 'null'); } catch {}
+  const p = N.llegeixPantalla();
   // La safata també (ACT-748, 14-11: «al recargar en la safata vuelve a Discos en rotació»), amb la pantalla d'on s'havia
   // obert a sota, perquè «← Tornar» hi torni. Camp: el mateix estat de pantalla a sessionStorage, amb abansSafata.
   const LLOCS = ['faristol', 'prestatgeria', 'gramola', 'artista'];
@@ -2091,6 +2112,7 @@ function tornaPantalla() {
   if (p.sup === 'safata') { estat.abansSafata = sota; estat.sotaSensePintar = sota; }   // pinta() només pinta la de dalt
   vesA(p.sup);
   sub(SUBS.includes(p.sub) ? p.sub : 'rot');
+  if (p.asub) aparador(p.asub);
   if (sota === 'prestatgeria') {   // com psub(), sense pintar: mostraMaquina pinta tot just després
     estat.psub = PSUBS.includes(p.psub) ? p.psub : 'tots';
     PSUBS.forEach(k => { $('#ptab-' + k).setAttribute('aria-selected', estat.psub === k); $('#q-' + k).classList.toggle('activa', estat.psub === k); });
@@ -2228,6 +2250,7 @@ A.vigilaPendents(r => {
   const fallava = estat.desatFallat; marcaDesat(r); if (r.desat && fallava) avisa('Desat al Drive.');
 });
 lliscar($('#s-faristol'));
+aparador(N.darrerAparador());
 lliscar($('#s-prestatgeria'), PSUBS, () => estat.psub || 'tots', psub);
 $('#cercaArxiu').addEventListener('input', () => pintaArxiu());
 document.addEventListener('input', e => { if (e.target.id === 'inLlista') estat.nomLlistaTxt = e.target.value; });

@@ -775,3 +775,19 @@ body .fitxa-portada .portada-espera .bt{padding:6px 0; color:var(--accent)}
 /* La safata dins la franja de color, amb el mateix títol que les altres seccions (ACT-752); «← Tornar», en la tinta */
 body[data-estil="ricard"] .cap-safata{padding-bottom:2px}
 body[data-estil="ricard"] .cap-safata .enrere{background:none; border:0; color:var(--tinta); padding:0 0 10px; margin:0; font-weight:600; box-shadow:none}
+
+/* ---------- obra 2 (ACT-769, ACT-705): l'icona de L'Afinació amb el seu punt, i les dues subpantalles de L'Aparador ---------- */
+.ic-afi{position:relative; display:grid; place-items:center; width:34px; height:32px}
+.ic-afi .punt{position:absolute; top:-4px; right:-4px; width:11px; height:11px; border-radius:50%; background:var(--taronja,#FF6B3D);
+  box-shadow:0 0 0 2px var(--c1,var(--fons))}
+.ic-afi .punt[hidden]{display:none}
+.apar-tabs{display:flex; gap:8px; margin:12px 0 4px}
+.apar-tabs button{flex:1; appearance:none; background:none; border:1px solid var(--vora-2); border-radius:18px; padding:7px 10px;
+  font:600 12.5px var(--sans); color:var(--os-2); cursor:pointer}
+.apar-tabs button[aria-selected="true"]{background:var(--os); border-color:var(--os); color:var(--fons)}
+body[data-estil="ricard"] .apar-tabs button[aria-selected="true"]{background:var(--tinta,#111); border-color:var(--tinta,#111); color:var(--c1,#fff)}
+.apanell{display:none}
+.apanell.activa{display:block}
+/* ACT-769: la capçalera fixa de debò. Amb overflow:hidden, #telefon era el contenidor de desplaçament i la capçalera
+   «sticky» marxava amb la pàgina; clip retalla igual (les animacions de costat) sense fer-ne un contenidor. */
+#telefon{overflow:clip}
