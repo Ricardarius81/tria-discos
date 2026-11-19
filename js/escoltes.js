@@ -1099,11 +1099,12 @@ export const creaDiscNou = ({ album, artista, recording_msid, minuts, canal, rot
 // La moneda (v1.18): escoltes d'Efectes plens que arriben al llindar, dins d'una finestra de sis mesos i des de la Data de
 // referència de rotació. Només les de targetes contestades: una de pendent pot ser de dormir. Les de part no són de l'edició.
 const SIS_MESOS = 182 * 864e5, UN_MES = 30 * 864e5;
+export const ESCOLTES_ENTRAR = 5;   // ACT-764: l'oferta d'entrar, de 3 a 5 escoltes (Ricard: 3 «és massa poc»)
 export function preguntesRotacio(db, ara = Date.now()) {
   const arr = arrencada(db); if (!arr) return [];
   const desDe = new Date(ara - SIS_MESOS).toISOString();
   // ACT-738: les edicions que poden tenir pregunta: les de la rotació (8 i 9) i les que tenen alguna escolta dins dels sis
-  // mesos (7, que en demana tres). Abans, totes. Mateix resultat.
+  // mesos (7, que en demana cinc des de la ACT-764). Abans, totes. Mateix resultat.
   const eds = files(db, `SELECT e.id, e.rotacio_actual, e.data_referencia_rotacio AS ref, a.titol, ar.nom_canonic AS art, e.durada_total, e.portada,
                                 (SELECT COUNT(*) FROM part p WHERE p.edicio_id = e.id) AS n_parts
                          FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id
@@ -1118,7 +1119,7 @@ export function preguntesRotacio(db, ara = Date.now()) {
   const out = [];
   for (const e of eds) {
     const meves = esc.filter(x => x.edicio_id === e.id && (!e.ref || x.data_hora > e.ref));
-    if (!e.rotacio_actual && meves.length >= 3) out.push({ q: 7, ...e });
+    if (!e.rotacio_actual && meves.length >= ESCOLTES_ENTRAR) out.push({ q: 7, ...e });
     else if (e.rotacio_actual && !e.n_parts && meves.length >= 5 && meves.some(x => x.contextos.some(c => FORT.has(c)))) out.push({ q: 8, ...e });
     else if (e.rotacio_actual) {
       const base = [darrera.get(e.id), arr].filter(Boolean).sort().pop();
@@ -1127,8 +1128,9 @@ export function preguntesRotacio(db, ara = Date.now()) {
   }
   return out;
 }
-// Les respostes. Només el «no» de la 7 reescriu la data; a la 8 i a la 9, qualsevol resposta (§8.10).
-export const respon7 = (id, si) => db => si ? (db.run('UPDATE edicio SET rotacio_actual = 1 WHERE id = ?', [id]), esborraProperSiEsAquest(db, id))
+// Les respostes. A la 7, el sí i el no reescriuen la data (ACT-764: entrar també, perquè «ja el dones per estudiat?» no
+// surti el mateix dia amb les mateixes cinc escoltes); a la 8 i a la 9, qualsevol resposta (§8.10).
+export const respon7 = (id, si) => db => si ? (db.run('UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ? WHERE id = ?', [new Date().toISOString(), id]), esborraProperSiEsAquest(db, id))
                                           : db.run('UPDATE edicio SET data_referencia_rotacio = ? WHERE id = ?', [new Date().toISOString(), id]);
 export const tocaReferencia = id => db => db.run('UPDATE edicio SET data_referencia_rotacio = ? WHERE id = ?', [new Date().toISOString(), id]);
 

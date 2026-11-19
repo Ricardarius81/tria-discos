@@ -2,6 +2,7 @@
 // { nom, fes(ctx), sintetic?: només amb l'arxiu sintètic }. Les marques { bloc: 'nom', prepara?(ctx), senseArrencada?, guarda? }
 // tallen la llista en blocs: cada bloc arrenca d'una còpia neta de l'arxiu sintètic (ACT-749, ACT-753; vegeu banc.mjs).
 // Una comprovació falla llançant un error amb una frase que digui què s'esperava i què hi ha.
+import { OBRA1 } from './obra1.mjs';
 const cal = (cond, msg) => { if (!cond) throw new Error(msg); };
 const igual = (a, b, msg) => cal(a === b, `${msg}: s'esperava ${JSON.stringify(b)} i hi ha ${JSON.stringify(a)}`);
 
@@ -2555,6 +2556,7 @@ export const COMPROVACIONS = [
     await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'); await A.canvia(db => db.run('DELETE FROM pila_entrada WHERE album_id = 1')); });
     await esperaDesat();
   } },
+  ...OBRA1,   // l'obra 1 (ACT-763 a ACT-768), en fitxer propi
 
   // ───────── el que no ha de passar mai ─────────
   { bloc: 'obra 4: Parsifal, les òperes per actes (ACT-777)' },

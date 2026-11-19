@@ -17,6 +17,7 @@ const FITXERS = [
   'js/afinacio.js',
   'js/actes.js',
   'js/piles.js',
+  'js/bandcamp.js',
   'js/arxiu.js',
   'js/copies.js',
   'js/dades.js',

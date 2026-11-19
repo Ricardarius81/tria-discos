@@ -44,7 +44,7 @@ export function rotacio(db) {
 export const fitxa = (db, id) => carrega(db, 'e.id = ?', [id])[0] || null;
 function carrega(db, on, params = []) {
   const eds = files(db, `
-    SELECT e.id, e.album_id, e.nom_edicio, e.durada_total, e.rotacio_actual, e.app_escolta, e.codi_bandcamp, e.formats, e.tags,
+    SELECT e.id, e.album_id, e.nom_edicio, e.durada_total, e.rotacio_actual, e.app_escolta, e.codi_bandcamp, e.enllac_bandcamp, e.formats, e.tags,
            e.darrera_obertura, e.data_referencia_rotacio, e.portada, e.portada_origen, e.data_darrera_pregunta_puntuacio, e.per_afinar,
            a.titol, a.artista_id, a.tags AS album_tags, a.conjunt, a.posicio, ar.nom_canonic AS art,
            a.generes, a.llenguatge, a.formacio, a.instrument_solista, a.subgeneres,
@@ -70,6 +70,7 @@ function carrega(db, on, params = []) {
     e.fisic = e.formats.some(f => FISICS.includes(f));
     e.min = e.viva ? (e.viva.durada || null) : e.durada_total;
     e.bc = e.viva ? e.viva.codi_bandcamp : e.codi_bandcamp;
+    e.bce = e.parts.length ? null : (e.enllac_bandcamp || null);   // ACT-767: l'enllaç enganxat, mentre no arriba el codi
     // + l'última pista que ha sonat d'aquesta edició, encara que no arribi al 75 % (opció B de Ricard, 3-11: com el
     // «escoltat recentment» d'Amazon, puja també el que només has començat). Només si el nom ja és emparellat.
     e.clau = [e.darrera_obertura, e.darrera_escolta, e.darrer_scrobble, e.data_referencia_rotacio].filter(Boolean).sort().pop() || '';
@@ -207,9 +208,10 @@ export const afegeixCanalPropi = nom => db => {
   return 'propi:' + l.find(x => norm(x) === norm(nom));
 };
 
-// Treure una edició sencera de la rotació (amb totes les seves parts).
+// Treure una edició sencera de la rotació (amb totes les seves parts). La sortida, a mà o per les preguntes 8 i 9,
+// reescriu la Data de referència de rotació (v1.18, ACT-763): les escoltes velles ja no tornen a oferir d'entrar.
 export const treu = id => db => {
-  db.run('UPDATE edicio SET rotacio_actual = 0 WHERE id = ?', [id]);
+  db.run('UPDATE edicio SET rotacio_actual = 0, data_referencia_rotacio = ? WHERE id = ?', [ara(), id]);
   db.run('UPDATE part SET rotacio_actual = 0 WHERE edicio_id = ?', [id]);
 };
 

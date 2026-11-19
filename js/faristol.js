@@ -24,6 +24,7 @@ import * as P from './piles.js?v=1';
 import * as N from './navegacio.js?v=1';
 import * as FX from './fitxa.js?v=1';
 import * as R from './rajoles.js?v=1';
+import * as B from './bandcamp.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -51,7 +52,8 @@ function enllac(canal, d) {
   const q = d.art + ' ' + d.tit;
   if (canal === 'bandcamp') {
     return d.bc ? { href: 'x-bandcamp://show_tralbum?tralbum_type=a&tralbum_id=' + d.bc, nota: "obre el disc a l'app", ext: false }
-                : { href: CANALS.bandcamp.url(q), nota: 'cerca: falta el codi', ext: true };
+         : d.bce ? { href: d.bce, nota: "obre l'enllaç; el codi arriba de nit", ext: true }   // ACT-767
+                 : { href: CANALS.bandcamp.url(q), nota: 'cerca: falta el codi', ext: true };
   }
   if (canal === 'aimp') return { href: AIMP_APP(), nota: "obre l'app; el disc el tries tu", ext: false };
   if (CANALS[canal]?.propi) return { href: '#', nota: "obre-ho tu: no en té l'adreça", ext: false, propi: CANALS[canal].nom };
@@ -210,7 +212,7 @@ function fullGrupEscolta(nom) {
   if (!m.length) { fullGrup(nom); return; }
   obreFull(`<h3>${esc(titolGrup(nom, m))}</h3><p>${m.length} discos que van junts${m.every(x => x.min) ? ' · ' + m.reduce((s, x) => s + x.min, 0) + '′ en total' : ''}.</p>
     <div class="llista-grup">${m.map((x, i) => {
-      const e = x.app_escolta ? enllac(x.app_escolta, { art: x.art, tit: x.titol, bc: x.bc }) : null;
+      const e = x.app_escolta ? enllac(x.app_escolta, { art: x.art, tit: x.titol, bc: x.bc, bce: x.bce }) : null;
       return `<div class="membre">
         <button class="mini" data-fitxa="${x.id}">${x.portada ? IMG(x.portada) : ''}</button>
         <button class="txt" data-fitxa="${x.id}"><b>${i + 1}. ${esc(x.titol)}</b><small>${esc(x.art)}${x.min ? ' · ' + x.min + '′' : ''}</small></button>
@@ -243,7 +245,7 @@ function fullGrup(nom) {
 function botoPlay(d, classe) {
   if (d.esperant) return '';
   return d.app_escolta
-    ? `<a class="${classe}" ${aAttrs(enllac(d.app_escolta, { art: d.art, tit: d.titol, bc: d.bc }))} data-obre="${d.id}" aria-label="Escoltar ara ${esc(d.titol)}">▶</a>`
+    ? `<a class="${classe}" ${aAttrs(enllac(d.app_escolta, { art: d.art, tit: d.titol, bc: d.bc, bce: d.bce }))} data-obre="${d.id}" aria-label="Escoltar ara ${esc(d.titol)}">▶</a>`
     : `<button class="${classe}" data-escoltar="${d.id}" aria-label="Escoltar ara ${esc(d.titol)}">▶</button>`;
 }
 function pintaReixa() {
@@ -257,7 +259,7 @@ function pintaReixa() {
     const tit = d.viva?.nom && d.parts.length ? d.titol : d.titol;
     const canal = d.app_escolta;
     const play = d.esperant ? '' : (canal
-      ? `<a class="escoltar" ${aAttrs(enllac(canal, { art: d.art, tit: d.titol, bc: d.bc }))} data-obre="${d.id}" aria-label="Escoltar ara ${esc(tit)}">▶</a>`
+      ? `<a class="escoltar" ${aAttrs(enllac(canal, { art: d.art, tit: d.titol, bc: d.bc, bce: d.bce }))} data-obre="${d.id}" aria-label="Escoltar ara ${esc(tit)}">▶</a>`
       : `<button class="escoltar" data-escoltar="${d.id}" aria-label="Escoltar ara ${esc(tit)}">▶</button>`);
     return `<div class="disc${prefs.has(d.artista_id) ? ' pref' : ''}">
       <button class="coberta ${d.portada ? 'amb-img' : ''}" data-fitxa="${d.id}" aria-label="Fitxa de ${esc(tit)}">
@@ -299,6 +301,7 @@ function pintaFiles() {
       </button>${estat.ordena ? '' : playPreferent(p)}${mou}
     </div>`;
   }).join('') || `<p class="subtitol" style="margin:12px 0 0">Encara no hi ha cap artista preferent.</p>`;
+  I.omple($('#files'));   // ACT-768 (d): «Ordena la llista» torna a pintar les files sense passar per pinta(): les fotos, també
 }
 
 function pintaArtista(id) {
@@ -467,7 +470,7 @@ function fullGrupHistorial(nom) {
   const f0 = E.historial(db()).find(x => x.grup === nom), f = f0 && filaHistorial(f0); if (!f) return;
   obreFull(`<h3>${esc(f.titol)}</h3><p>${f.n === 1 ? 'Una escolta' : f.n + ' escoltes'} · l'última, ${esc(quan(f.darrera))}.</p>
     <div class="llista-grup">${f.membres.map((x, i) => {
-      const e = x.app_escolta ? enllac(x.app_escolta, { art: x.art, tit: x.titol, bc: x.bc }) : null;
+      const e = x.app_escolta ? enllac(x.app_escolta, { art: x.art, tit: x.titol, bc: x.bc, bce: x.bce }) : null;
       return `<div class="membre">
         <button class="mini" data-fitxa="${x.id}">${x.portada ? IMG(x.portada) : ''}</button>
         <button class="txt" data-fitxa="${x.id}"><b>${i + 1}. ${esc(x.titol)}</b><small>${esc(x.art)}${x.min ? ' · ' + x.min + '′' : ''}${x.rotacio_actual ? ' · en rotació' : ''}</small></button>
@@ -812,7 +815,7 @@ function blocNou(x) {
   const pref = estat.nouPrefDe?.[x.clau];
   return `<div data-nou="${esc(x.clau)}"><p class="sf-q">Disc nou: la durada i el canal</p>
     <label class="camp"><span>Durada en minuts <small class="gris">· ${x.proposta.font}</small></span>
-      <input data-sfdur="${esc(x.clau)}" type="number" inputmode="numeric" min="1" value="${x.proposta.minuts}"></label>
+      <input data-sfdur="${esc(x.clau)}" type="number" inputmode="numeric" min="1" value="${esc(estat.nouMinDe?.[x.clau] ?? x.proposta.minuts)}"></label>
     ${x.proposta.font === 'el que ha sonat' ? `<p class="sf-pre">Només és la del disc si l'has sentit sencer.</p>` : ''}
     ${x.proposta.parts ? `<p class="sf-q" data-sfparts="${esc(x.clau)}">Una caixa de ${x.proposta.parts.length} parts, una per acte <small class="gris">· segons MusicBrainz</small></p>
       <p class="sf-pre">${x.proposta.parts.map(p => `${esc(p.nom)} · ${p.durada}′`).join('<br>')}</p>` : ''}
@@ -855,6 +858,8 @@ function pintaSafata() {
   // La safata es torna a pintar sola (una lectura de ListenBrainz, un desat): el nom de la llista que s'està escrivint
   // es conserva, i el cursor també.
   const escrivint = document.activeElement?.id === 'inLlista';
+  // ACT-768 (a): la durada escrita d'un disc nou es queda encara que es torni a pintar (triar el canal, una lectura).
+  for (const i of document.querySelectorAll('[data-sfdur]')) (estat.nouMinDe ||= {})[i.dataset.sfdur] = i.value;
   try { pintaSafata_(); } finally { if (escrivint) { const i = $('#inLlista'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } } }
 }
 function pintaSafata_() {
@@ -922,7 +927,7 @@ function pintaSafata_() {
   // les preguntes 7, 8 i 9
   h += cua.rot.map(x => {
     const d = { titol: x.titol, art: x.art, durada_total: x.durada_total, portada: x.portada };
-    if (x.q === 7) return `<div class="sf-card"><span class="sf-tipus">Tres escoltes en sis mesos</span>${minDisc(d)}
+    if (x.q === 7) return `<div class="sf-card"><span class="sf-tipus">Cinc escoltes en sis mesos</span>${minDisc(d)}
       <p class="sf-q">Sembla que l'estàs estudiant. El poso en rotació?</p>
       <div class="sf-chips"><button class="principal" data-sfq7="${x.id}|si">Sí, posa'l</button><button data-sfq7="${x.id}|no">No</button></div></div>`;
     if (x.q === 8) return `<div class="sf-card"><span class="sf-tipus">Cinc escoltes</span>${minDisc(d)}
@@ -1162,9 +1167,22 @@ const cel = (attr, val, classe, titol, txt) =>
 // «← Tornar» d'una fulla oberta des de la fitxa torna a la fitxa, no tanca (abans tancava: s'havia de tornar a obrir el disc).
 function tornaA(id) { const b = $('#full .torna-full'); if (b && id) { delete b.dataset.tornafull; b.dataset.fitxa = id; } }
 
+// ACT-767 i ACT-766: «Enganxa l'enllaç» a la fitxa d'un disc de Bandcamp sense codi (una edició sense parts), i l'avís
+// si la tasca de nit no l'ha trobat en B.NITS nits.
+function blocEnllac(d) {
+  if (d.app_escolta !== 'bandcamp' || d.bc || d.parts.length) return '';
+  const nits = B.apartat(db(), d.id);
+  return `<div class="enllac-bc">
+    ${nits !== null ? `<p class="avis-bc"><b>Bandcamp no l'ha trobat</b> en ${nits} nits: queda apartat. Enganxa l'enllaç i la tasca hi tornarà.</p>` : ''}
+    ${d.bce ? `<p class="gris" style="font-size:12px">Enllaç desat: el ▶ ja l'obre. El codi el treu la tasca aquesta nit.</p>` : ''}
+    <label class="camp"><span>Enganxa l'enllaç <small class="gris">· el de «Compartir» a l'app de Bandcamp</small></span>
+      <input id="inEnllacBc" type="url" inputmode="url" autocomplete="off" placeholder="https://….bandcamp.com/album/…" value="${esc(d.bce || '')}"></label>
+    <button class="bt" data-desaenllac="${d.id}">Desa l'enllaç</button></div>`;
+}
+
 function fullFitxa(d) {
   const canal = d.app_escolta ? CANALS[d.app_escolta]?.nom || nomCanal(d.app_escolta) : (d.fisic ? 'disc físic' : '');
-  const codi = d.app_escolta === 'bandcamp' ? (d.bc ? ' · amb codi' : ' · sense codi') : '';
+  const codi = d.app_escolta === 'bandcamp' ? (d.bc ? ' · amb codi' : d.bce ? ' · amb enllaç' : ' · sense codi') : '';
   const gen = estatGenere(d), tg = estatTags(d), esc_ = E.escoltesDeLEdicio(db(), d.id);
   const origen = ORIGEN_PORTADA[d.portada_edicio ? d.portada_origen || 'escolta' : d.portada_origen === 'rebutjada' ? 'rebutjada' : 'cap'];
   const edicio = d.nom_edicio ? esc(d.nom_edicio) : (d.n_edicions > 1 ? 'sense nom' : 'l\'única que hi ha');
@@ -1191,6 +1209,7 @@ function fullFitxa(d) {
       ${d.esperant ? `<button class="bt principal" data-repren="${d.id}">Reprèn</button>` : `<button class="bt principal" data-escoltar="${d.id}">▶ Escoltar ara</button>`}
       ${d.rotacio_actual ? `<button class="bt" data-treure="${d.id}">Treu de rotació</button>` : `<button class="bt" data-hrot="${d.id}">Posa'l en rotació</button>`}
     </div>
+    ${blocEnllac(d)}
     ${pilesFitxa(d)}
     <div class="graella">
       ${cel('generefitxa', d.id, (gen.falta ? 'falta' : 'ple') + ' cel-genere', 'Gènere', esc(gen.txt))}
@@ -1687,7 +1706,7 @@ function fullCabina() {
       <li><button data-ignorats="1">Artistes que s'ignoren sempre <small>${(n => n ? (n === 1 ? 'un' : n) + ' · obre la llista' : 'cap')(E.ignoraSempre(db()).length)}</small></button></li>
       <li><span class="ll-info">ListenBrainz <small>${E.arrencada(db()) ? 'les dues comptes, des del ' + dia(E.arrencada(db())) + ' · ' + r.scrobble + ' pistes' : 'encara no s\'ha llegit'}${estat.lbError ? ' · ' + esc(estat.lbError) : ''}</small></span></li>
       <li><span class="ll-info">Bústia de Bandcamp <small>${(b => !b ? 'encara no s\'ha mirat en aquesta sessió (cal connexió amb el Drive)'
-        : (b.pendents === null ? '' : b.pendents ? (b.pendents === 1 ? 'un disc espera' : b.pendents + ' discos esperen') + ' codi; es busquen cada nit' : 'cap disc espera codi')
+        : (b.pendents === null ? '' : b.pendents ? (b.pendents === 1 ? 'un disc espera' : b.pendents + ' discos esperen') + ' codi; es busquen cada nit' : 'cap disc espera codi') + (b.apartats ? ` · ${b.apartats === 1 ? 'un apartat' : b.apartats + ' apartats'} (no trobats en ${B.NITS} nits)` : '')
           + (b.errors.length ? ` · <b class="mal">${esc(b.errors.join(' · ').slice(0, 160))}</b>` : ''))(estat.bustia)}</small></span></li>
       ${liniesCopia()}
       <li><a href="privadesa.html" target="_blank" rel="noopener">Política de privadesa <small>què surt d'aquest mòbil, i cap a on</small></a></li>
@@ -1957,7 +1976,7 @@ document.addEventListener('click', e => {
     // Les escoltes es calculen amb la durada (Escolta.completitud): en canviar-la, es tornen a calcular (ACT-582, Variant Immersions).
     tancaFull(); fes(y => { D.canviaDurada(x.id, m, x.viva?.id)(y); recalculaEdicio(y, x.id); }, `Durada: ${m}′`); return; }
   if (d.escoltar) { const x = rot(d.escoltar); if (!x) return; tancaFull();
-    fullEscoltar({ id: x.id, art: x.art, tit: x.titol, min: x.min, canal: x.app_escolta, bc: x.bc, fisic: x.fisic }); return; }
+    fullEscoltar({ id: x.id, art: x.art, tit: x.titol, min: x.min, canal: x.app_escolta, bc: x.bc, bce: x.bce, fisic: x.fisic }); return; }
   if (d.altrecanal) { fullEscoltar(estat.escoltant, true); return; }
   if (d.canvicanal) {
     const x = estat.escoltant; if (!x) return;
@@ -2153,24 +2172,27 @@ document.addEventListener('click', e => {
                if (pref) D.afegeixPreferentId(r.artista_id)(y); return r; },
       `${x.album || x.pista} entra a l'arxiu${on === 'rotacio' ? ' i a la rotació' : ''}${pref ? ', i l\'artista a preferents' : ''}`); return; }
   // les preguntes 7, 8 i 9
-  if (d.sfq7) { const [id, r] = d.sfq7.split('|'); fes(E.respon7(+id, r === 'si'), r === 'si' ? 'Entra a la rotació' : 'D\'acord: no tornaré a preguntar fins d\'aquí a tres escoltes'); return; }
+  if (d.sfq7) { const [id, r] = d.sfq7.split('|'); fes(E.respon7(+id, r === 'si'), r === 'si' ? 'Entra a la rotació' : 'D\'acord: no tornaré a preguntar fins d\'aquí a cinc escoltes'); return; }
   if (d.sfq8) { const [id, r] = d.sfq8.split('|'), x = D.fitxa(db(), +id); if (!x) return;
     if (r === 'si') { estat.abansSortida = A.estat.db.export(); fes(y => { E.tocaReferencia(+id)(y); D.treu(+id)(y); }, `${x.titol} fora de rotació`, { abans: estat.abansSortida }); fullPuntuar(x); return; }
     fes(E.tocaReferencia(+id), r === 'ara' ? null : 'Encara no: segueix en rotació');
-    if (r === 'ara') fullEscoltar({ id: x.id, art: x.art, tit: x.titol, min: x.min, canal: x.app_escolta, bc: x.bc, fisic: x.fisic }); return; }
+    if (r === 'ara') fullEscoltar({ id: x.id, art: x.art, tit: x.titol, min: x.min, canal: x.app_escolta, bc: x.bc, bce: x.bce, fisic: x.fisic }); return; }
   if (d.sfq9) { const [id, r] = d.sfq9.split('|'), x = D.fitxa(db(), +id); if (!x) return;
     if (r === 'no') { estat.abansSortida = A.estat.db.export(); fes(y => { E.tocaReferencia(+id)(y); D.treu(+id)(y); }, `${x.titol} fora de rotació`, { abans: estat.abansSortida }); fullPuntuar(x); return; }
     fes(E.tocaReferencia(+id), r === 'ara' ? null : 'Segueix en rotació');
-    if (r === 'ara') fullEscoltar({ id: x.id, art: x.art, tit: x.titol, min: x.min, canal: x.app_escolta, bc: x.bc, fisic: x.fisic }); return; }
+    if (r === 'ara') fullEscoltar({ id: x.id, art: x.art, tit: x.titol, min: x.min, canal: x.app_escolta, bc: x.bc, bce: x.bce, fisic: x.fisic }); return; }
   if (d.q2no) { const q = E.preguntes2(db()).find(x => x.clau === d.q2no); if (!q) return;
     fes(E.rebutjaEmparellament(q), `${q.album || q.pista}: no és cap d'aquestes. Serà un disc nou.`); return; }
 
   // L'Historial
   if (d.hescoltar) { const x = D.fitxa(db(), +d.hescoltar); if (!x) return;
-    fullEscoltar({ id: x.id, art: x.art, tit: x.titol, min: x.min, canal: x.app_escolta, bc: x.bc, fisic: x.fisic }); return; }
+    fullEscoltar({ id: x.id, art: x.art, tit: x.titol, min: x.min, canal: x.app_escolta, bc: x.bc, bce: x.bce, fisic: x.fisic }); return; }
   if (d.hrot) { const id = +d.hrot, x = D.fitxa(db(), id); if (!x) return;
     fes(D.posaIdEnRotacio(id), `${x.titol} entra a Discos en Rotació`); if (t.closest('#full')) fullFitxa(rot(id)); return; }
   if (d.hgrup) { fullGrupHistorial(d.hgrup); return; }
+  if (d.desaenllac) { const id = +d.desaenllac, url = B.llegeixEnllac($('#inEnllacBc')?.value);
+    if (!url) { avisa('No hi trobo cap enllaç d\'un àlbum de Bandcamp (https://….bandcamp.com/album/…).'); return; }
+    fes(B.desaEnllac(id, url), 'Enllaç desat: el ▶ ja l\'obre. El codi arriba aquesta nit.').then(() => { const x = D.fitxa(db(), id); if (x && t.closest('#full')) fullFitxa(x); }); return; }
   if (d.histmes) { estat.histMax = (estat.histMax || FINESTRA_HIST) + FINESTRA_HIST; pintaHistorial(); return; }   // ACT-737
 
   // La fitxa que creix (bloc 3.2 bis)
@@ -2415,8 +2437,12 @@ async function bustia() {
       if (fets.length) avisa(`Bandcamp: ${fets.length === 1 ? 'un codi nou' : fets.length + ' codis nous'}. El ▶ ja obre el disc a l'app.`);
     } catch (e) { b.errors.push('codis: ' + e.message); }
     try {
-      const pend = E.pendentsBandcamp(db()), text = E.textPendents(pend);
-      b.pendents = pend.length;
+      // ACT-766: els que no s'han trobat en B.NITS nits queden apartats (fora del fitxer) i s'avisa una vegada.
+      const r = B.pendentsAmbNits(db()), pend = r.envia, text = B.textPendents(pend);
+      if (B.nitsNoves(db())) await fes(B.apuntaNits(), null, { desfes: false, auto: true });
+      if (r.nous.length) avisa(r.nous.length === 1 ? `Bandcamp: «${r.nous[0].titol}» no s'ha trobat en ${B.NITS} nits. Queda apartat: enganxa l'enllaç a la seva fitxa.`
+                                                   : `Bandcamp: ${r.nous.length} discos no s'han trobat en ${B.NITS} nits. Queden apartats: enganxa l'enllaç a la fitxa de cadascun.`);
+      b.pendents = pend.length; b.apartats = r.apartats.length;
       let abans = null; try { abans = localStorage.getItem('tria-bustia'); } catch {}
       if (text !== abans) { await A.escriuPendentsBustia(text); try { localStorage.setItem('tria-bustia', text); } catch {} }
     } catch (e) { b.errors.push('pendents: ' + e.message); }
