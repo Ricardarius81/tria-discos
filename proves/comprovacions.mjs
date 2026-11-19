@@ -636,7 +636,7 @@ export const COMPROVACIONS = [
   // Sobre una base apart, a la pàgina: les pistes de veritat del Chuck Berry del 7-11 i de l'In Moll, sense trepitjar res.
   { nom: 'pista repetida (ACT-695, Chuck Berry del 7-11): tornar a començar una cançó en reprendre el disc no el parteix; repetir-ne dues quan ja és sencer no surt «a mitges»; dues senceres en 15 hores compten dues', sintetic: true, async fes({ pagina }) {
     const r = await pagina.evaluate(async () => {
-      const E = await import('./js/escoltes.js?v=15'), { MIGRACIONS } = await import('./js/esquema.js?v=9');
+      const E = await import('./js/escoltes.js?v=15'), { MIGRACIONS } = await import('./js/esquema.js?v=10');
       const SQL = await initSqlJs({ locateFile: f => 'vendor/sqljs/' + f });
       const base = dur => { const d = new SQL.Database(); MIGRACIONS.forEach((m, i) => { d.exec(m); d.exec(`PRAGMA user_version = ${i + 1}`); });
         d.run("INSERT INTO artista (id, nom_canonic) VALUES (1, 'Chuck Berry')");
@@ -677,7 +677,7 @@ export const COMPROVACIONS = [
   } },
   { nom: 'la mateixa pista (ACT-694): In Moll 1 amb un altre recording_msid i 227 ms de diferència és la mateixa; dos «I. Allegro» de durada diferent no ho són', sintetic: true, async fes({ pagina }) {
     const r = await pagina.evaluate(async () => {
-      const E = await import('./js/escoltes.js?v=15'), { MIGRACIONS } = await import('./js/esquema.js?v=9');
+      const E = await import('./js/escoltes.js?v=15'), { MIGRACIONS } = await import('./js/esquema.js?v=10');
       const SQL = await initSqlJs({ locateFile: f => 'vendor/sqljs/' + f });
       const d = new SQL.Database(); MIGRACIONS.forEach((m, i) => { d.exec(m); d.exec(`PRAGMA user_version = ${i + 1}`); });
       d.run("INSERT INTO artista (id, nom_canonic) VALUES (1, 'Markus Guentner'), (2, 'Bach')");
@@ -704,7 +704,7 @@ export const COMPROVACIONS = [
   } },
   { nom: 'durada sospitosa (ACT-696): el Chuck Berry de 69′ amb 58′ a la fitxa, d\'una tirada, avisa amb «Posa 69′»; «La durada és bona» guarda Edició.durada_confirmada i calla; canviar la durada el torna a obrir', sintetic: true, async fes({ pagina }) {
     const r = await pagina.evaluate(async () => {
-      const E = await import('./js/escoltes.js?v=15'), { MIGRACIONS } = await import('./js/esquema.js?v=9');
+      const E = await import('./js/escoltes.js?v=15'), { MIGRACIONS } = await import('./js/esquema.js?v=10');
       const SQL = await initSqlJs({ locateFile: f => 'vendor/sqljs/' + f });
       const d = new SQL.Database(); MIGRACIONS.forEach((m, i) => { d.exec(m); d.exec(`PRAGMA user_version = ${i + 1}`); });
       d.run("INSERT INTO artista (id, nom_canonic) VALUES (1, 'Chuck Berry')");
@@ -1293,7 +1293,7 @@ export const COMPROVACIONS = [
   // ───────── L'Afinació (v1.49, ACT-656 a ACT-686) ─────────
   { bloc: 'L\'Afinació (v1.49, ACT-656 a ACT-686)' },
   { nom: 'afinació (ACT-681, ACT-696, ACT-733): l\'arxiu és a l\'estructura 10, amb Edició.per_afinar, Edició.durada_confirmada i Àlbum.subgeneres', async fes({ consulta }) {
-    igual(consulta('PRAGMA user_version')[0].user_version, 10, 'estructura de l\'arxiu (la 10 des de la ACT-733)');
+    igual(consulta('PRAGMA user_version')[0].user_version, 11, 'estructura de l\'arxiu (la 10 des de la ACT-733; la 11 des de la ACT-744, les Piles)');
     cal(consulta('PRAGMA table_info(album)').some(c => c.name === 'subgeneres'), 'Àlbum no té la columna subgeneres (ACT-733)');
     cal(consulta('PRAGMA table_info(edicio)').some(c => c.name === 'durada_confirmada'), 'Edició no té la columna durada_confirmada (ACT-696)');
     cal(consulta('PRAGMA table_info(edicio)').some(c => c.name === 'per_afinar'), 'Edició no té la columna per_afinar');
@@ -1370,7 +1370,7 @@ export const COMPROVACIONS = [
     igual(ids.join(','), '1,5', 'les dues marcades a dalt, la més recent primer');
     const t5 = await pagina.locator('#afinacio [data-fitxa="5"]').innerText();
     cal(t5.includes('per afinar · marcat fa 10 dies') && t5.includes('sense gènere'), 'la fila d\'In a Silent Way no diu els dos motius: ' + t5);
-    const xl = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'), X = await import('./js/excel.js?v=5');
+    const xl = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'), X = await import('./js/excel.js?v=6');
       const l = (await X.llegeix(await X.xlsx(A.estat.db)))['Edició']; const c = l[0].indexOf('per_afinar');
       return { c, v: c >= 0 ? l.find(f => String(f[0]) === '5')?.[c] : null }; });
     cal(xl.c >= 0, 'l\'Excel no porta la columna per_afinar');
@@ -2120,7 +2120,7 @@ export const COMPROVACIONS = [
 
   { nom: 'excel: anada i tornada idèntica fila a fila, amb les onze pestanyes (les dues de les llistes, des de l\'estructura 7) i les columnes de càrrega del §3.2', async fes({ pagina, consulta, real }) {
     const r = await pagina.evaluate(async () => {
-      const A = await import('./js/arxiu.js?v=21'), X = await import('./js/excel.js?v=5'), { MIGRACIONS } = await import('./js/esquema.js?v=9');
+      const A = await import('./js/arxiu.js?v=21'), X = await import('./js/excel.js?v=6'), { MIGRACIONS } = await import('./js/esquema.js?v=10');
       const l = await X.llegeix(await X.xlsx(A.estat.db));
       const SQL = await initSqlJs({ locateFile: f => 'vendor/sqljs/' + f });
       const buida = () => { const d = new SQL.Database(); MIGRACIONS.forEach((m, i) => { d.exec(m); d.exec(`PRAGMA user_version = ${i + 1}`); }); return d; };
@@ -2134,7 +2134,7 @@ export const COMPROVACIONS = [
     });
     cal(!r.dif.length, 'l\'anada i tornada no és idèntica: ' + r.dif.slice(0, 3).join(' | '));
     cal(!r.dif2.length, 'una correcció del títol a Edició ha manat sobre Àlbum: ' + r.dif2.slice(0, 2).join(' | '));
-    igual(r.pestanyes.join(','), 'Edició,Part,Artista,Àlbum,Puntuació,Escolta,Scrobble,Preferent,Llista,Cançó de llista,Meta', 'pestanyes');
+    igual(r.pestanyes.join(','), 'Edició,Part,Artista,Àlbum,Puntuació,Escolta,Scrobble,Preferent,Llista,Cançó de llista,Pila,Entrada de Pila,Meta', 'pestanyes (les dues de les Piles des de l\'estructura 11)');
     igual(r.llistes, consulta('SELECT COUNT(*) AS n FROM llista_canco')[0].n, 'files de la pestanya Cançó de llista');
     if (!real) cal(r.llistes > 0, 'la pestanya Cançó de llista hauria de portar les cançons de les llistes de les comprovacions d\'abans');
     cal(r.part.length && r.partCols.includes('portada'), 'la pestanya Part no porta la columna portada (ACT-624)');
@@ -2149,9 +2149,9 @@ export const COMPROVACIONS = [
     await pagina.click('#btAjustos'); await pagina.waitForTimeout(300);
     const [baixada] = await Promise.all([pagina.waitForEvent('download', { timeout: 10000 }), pagina.click('[data-excel]')]);
     cal(/^la-meva-discoteca \d{4}-\d{2}-\d{2}\.xlsx$/.test(baixada.suggestedFilename()), 'nom del fitxer: ' + baixada.suggestedFilename());
-    const fs = await import('node:fs'), X = await import('../js/excel.js?v=5');
+    const fs = await import('node:fs'), X = await import('../js/excel.js?v=6');
     const l = await X.llegeix(new Uint8Array(fs.readFileSync(await baixada.path())));
-    igual(Object.keys(l).length, 11, 'pestanyes del fitxer baixat');
+    igual(Object.keys(l).length, 13, 'pestanyes del fitxer baixat (13 des de l\'estructura 11)');
     await pagina.click('[data-tornafull]').catch(() => {});
   } },
   { nom: 'sense connexió: la màquina s\'obre amb el codi guardat i la còpia del mòbil', async fes({ pagina, esperaDesat }) {
@@ -2407,6 +2407,130 @@ export const COMPROVACIONS = [
     const b = await obre();
     igual(b.rot, 1, 'passats 15 minuts, a Discos en Rotació');
     await pagina.click('[data-sub="rot"]');
+  } },
+
+  // ───────── obra 3: les Piles (estructura 11) ─────────
+  { bloc: 'obra 3: les Piles, tocar una entrada, la sortida i «Ja escoltats» (ACT-706, ACT-707, ACT-708, ACT-710 a ACT-714, ACT-720, ACT-744, ACT-773)' },
+  { nom: 'estructura 11 (ACT-744, ACT-707): pila i pila_entrada amb data_sortida; Gimnàs, Avió/Tren/Bus i Cotxe amb els seus contextos; The Fat of the Land a Gimnàs, de text', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    await esperaDesat(10000).catch(() => {});
+    const ps = consulta('SELECT nom, contextos FROM pila ORDER BY posicio');
+    igual(JSON.stringify(ps.map(p => [p.nom, JSON.parse(p.contextos)])), JSON.stringify([['Gimnàs', ['Al gimnàs']], ['Avió/Tren/Bus', ['Avió / Tren / Bus']], ['Cotxe', ['Conduint (sol)', 'Conduint (acompanyat)']]]), 'les Piles i els contextos');
+    cal(consulta('PRAGMA table_info(pila_entrada)').some(c => c.name === 'data_sortida'), 'falta Pila_entrada.data_sortida');
+    const e = consulta("SELECT pila_id, album_id, data_sortida FROM pila_entrada WHERE titol = 'The Fat of the Land'");
+    igual(JSON.stringify(e), JSON.stringify([{ pila_id: 1, album_id: null, data_sortida: null }]), 'la llavor a Gimnàs');
+    await pagina.click('[data-anar="faristol"]'); await pagina.click('[data-sub="pref"]'); await pagina.click('[data-asub="esc"]'); await pagina.waitForTimeout(150);
+    igual(await pagina.locator('#a-esc.activa #piles [data-pila]').count(), 3, 'les tres pestanyes de les Piles');
+    cal((await pagina.locator('#piles').innerText()).includes('The Fat of the Land'), 'la llista de Gimnàs no ensenya The Fat of the Land');
+  } },
+  { nom: 'Afegeix (ACT-710, ACT-711, ACT-713): suggeriments mentre s\'escriu i triar-ne un la casa (album_id); un text que no és a l\'arxiu queda de text; un text sense dubte es casa; la més recent a dalt', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    await pagina.click('[data-anar="faristol"]'); await pagina.click('[data-sub="pref"]'); await pagina.click('[data-asub="esc"]'); await pagina.click('#piles [data-pila="1"]');
+    await pagina.click('#piles [data-afegeixpila]'); await pagina.fill('#pilaTit', 'silent'); await pagina.waitForTimeout(150);
+    const sug = pagina.locator('#pilaSug [data-afegeixalbum]');
+    cal((await sug.allInnerTexts()).some(t => t.includes('In a Silent Way')), 'no surt el suggeriment In a Silent Way');
+    await sug.filter({ hasText: 'In a Silent Way' }).first().click(); await esperaDesat();
+    igual(JSON.stringify(consulta("SELECT album_id, artista FROM pila_entrada WHERE titol = 'In a Silent Way'")), JSON.stringify([{ album_id: 5, artista: 'Miles Davis' }]), 'el suggeriment, casat');
+    await pagina.click('#piles [data-afegeixpila]'); await pagina.fill('#pilaArt', 'Massive Attack'); await pagina.fill('#pilaTit', 'Mezzanine'); await pagina.click('[data-afegeixtext]'); await esperaDesat();
+    igual(JSON.stringify(consulta("SELECT album_id FROM pila_entrada WHERE titol = 'Mezzanine'")), JSON.stringify([{ album_id: null }]), 'el text, sense casar');
+    await pagina.click('#piles [data-afegeixpila]'); await pagina.fill('#pilaArt', 'outkast'); await pagina.fill('#pilaTit', 'STANKONIA'); await pagina.click('[data-afegeixtext]'); await esperaDesat();
+    igual(JSON.stringify(consulta("SELECT album_id, artista FROM pila_entrada WHERE titol = 'Stankonia'")), JSON.stringify([{ album_id: 7, artista: 'Outkast' }]), 'el text sense dubte, casat amb l\'àlbum');
+    const titols = (await pagina.locator('#piles .pila-fila b').allInnerTexts()).map(t => t.trim());
+    igual(JSON.stringify(titols), JSON.stringify(['Stankonia', 'Mezzanine', 'In a Silent Way', 'The Fat of the Land']), 'l\'ordre per data_alta, la més recent a dalt');
+  } },
+  { nom: 'tocar una entrada (ACT-712, ACT-714, ACT-720): una edició obre la fitxa; diverses, les edicions; de text, la fulla amb els canals i «Treu de la Pila»; el ▶ a part', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    await pagina.click('[data-anar="faristol"]'); await pagina.click('[data-sub="pref"]'); await pagina.click('[data-asub="esc"]'); await pagina.click('#piles [data-pila="1"]');
+    const fila = t => pagina.locator('#piles .pila-fila').filter({ hasText: t }).first();
+    igual(await fila('In a Silent Way').locator('a.play[href*="music.youtube.com"]').count(), 1, 'el ▶ d\'una casada amb una edició és el del seu canal');
+    await fila('In a Silent Way').locator('[data-tocaentrada]').click(); await pagina.waitForTimeout(200);
+    cal(await pagina.locator('#full.obert .fitxa-cap').count() === 1 && (await pagina.locator('#full h3').first().innerText()).includes('In a Silent Way'), 'no obre la fitxa d\'In a Silent Way');
+    await pagina.click('#full [data-tornafull]'); await pagina.waitForTimeout(150);
+    igual(await fila('Stankonia').locator('button.play[data-edicionspila]').count(), 1, 'el ▶ d\'una casada amb diverses edicions obre les edicions');
+    await fila('Stankonia').locator('[data-tocaentrada]').click(); await pagina.waitForTimeout(200);
+    igual(await pagina.locator('#full.obert .pila-edicions .membre').count(), 2, 'les dues edicions de Stankonia');
+    await pagina.click('#full [data-tornafull]'); await pagina.waitForTimeout(150);
+    cal(await fila('Mezzanine').locator('a.play[href*="music.amazon.com"]').count() === 1, 'el ▶ d\'una de text sense artista a l\'arxiu ha de cercar a Amazon');
+    await fila('Mezzanine').locator('[data-tocaentrada]').click(); await pagina.waitForTimeout(200);
+    igual(await pagina.locator('#full.obert a.bt[href*="music.youtube.com"]').count(), 1, 'la fulla de text porta els altres canals');
+    await pagina.click('#full [data-treuentrada]'); await esperaDesat();
+    igual(consulta("SELECT COUNT(*) AS n FROM pila_entrada WHERE titol = 'Mezzanine'")[0].n, 0, '«Treu de la Pila» esborra la fila');
+  } },
+  { nom: 'des de la fitxa (ACT-710, ACT-744): «Afegeix a una Pila» tria Cotxe, la fitxa diu «A la Pila Cotxe · Treu», i Treu esborra la fila sense passar per «Ja escoltats»', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    await pagina.click('[data-anar="faristol"]'); await pagina.click('[data-sub="rot"]'); await pagina.waitForTimeout(150);
+    await pagina.locator('#reixa .coberta[data-fitxa="1"]').click(); await pagina.waitForTimeout(200);
+    await pagina.click('#full [data-afegeixapila="1"]'); await pagina.waitForTimeout(150);
+    await pagina.click('#full [data-posaapila="3:1"]'); await esperaDesat(); await pagina.waitForTimeout(150);
+    igual(JSON.stringify(consulta('SELECT pila_id, album_id, data_sortida FROM pila_entrada WHERE album_id = 1')), JSON.stringify([{ pila_id: 3, album_id: 1, data_sortida: null }]), 'la fila a Cotxe');
+    cal((await pagina.locator('#full .fitxa-piles').innerText()).includes('A la Pila Cotxe'), 'la fitxa no diu «A la Pila Cotxe»');
+    await pagina.click('#full .fitxa-piles [data-treuentrada]'); await esperaDesat();
+    igual(consulta('SELECT COUNT(*) AS n FROM pila_entrada WHERE album_id = 1')[0].n, 0, 'Treu esborra la fila');
+    await pagina.click('#full [data-tornafull]').catch(() => {});
+  } },
+  { nom: 'la sortida (ACT-707, ACT-708, ACT-744) i casar (ACT-711), a una base apart: el 75 % dels trossos del context; dos contextos de Cotxe sumen; abans de l\'alta no compta; el text sense parèntesis es casa amb el que ha sonat', sintetic: true, async fes({ pagina }) {
+    const r = await pagina.evaluate(async () => {
+      const P = await import('./js/piles.js?v=1'), { MIGRACIONS } = await import('./js/esquema.js?v=10');
+      const SQL = await initSqlJs({ locateFile: f => 'vendor/sqljs/' + f });
+      const d = new SQL.Database(); MIGRACIONS.forEach((m, i) => { d.exec(m); d.exec(`PRAGMA user_version = ${i + 1}`); });
+      d.run("INSERT INTO artista (id, nom_canonic) VALUES (1, 'Miles Davis'), (2, 'Keith Jarrett')");
+      d.run("INSERT INTO album (id, titol, artista_id) VALUES (1, 'Kind of Blue', 1), (2, 'Agharta', 1), (3, 'Live (1975)', 2), (4, 'Live (1980)', 2), (5, 'Bitches Brew', 1)");
+      d.run("INSERT INTO edicio (id, album_id, durada_total, rotacio_actual) VALUES (1, 1, 46, 0), (2, 1, 55, 0), (3, 2, 97, 0), (4, 3, 60, 0), (5, 4, 60, 0), (6, 5, 94, 0)");
+      d.run('DELETE FROM pila_entrada');
+      const alta = '2026-11-10T00:00:00.000Z', e = (id, pila, art, tit, alb, a = alta) => d.run('INSERT INTO pila_entrada (id, pila_id, artista, titol, album_id, data_alta) VALUES (?, ?, ?, ?, ?, ?)', [id, pila, art, tit, alb, a]);
+      e(1, 1, 'Miles Davis', 'Kind of Blue', 1); e(2, 1, 'Miles Davis', 'Agharta', 2); e(3, 3, 'Miles Davis', 'Kind of Blue', 1);
+      e(4, 2, 'keith jarrett', 'Live [remaster]', null); e(5, 1, 'Miles Davis', 'Bitches Brew', 5);
+      let id = 0; const s = (ed, h, ctx, c, unio) => { id++; d.run('INSERT INTO escolta (id, edicio_id, data_hora, context, completitud, unio) VALUES (?, ?, ?, ?, ?, ?)', [id, ed, h, ctx, c, unio ?? null]); return id; };
+      const u1 = s(2, '2026-11-11T18:00:00.000Z', 'Al gimnàs', 0.5); d.run('UPDATE escolta SET unio = ? WHERE id = ?', [u1, u1]); s(2, '2026-11-14T18:00:00.000Z', 'Al gimnàs', 0.3, u1);
+      const u2 = s(3, '2026-11-11T19:00:00.000Z', 'Al gimnàs', 0.5); d.run('UPDATE escolta SET unio = ? WHERE id = ?', [u2, u2]); s(3, '2026-11-11T21:00:00.000Z', 'A casa', 0.5, u2);
+      const u3 = s(1, '2026-11-12T08:00:00.000Z', 'Conduint (sol)', 0.4); d.run('UPDATE escolta SET unio = ? WHERE id = ?', [u3, u3]); s(1, '2026-11-12T17:00:00.000Z', 'Conduint (acompanyat)', 0.4, u3);
+      s(5, '2026-11-13T10:00:00.000Z', 'Avió / Tren / Bus', 0.9);
+      s(6, '2026-11-09T18:00:00.000Z', 'Al gimnàs', 1);
+      const n = P.sortides(d);
+      const fe = d.exec('SELECT id, album_id, data_sortida FROM pila_entrada ORDER BY id')[0].values;
+      const casa1 = P.casaText(d, 'MILES DAVIS', 'kind of blue');
+      d.run("INSERT INTO album (id, titol, artista_id) VALUES (6, 'Agharta', 1)");
+      const casa2 = P.casaText(d, 'Miles Davis', 'Agharta');
+      return { n, fe, casa1, casa2, cua: P.senseCua('Live (1975) [Remaster]') };
+    });
+    igual(r.n, 3, 'quantes surten');
+    igual(JSON.stringify(r.fe), JSON.stringify([[1, 1, '2026-11-14T18:00:00.000Z'], [2, 2, null], [3, 1, '2026-11-12T17:00:00.000Z'], [4, 4, '2026-11-13T10:00:00.000Z'], [5, 5, null]]),
+      'Pila_entrada.data_sortida i album_id (1: 0,5 + 0,3 al gimnàs; 2: mig a casa; 3: els dos de conduir; 4: Live (1980) casat; 5: abans de l\'alta)');
+    igual(r.casa1, 1, 'un sol àlbum: es casa');
+    igual(r.casa2, null, 'dos àlbums amb el mateix títol i artista: es queda de text');
+    igual(r.cua, 'Live', 'el títol sense la cua de parèntesis i claudàtors');
+  } },
+  { nom: '«Ja escoltats» i «Torna a la Pila» (ACT-744): la sortida, al final de la Pila; tornar-la buida data_sortida, posa data_alta a avui i puja a dalt', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21');
+      await A.canvia(db => db.run("UPDATE pila_entrada SET data_sortida = '2026-11-15T10:00:00.000Z' WHERE titol = 'In a Silent Way'")); });
+    await reobre(pagina); await pagina.click('[data-sub="pref"]'); await pagina.click('[data-asub="esc"]'); await pagina.click('#piles [data-pila="1"]'); await pagina.waitForTimeout(150);
+    cal(!(await pagina.locator('#piles .pila-fila').allInnerTexts()).some(t => t.includes('In a Silent Way')), 'una entrada que ha sortit encara es veu a la llista');
+    await pagina.click('#piles [data-jaescoltats]'); await pagina.waitForTimeout(150);
+    cal((await pagina.locator('#full.obert').innerText()).includes('In a Silent Way'), '«Ja escoltats» no l\'ensenya');
+    const abans = consulta("SELECT data_alta FROM pila_entrada WHERE titol = 'In a Silent Way'")[0].data_alta;
+    await pagina.click('#full [data-tornapila]'); await esperaDesat();
+    const x = consulta("SELECT data_alta, data_sortida FROM pila_entrada WHERE titol = 'In a Silent Way'")[0];
+    igual(x.data_sortida, null, 'data_sortida buida'); cal(x.data_alta > abans, `data_alta a avui: era ${abans}, és ${x.data_alta}`);
+    igual((await pagina.locator('#piles .pila-fila b').first().innerText()).trim(), 'In a Silent Way', 'a dalt de tot');
+  } },
+  { nom: 'la darrera Pila (ACT-706, tria-pila): es recorda, també després de recarregar', sintetic: true, async fes({ pagina }) {
+    await pagina.click('[data-anar="faristol"]'); await pagina.click('[data-sub="pref"]'); await pagina.click('[data-asub="esc"]'); await pagina.click('#piles [data-pila="3"]'); await pagina.waitForTimeout(100);
+    await reobre(pagina); await pagina.click('[data-sub="pref"]'); await pagina.click('[data-asub="esc"]'); await pagina.waitForTimeout(150);
+    igual(await pagina.locator('#piles [data-pila="3"][aria-selected="true"]').count(), 1, 'Cotxe, després de recarregar');
+    await pagina.click('#piles [data-pila="1"]');
+  } },
+
+  { nom: 'icona de Pila (ACT-773): a la portada de Discos en rotació, a l\'Historial i a La Prestatgeria quan l\'àlbum té una entrada casada sense data_sortida; una de text no en pinta', sintetic: true, async fes({ pagina, esperaDesat }) {
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'), P = await import('./js/piles.js?v=1'); await A.canvia(P.afegeix(1, null, null, 1)); });
+    await esperaDesat(); await reobre(pagina); await pagina.click('[data-sub="rot"]'); await pagina.waitForTimeout(150);
+    igual(await pagina.locator('#reixa .coberta[data-fitxa="1"] .ico-pila[data-icopila="Gimnàs"]').count(), 1, 'Angel\'s Flight a Discos en rotació');
+    await pagina.click('[data-sub="hist"]'); await pagina.waitForTimeout(150);
+    const files = await pagina.evaluate(() => [...document.querySelectorAll('#hist .hcap[data-fitxa]')].map(b => [b.dataset.fitxa, !!b.querySelector('.ico-pila')]));
+    cal(files.some(([id]) => id === '1' || id === '5'), 'a l\'Historial no hi ha cap disc de les Piles per provar-ho: ' + JSON.stringify(files));
+    cal(files.every(([id, ico]) => ico === (id === '1' || id === '5')), 'les icones de l\'Historial: ' + JSON.stringify(files));
+    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="tots"]'); await pagina.waitForTimeout(150);
+    igual(await pagina.locator('#arxiu [data-fitxa="1"] .ico-pila').count(), 1, 'Angel\'s Flight a La Prestatgeria');
+    igual(JSON.stringify(await pagina.evaluate(() => [...document.querySelectorAll('#arxiu .ar-fila')].filter(b => b.querySelector('.ico-pila')).map(b => +b.dataset.fitxa).sort((a, b) => a - b))),
+      '[1,5,7,8]', 'només les edicions dels àlbums casats (Angel\'s Flight, In a Silent Way i les dues de Stankonia), no The Fat of the Land');
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'); await A.canvia(db => db.run('DELETE FROM pila_entrada WHERE album_id = 1')); });
+    await esperaDesat(); await reobre(pagina); await pagina.click('[data-sub="rot"]'); await pagina.waitForTimeout(150);
+    igual(await pagina.locator('#reixa .coberta[data-fitxa="1"] .ico-pila').count(), 0, 'sense la entrada, sense icona');
   } },
 
   // ───────── el que no ha de passar mai ─────────

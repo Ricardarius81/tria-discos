@@ -17,7 +17,7 @@
 // Sense cap biblioteca de fora (§3.6): un .xlsx és un zip de fitxers XML, i el zip s'escriu aquí.
 // També es llegeix aquí, per a la prova d'anada i tornada del §3.5 (exportar, carregar en una base buida, comparar).
 
-import { TAULES, TAULES_LLISTES } from './esquema.js?v=9';
+import { TAULES, TAULES_LLISTES } from './esquema.js?v=10';
 
 const CARREGA = {
   edicio: {
@@ -39,8 +39,8 @@ const CARREGA = {
   }
 };
 const ALTRES = [['album', 'Àlbum'], ['puntuacio', 'Puntuació'], ['escolta', 'Escolta'], ['scrobble', 'Scrobble'], ['preferent', 'Preferent'],
-                ['llista', 'Llista'], ['llista_canco', 'Cançó de llista']];
-export const PESTANYES = ['Edició', 'Part', 'Artista', 'Àlbum', 'Puntuació', 'Escolta', 'Scrobble', 'Preferent', 'Llista', 'Cançó de llista', 'Meta'];
+                ['llista', 'Llista'], ['llista_canco', 'Cançó de llista'], ['pila', 'Pila'], ['pila_entrada', 'Entrada de Pila']];
+export const PESTANYES = ['Edició', 'Part', 'Artista', 'Àlbum', 'Puntuació', 'Escolta', 'Scrobble', 'Preferent', 'Llista', 'Cançó de llista', 'Pila', 'Entrada de Pila', 'Meta'];
 
 const campsDe = (db, t) => db.exec(`PRAGMA table_info(${t})`)[0].values.map(v => v[1]);
 
@@ -220,7 +220,12 @@ export async function llegeix(bytes) {
 // mana la seva taula (Àlbum per al títol, l'artista i l'any original). Torna quantes files ha posat per taula.
 export function carrega(db, llegit) {
   const posades = {};
+  // Les Piles (estructura 11) neixen amb la llavor de la migració: si l'Excel les porta, manen les seves; un Excel d'abans
+  // de la estructura 11 no en porta, i llavors es queden les de la llavor.
+  const PILES = ['pila', 'pila_entrada'];
+  if (PILES.every(t => llegit[mapa(db).find(m => m.taula === t)?.full])) PILES.forEach(t => db.run(`DELETE FROM ${t}`));
   for (const m of mapa(db)) {
+    if (PILES.includes(m.taula) && !llegit[m.full]) continue;
     const files = llegit[m.full]; if (!files) throw new Error('falta la pestanya ' + m.full);
     const [cap, ...dades] = files;
     const idx = m.cols.filter(c => !c.lectura).map(c => {

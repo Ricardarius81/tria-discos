@@ -15,7 +15,7 @@
 //  · Quan salta la vermella, la còpia es fa però no va res a la paperera, ni la del mateix dia: les d'abans són les bones.
 
 import * as A from './arxiu.js?v=21';
-import * as X from './excel.js?v=5';
+import * as X from './excel.js?v=6';
 
 const PATRO = /· còpia de seguretat (\d{4}-\d{2}-\d{2})\.(sqlite|xlsx)$/;
 export const nomCopia = (data, ext) => `la-meva-discoteca · còpia de seguretat ${data}.${ext}`;

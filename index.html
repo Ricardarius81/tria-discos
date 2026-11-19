@@ -84,7 +84,7 @@
           <div class="files" id="files"></div>
         </div>
         <div class="apanell" id="a-esc">
-          <div class="marcador"><p class="cita">Encara no construïda.</p><p>Les Piles (Gimnàs, Avió/Tren/Bus, Cotxe) arriben amb l'obra 3.</p></div>
+          <div id="piles"></div>
         </div>
       </div>
       <div class="panell" id="p-hist">
@@ -122,7 +122,7 @@
   setTimeout(() => { const m = document.getElementById('entradaTxt'); if (m && m.textContent === 'Obrint…') { m.className = 'mal'; m.textContent = 'La màquina no ha arrencat. Tanca la pestanya, espera un minut i torna-la a obrir.'; } }, 10000);
 </script>
 <script src="vendor/sqljs/sql-wasm.js?v=1"></script>
-<script type="module" src="js/faristol.js?v=32"></script>
+<script type="module" src="js/faristol.js?v=33"></script>
 <script>
   // El codi de l'app es guarda al mòbil perquè s'obri sense connexió (ACT-581). Si el navegador no en sap, tot va com abans.
   if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

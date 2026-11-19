@@ -791,3 +791,13 @@ body[data-estil="ricard"] .apar-tabs button[aria-selected="true"]{background:var
 /* ACT-769: la capçalera fixa de debò. Amb overflow:hidden, #telefon era el contenidor de desplaçament i la capçalera
    «sticky» marxava amb la pàgina; clip retalla igual (les animacions de costat) sense fer-ne un contenidor. */
 #telefon{overflow:clip}
+/* Les Piles (obra 3, ACT-710 a ACT-714, ACT-744, ACT-773) */
+.pila-tabs button{font-size:13px; padding:6px 6px}
+.pila-ja{margin-top:10px}
+.fitxa-piles{display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; padding:0 0 10px; font-size:13px}
+.fitxa-piles .a-pila{white-space:nowrap}
+#full input.cerca{display:block; width:100%; margin:0 0 8px}
+.ico-pila{position:absolute; top:4px; right:4px; z-index:2; display:inline-flex; gap:2px; pointer-events:none}
+.ico-pila i{display:inline-grid; place-items:center; width:18px; height:18px; border-radius:50%; background:var(--os,#333); color:var(--fons,#fff);
+  font:600 10px/1 system-ui, sans-serif; font-style:normal}
+.coberta .ico-pila{top:auto; bottom:9px; right:9px}
