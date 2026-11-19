@@ -42,13 +42,14 @@ export const RAJOLES = [
 ];
 export const esRajola = k => RAJOLES.some(r => r.clau === k);
 
-// Les franges de durada (ACT-774, de Ricard): menys de 15′, 15-30, 30-45, 45-60, 60-80 i de 20 en 20 fins al disc més
-// llarg; per sobre de 80′, només les que tenen algun disc. [de, a): un disc de 30′ va a 30-45.
+// Les franges de durada (ACT-774, de Ricard): menys de 15′, 15-29, 30-44, 45-59, 60-79 i de 20 en 20 fins al disc més
+// llarg; per sobre de 80′, només les que tenen algun disc. [de, a): un disc de 30′ va a 30-44. Els rètols no solapen els
+// números rodons (ACT-800 b): amb minuts sencers és el mateix repartiment, només canvia el rètol.
 export function franja(d) {
   if (d < 15) return { de: 0, nom: 'menys de 15′' };
-  for (const [a, b] of [[15, 30], [30, 45], [45, 60], [60, 80]]) if (d < b) return { de: a, nom: `${a}-${b}′` };
+  for (const [a, b] of [[15, 30], [30, 45], [45, 60], [60, 80]]) if (d < b) return { de: a, nom: `${a}-${b - 1}′` };
   const a = 80 + Math.floor((d - 80) / 20) * 20;
-  return { de: a, nom: `${a}-${a + 20}′` };
+  return { de: a, nom: `${a}-${a + 19}′` };
 }
 const FRANGES_FIXES = [0, 15, 30, 45, 60].map(franja);
 
@@ -65,7 +66,8 @@ function base(db) {
              (SELECT p.valor FROM puntuacio p WHERE p.edicio_id = e.id ORDER BY p.data DESC, p.id DESC LIMIT 1) AS nota
       FROM edicio e JOIN album a ON a.id = e.album_id`).map(r => [r.id, r]));
     const files_ = tots.map(x => { const e = extra.get(x.id) || {};
-      return { ...x, escoltes: n.get(x.id) || 0, estrena: e.estat_estrena, canal: e.app_escolta || null, genere: llista(e.generes)[0] || null,
+      const gs = llista(e.generes).filter(Boolean);
+      return { ...x, escoltes: n.get(x.id) || 0, estrena: e.estat_estrena, canal: e.app_escolta || null, genere: gs[0] || null, generes: gs,
                any: e.any_original ?? null, nota: e.nota ?? null, artista_id: e.artista_id }; });
     const c = { tots: files_.length, artista: new Set(files_.map(x => x.artista_id)).size, album: new Set(files_.map(x => x.album_id)).size,
                 genere: 0, any: 0, escoltes: 0, durada: files_.length, estrena: 0, nota: 0, canal: 0, atzar: files_.length };
@@ -118,7 +120,13 @@ export function seccions(db, clau, ara = new Date()) {
   switch (clau) {
     case 'artista': return agrupa(fs, x => x.art, () => 0);   // ja venen per artista
     case 'album': return [{ titol: '', files: [...fs].sort((x, y) => CA.compare(x.titol, y.titol) || CA.compare(x.art, y.art) || x.id - y.id) }];
-    case 'genere': return agrupa(fs.filter(x => x.genere), x => x.genere, ([a], [b]) => CA.compare(a, b));
+    case 'genere': {
+      // ACT-801: cada disc surt sota TOTES les seves rames (Àlbum.Gènere); a cada rama, primer on és la principal (posició 1)
+      // i, a «També», on és secundària. Les xifres principals sumen els discos amb gènere; les +N, no.
+      const m = new Map(), sec = g => { if (!m.has(g)) m.set(g, { titol: g, clau: g, files: [], tambe: [] }); return m.get(g); };
+      for (const x of fs) x.generes.forEach((g, i) => { const t = sec(g); if (!i) t.files.push(x); else if (!x.generes.slice(0, i).includes(g)) t.tambe.push(x); });
+      return [...m.values()].sort((a, b) => CA.compare(a.titol, b.titol));
+    }
     case 'any': return agrupa(fs.filter(x => x.any != null), x => x.any, ([a], [b]) => a - b);
     case 'escoltes': return [{ titol: '', files: fs.filter(x => x.escoltes).sort((x, y) => y.escoltes - x.escoltes || perNom(x, y)) }];
     case 'durada': {
@@ -136,15 +144,36 @@ export function seccions(db, clau, ara = new Date()) {
   }
 }
 
+// ───────── l'ordre ascendent o descendent de cada rajola (ACT-800 a, ACT-801) ─────────
+// L'ordre natural de cada rajola és el de la ACT-789; triar l'altre gira les seccions i les files de dins (a Per Gènere,
+// dins de cada tram: la principal sempre davant de «També»). A l'atzar no en té. El mòbil el recorda per a cada rajola.
+export const ORDRE_NATURAL = { tots: 'asc', artista: 'asc', album: 'asc', genere: 'asc', any: 'asc', escoltes: 'desc', durada: 'asc',
+  estrena: 'asc', nota: 'desc', canal: 'desc', dia: 'desc' };
+const ORDRE_RJ = 'tria-ordre-rajoles';
+const ordresRj = () => { try { const v = JSON.parse(localStorage.getItem(ORDRE_RJ) || '{}'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } };
+export function ordreRajola(clau) { const n = ORDRE_NATURAL[clau]; if (!n) return null; const v = ordresRj()[clau]; return v === 'asc' || v === 'desc' ? v : n; }
+export function posaOrdreRajola(clau, v) { if (!ORDRE_NATURAL[clau]) return; try { localStorage.setItem(ORDRE_RJ, JSON.stringify({ ...ordresRj(), [clau]: v })); } catch {} }
+export function ordena(ss, clau, ordre = ordreRajola(clau)) {
+  if (!ordre || ordre === ORDRE_NATURAL[clau]) return ss;
+  return [...ss].reverse().map(s => ({ ...s, files: [...s.files].reverse(), ...(s.tambe ? { tambe: [...s.tambe].reverse() } : {}) }));
+}
+
 // ───────── l'ordre dels Artistes Preferents (ACT-775) ─────────
 export const ORDRES = [['manual', 'Manual'], ['az', 'A-Z'], ['za', 'Z-A'], ['inclusio-asc', 'Inclusió ↑'], ['inclusio-desc', 'Inclusió ↓'], ['escolta', 'Darrera escolta']];
 const ORDRE = 'tria-ordre-preferents';
 export function ordrePref() { try { const v = localStorage.getItem(ORDRE); return ORDRES.some(([k]) => k === v) ? v : 'manual'; } catch { return 'manual'; } }
 export function posaOrdrePref(v) { try { localStorage.setItem(ORDRE, v); } catch {} }
-// La darrera escolta de cada artista (Escolta.data_hora de les edicions dels seus àlbums), en una consulta.
-const darreres = db => memo(db, 'darrera-artista', () => new Map(files(db, `
-  SELECT a.artista_id AS id, MAX(s.data_hora) AS d FROM escolta s JOIN edicio e ON e.id = s.edicio_id JOIN album a ON a.id = e.album_id
-  GROUP BY a.artista_id`).map(r => [r.id, r.d])));
+// La darrera escolta de cada artista (Escolta.data_hora de les edicions dels seus àlbums), en una consulta. Compta també
+// les fitxes que comparteixen Persona (ACT-800, com el marc daurat i la obra 5): la clau és COALESCE(persona, nom_canonic).
+const normP = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+const darreres = db => memo(db, 'darrera-artista', () => {
+  const art = files(db, 'SELECT ar.id, COALESCE(ar.persona, ar.nom_canonic) AS p FROM artista ar');
+  const d = new Map(files(db, `SELECT a.artista_id AS id, MAX(s.data_hora) AS d FROM escolta s JOIN edicio e ON e.id = s.edicio_id JOIN album a ON a.id = e.album_id
+    GROUP BY a.artista_id`).map(r => [r.id, r.d]));
+  const perP = new Map();
+  for (const a of art) { const k = normP(a.p), v = d.get(a.id); if (v && (!perP.has(k) || perP.get(k) < v)) perP.set(k, v); }
+  return new Map(art.map(a => [a.id, perP.get(normP(a.p)) || null]));
+});
 // ps ve en ordre manual (preferent.ordre, id). Inclusió = preferent.id, l'ordre d'alta.
 export function ordenaPreferents(db, ps, ordre = ordrePref()) {
   const ll = [...ps];

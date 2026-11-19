@@ -507,14 +507,19 @@ function pintaArxiu() {
   rj.hidden = true; rj.innerHTML = '';
   const nom = R.RAJOLES.find(r => r.clau === clau)?.nom || '';
   cap.hidden = !estat.rajola;
-  cap.innerHTML = estat.rajola ? `<button class="torna-rajoles" data-rajoles="1">‹ Rajoles</button><b>${esc(nom)}</b>` : '';
-  const ss = R.seccions(db(), clau), tots = ss.reduce((a, s) => a + s.files.length, 0);
-  const fs = ss.map(s => ({ ...s, files: f ? s.files.filter(x => x.cerca.includes(f)) : s.files }));
+  const ordre = R.ordreRajola(clau);   // ACT-800 a, ACT-801: ascendent o descendent, recordat per rajola; A l'atzar, cap
+  cap.innerHTML = estat.rajola ? `<button class="torna-rajoles" data-rajoles="1">‹ Rajoles</button><b>${esc(nom)}</b>${ordre ? `<button class="ordre-rj" data-ordre-rj="${clau}" aria-label="Canvia l'ordre">${ordre === 'asc' ? '↑ ascendent' : '↓ descendent'}</button>` : ''}` : '';
+  const ss = R.ordena(R.seccions(db(), clau), clau, ordre), tots = ss.reduce((a, s) => a + s.files.length, 0);
+  const filtra = ll => f ? ll.filter(x => x.cerca.includes(f)) : ll;
+  const fs = ss.map(s => ({ ...s, files: filtra(s.files), ...(s.tambe ? { tambe: filtra(s.tambe) } : {}) }));
   const n = fs.reduce((a, s) => a + s.files.length, 0);
   $('#arxiuCompte').textContent = f ? `${n} de ${tots} discos` : (clau === 'tots' ? `${tots} discos, per artista` : `${tots} ${tots === 1 ? 'disc' : 'discos'}`);
   const titol = s => clau === 'canal' ? nomCanal(s.clau) : clau === 'nota' ? `${s.titol} ★` : s.titol;
-  caixa.innerHTML = fs.filter(s => s.files.length || (clau === 'durada' && !f)).map(s => (s.titol ? `<h2 class="ag-cap rj-cap"${clau === 'canal' ? ` data-canal="${esc(s.clau)}"` : ''}>${esc(titol(s))}${clau === 'durada' ? ' · ' + s.files.length : ''}</h2>` : '')
-      + s.files.map(x => filaArxiu(x, clau)).join('')).join('')
+  // Per Gènere (ACT-801): «Ambient 120 · +35», els de rama principal i, després de «També», els de rama secundària.
+  const compte = s => clau === 'durada' ? ' · ' + s.files.length : s.tambe ? ` ${s.files.length}${s.tambe.length ? ' · +' + s.tambe.length : ''}` : '';
+  caixa.innerHTML = fs.filter(s => s.files.length || s.tambe?.length || (clau === 'durada' && !f)).map(s => (s.titol ? `<h2 class="ag-cap rj-cap"${clau === 'canal' ? ` data-canal="${esc(s.clau)}"` : ''}>${esc(titol(s))}${compte(s)}</h2>` : '')
+      + s.files.map(x => filaArxiu(x, clau)).join('')
+      + (s.tambe?.length ? `<p class="rj-tambe">També</p>` + s.tambe.map(x => filaArxiu(x, clau)).join('') : '')).join('')
     || `<p class="subtitol" style="margin:14px 0 0">${f ? 'Res amb aquest nom.' : (clau === 'dia' ? 'Cap escolta d\'aquest dia en anys anteriors.' : 'Encara cap disc aquí.')}</p>`;
   I.omple(caixa);
 }
@@ -1914,6 +1919,7 @@ document.addEventListener('click', e => {
   if (d.psub) { if ($('#full').classList.contains('obert')) tancaFull(); if (d.psub === 'tots') estat.rajola = null; psub(d.psub); return; }
   if (d.rajola) { estat.rajola = d.rajola; if (d.rajola === 'atzar') R.remena(); window.scrollTo(0, 0); pintaArxiu(); return; }
   if (d.rajoles) { estat.rajola = null; window.scrollTo(0, 0); pintaArxiu(); return; }
+  if (d.ordreRj) { R.posaOrdreRajola(d.ordreRj, R.ordreRajola(d.ordreRj) === 'asc' ? 'desc' : 'asc'); pintaArxiu(); return; }
   if (d.sub) { if ($('#full').classList.contains('obert')) tancaFull(); sub(d.sub); return; }
   if (d.tornar) { vesA('faristol'); sub('pref'); aparador('pref'); N.tornaAlcada('artista', { sup: 'faristol', sub: 'pref' }); return; }   // ACT-691
 

@@ -2524,7 +2524,7 @@ export const COMPROVACIONS = [
     const files = await pagina.evaluate(() => [...document.querySelectorAll('#hist .hfila')].filter(f => f.querySelector('.hcap[data-fitxa]')).map(f => [f.querySelector('.hcap').dataset.fitxa, !!f.querySelector('.ico-pila')]));
     cal(files.some(([id]) => id === '1' || id === '5'), 'a l\'Historial no hi ha cap disc de les Piles per provar-ho: ' + JSON.stringify(files));
     cal(files.every(([id, ico]) => ico === (id === '1' || id === '5')), 'les icones de l\'Historial: ' + JSON.stringify(files));
-    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="tots"]'); await pagina.waitForTimeout(150);
+    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="tots"]'); await pagina.click('[data-rajola="tots"]'); await pagina.waitForTimeout(150);
     igual(await pagina.locator('#arxiu [data-fitxa="1"] .ico-pila').count(), 1, 'Angel\'s Flight a La Prestatgeria');
     igual(JSON.stringify(await pagina.evaluate(() => [...document.querySelectorAll('#arxiu .ar-fila')].filter(b => b.querySelector('.ico-pila')).map(b => +b.dataset.fitxa).sort((a, b) => a - b))),
       '[1,5,7,8]', 'només les edicions dels àlbums casats (Angel\'s Flight, In a Silent Way i les dues de Stankonia), no The Fat of the Land');
@@ -2548,7 +2548,7 @@ export const COMPROVACIONS = [
     const hf = await pagina.evaluate(() => { const i = [...document.querySelectorAll('#hist .hfila')].map(f => f.querySelector('.hdreta .ico-pila')).find(Boolean); if (!i) return null;
       const d = i.nextElementSibling, a = i.getBoundingClientRect(), b = d?.getBoundingClientRect(); return { abans: d?.className, mig: b ? Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) : 99, dinsCob: !!i.closest('.hcob') }; });
     cal(hf && hf.abans === 'hdur' && hf.mig < 4 && !hf.dinsCob, 'a l\'Historial, just a l\'esquerra de la durada i a l\'alçada del text: ' + JSON.stringify(hf));
-    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="tots"]'); await pagina.waitForTimeout(150);
+    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="tots"]'); await pagina.click('[data-rajola="tots"]'); await pagina.waitForTimeout(150);
     const pf = await pagina.evaluate(() => { const i = document.querySelector('#arxiu [data-fitxa="1"] .ico-pila'); if (!i) return null;
       const d = i.nextElementSibling, a = i.getBoundingClientRect(), b = d?.getBoundingClientRect(); return { abans: d?.className, mig: b ? Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) : 99, dinsCob: !!i.closest('.hcob') }; });
     cal(pf && pf.abans === 'm' && pf.mig < 4 && !pf.dinsCob, 'a La Prestatgeria, just a l\'esquerra de la durada: ' + JSON.stringify(pf));
@@ -2753,12 +2753,12 @@ export const COMPROVACIONS = [
     await pagina.click('#rajoles [data-rajola="durada"]'); await pagina.waitForTimeout(200);
     const caps = await pagina.locator('#arxiu .rj-cap').allInnerTexts();
     const durs = consulta('SELECT durada_total AS d FROM edicio').map(r => r.d), max = Math.max(...durs);
-    const esperades = ['menys de 15′', '15-30′', '30-45′', '45-60′', '60-80′'];
-    for (let de = 80; de < max + 1; de += 20) if (durs.some(d => d >= de && d < de + 20)) esperades.push(`${de}-${de + 20}′`);
+    const esperades = ['menys de 15′', '15-29′', '30-44′', '45-59′', '60-79′'];   // ACT-800 b: rètols sense solapar
+    for (let de = 80; de < max + 1; de += 20) if (durs.some(d => d >= de && d < de + 20)) esperades.push(`${de}-${de + 19}′`);
     igual(JSON.stringify(caps.map(c => c.split(' · ')[0])), JSON.stringify(esperades), 'les franges');
     const files = await pagina.locator('#arxiu .ar-fila').evaluateAll(fs => fs.map(f => { let c = f.previousElementSibling; while (c && !c.classList.contains('rj-cap')) c = c.previousElementSibling; return [c?.textContent.split(' · ')[0], +f.querySelector('.m').textContent.replace('′', '')]; }));
     igual(files.length, durs.length, 'tots els discos, a alguna franja');
-    const dins = (f, d) => f === 'menys de 15′' ? d < 15 : (([a, b]) => d >= a && d < b)(f.replace('′', '').split('-').map(Number));
+    const dins = (f, d) => f === 'menys de 15′' ? d < 15 : (([a, b]) => d >= a && d <= b)(f.replace('′', '').split('-').map(Number));
     const mal = files.filter(([f, d]) => !dins(f, d));
     cal(!mal.length, 'discos fora de la seva franja: ' + JSON.stringify(mal.slice(0, 3)));
     await pagina.click('[data-rajoles]'); await pagina.waitForTimeout(150);
@@ -2820,6 +2820,72 @@ export const COMPROVACIONS = [
     cal(ds.every((d, i) => !i || !d || (ds[i - 1] && ds[i - 1] >= d)), 'Darrera escolta: de la més recent a la més antiga, i els que no han sonat al final: ' + JSON.stringify(ns.map((n, i) => n + ' ' + ds[i])));
     await pagina.selectOption('#ordrePref', 'manual'); await pagina.waitForTimeout(150);
     cal(await pagina.locator('#btOrdena').isVisible(), 'en Manual torna «Ordena la llista»');
+  } },
+  { nom: 'rajoles (ACT-800 a, ACT-801): ordre ascendent o descendent a cada rajola, que el mòbil recorda per a cada una; A l\'atzar no en té', sintetic: true, async fes({ pagina, esperaDesat }) {
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21');
+      await A.canvia(db => { const ids = db.exec('SELECT id FROM album ORDER BY id')[0].values.map(r => r[0]); ids.forEach((id, i) => db.run('UPDATE album SET any_original = ? WHERE id = ?', [1970 + i * 3, id])); }); });
+    await esperaDesat(); await reobre(pagina);
+    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="tots"]'); await pagina.click('#rajoles [data-rajola="any"]'); await pagina.waitForTimeout(200);
+    const anys = () => pagina.locator('#arxiu .rj-cap').evaluateAll(hs => hs.map(h => +h.textContent.split(' ')[0]));
+    const a1 = await anys(); cal(a1.length > 2 && a1.every((x, i) => !i || a1[i - 1] < x), 'Per Any, ascendent per defecte: ' + a1);
+    cal(await pagina.locator('#rajolaCap .ordre-rj').count() === 1, 'a la capçalera de la rajola, el botó d\'ordre');
+    await pagina.click('#rajolaCap .ordre-rj'); await pagina.waitForTimeout(150);
+    const a2 = await anys(); igual(JSON.stringify(a2), JSON.stringify([...a1].reverse()), 'descendent: els anys a l\'inrevés');
+    await pagina.reload(); await pagina.waitForSelector('#peu:not([hidden])', { timeout: 10000 }); await pagina.waitForTimeout(300);
+    if (!(await pagina.locator('#arxiu .rj-cap').count())) { await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="tots"]'); await pagina.click('#rajoles [data-rajola="any"]'); await pagina.waitForTimeout(200); }
+    igual(JSON.stringify(await anys()), JSON.stringify(a2), 'el mòbil recorda el descendent de Per Any');
+    await pagina.click('[data-rajoles]'); await pagina.click('#rajoles [data-rajola="durada"]'); await pagina.waitForTimeout(200);
+    const d1 = await pagina.locator('#arxiu .rj-cap').evaluateAll(hs => hs.map(h => h.textContent.split(' · ')[0]));
+    igual(d1[0], 'menys de 15′', 'Per Durada segueix ascendent: cada rajola té el seu ordre');
+    await pagina.click('#rajolaCap .ordre-rj'); await pagina.waitForTimeout(150);
+    const ms = await pagina.locator('#arxiu .ar-fila .m').evaluateAll(xs => xs.map(x => +x.textContent.replace('′', '')));
+    cal(ms.every((x, i) => !i || ms[i - 1] >= x), 'Per Durada descendent: del més llarg al més curt, també dins de cada franja: ' + ms);
+    await pagina.click('#rajolaCap .ordre-rj'); await pagina.click('[data-rajoles]'); await pagina.click('#rajoles [data-rajola="atzar"]'); await pagina.waitForTimeout(200);
+    igual(await pagina.locator('#rajolaCap .ordre-rj').count(), 0, 'A l\'atzar no té ordre');
+    await pagina.click('[data-rajoles]'); await pagina.click('#rajoles [data-rajola="any"]'); await pagina.click('#rajolaCap .ordre-rj'); await pagina.click('[data-rajoles]');
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'); await A.canvia(db => db.run('UPDATE album SET any_original = NULL')); });
+    await esperaDesat();
+  } },
+  { nom: 'rajoles (ACT-801): Per Gènere, cada disc sota totes les seves rames (Àlbum.Gènere): primer on és la principal, després de «També» on és secundària; capçalera «Rama N · +M»', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21');
+      await A.canvia(db => { const ids = db.exec('SELECT id FROM album ORDER BY id')[0].values.map(r => r[0]);
+        ids.forEach((id, i) => db.run('UPDATE album SET generes = ? WHERE id = ?', [JSON.stringify(i === 0 ? ['Ambient', 'Jazz'] : i === 1 ? ['Jazz', 'Ambient', 'Electrònica'] : [i % 2 ? 'Ambient' : 'Jazz']), id])); }); });
+    await esperaDesat(); await reobre(pagina);
+    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="tots"]'); await pagina.click('#rajoles [data-rajola="genere"]'); await pagina.waitForTimeout(200);
+    const eds = consulta('SELECT e.id, a.generes FROM edicio e JOIN album a ON a.id = e.album_id').map(r => ({ id: r.id, g: JSON.parse(r.generes || '[]') }));
+    const seccio = await pagina.evaluate(() => { const out = {}; let cur = null, tram = 'p';
+      for (const el of document.querySelector('#arxiu').children) {
+        if (el.classList.contains('rj-cap')) { cur = el.textContent.trim(); out[cur] = { p: [], t: [] }; tram = 'p'; }
+        else if (el.classList.contains('rj-tambe')) tram = 't';
+        else if (el.dataset.fitxa && cur) out[cur][tram].push(+el.dataset.fitxa);
+      } return out; });
+    for (const g of ['Ambient', 'Jazz', 'Electrònica']) {
+      const p = eds.filter(e => e.g[0] === g).map(e => e.id).sort((a, b) => a - b), t = eds.filter(e => e.g.slice(1).includes(g)).map(e => e.id).sort((a, b) => a - b);
+      const cap = `${g} ${p.length}${t.length ? ' · +' + t.length : ''}`, s = seccio[cap];
+      cal(!!s, 'la capçalera «' + cap + '»: ' + Object.keys(seccio).join(' | '));
+      igual(JSON.stringify([...s.p].sort((a, b) => a - b)), JSON.stringify(p), g + ': els de rama principal, a dalt');
+      igual(JSON.stringify([...s.t].sort((a, b) => a - b)), JSON.stringify(t), g + ': després de «També», els de rama secundària');
+    }
+    cal((await pagina.locator('#rajoles, #rajolaCap').count()) > 0, 'la pantalla de rajoles hi és');
+    await pagina.click('[data-rajoles]'); await pagina.waitForTimeout(100);
+    const n = eds.filter(e => e.g.length).length;
+    cal((await pagina.locator('#rajoles [data-rajola="genere"] .rj-n').innerText()).startsWith(n + ' '), 'el comptador de la rajola, discos amb gènere (cada un un cop)');
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'); await A.canvia(db => db.run('UPDATE album SET generes = NULL')); });
+    await esperaDesat();
+  } },
+  { nom: 'preferents (ACT-800): Darrera escolta compta també els discos de la Persona compartida (Artista.Persona)', sintetic: true, async fes({ pagina, consulta, esperaDesat, tornaFaristol }) {
+    const prefs = consulta('SELECT p.id, p.artista_id AS a, ar.nom_canonic AS n FROM preferent p JOIN artista ar ON ar.id = p.artista_id ORDER BY p.ordre, p.id');
+    const darrera = consulta('SELECT a.artista_id AS a FROM escolta s JOIN edicio e ON e.id = s.edicio_id JOIN album a ON a.id = e.album_id ORDER BY s.data_hora DESC LIMIT 1')[0].a;
+    const l = [...prefs].reverse().find(p => p.a !== darrera); cal(!!l, 'cal un preferent que no sigui l\'artista de la darrera escolta');
+    const abans = consulta(`SELECT id, persona FROM artista WHERE id IN (${l.a}, ${darrera})`);
+    await pagina.evaluate(async ([x, y]) => { const A = await import('./js/arxiu.js?v=21'); await A.canvia(db => db.run('UPDATE artista SET persona = ? WHERE id IN (?, ?)', ['Persona Prova ACT-800', x, y])); }, [l.a, darrera]);
+    await esperaDesat(); await reobre(pagina);
+    await tornaFaristol('pref'); await pagina.click('[data-asub="pref"]'); await pagina.selectOption('#ordrePref', 'escolta'); await pagina.waitForTimeout(150);
+    const ns = await pagina.locator('#files .fila .nom').allInnerTexts(), q = prefs.find(p => p.a === darrera);
+    cal(ns[0] === l.n || (q && ns[0] === q.n && ns[1] === l.n), 'el preferent de la Persona compartida, amb la darrera escolta de l\'altra fitxa, va a dalt: ' + ns.join(', '));
+    await pagina.selectOption('#ordrePref', 'manual');
+    await pagina.evaluate(async ab => { const A = await import('./js/arxiu.js?v=21'); await A.canvia(db => ab.forEach(r => db.run('UPDATE artista SET persona = ? WHERE id = ?', [r.persona, r.id]))); }, abans);
+    await esperaDesat();
   } },
   { bloc: 'el que no ha de passar mai', guarda: true },
   { nom: 'cap petició no surt a internet', async fes({ fugides }) {
