@@ -21,6 +21,7 @@ import * as L from './llistes.js?v=1';
 import * as V from './discografia.js?v=1';
 import * as F from './afinacio.js?v=4';
 import * as N from './navegacio.js?v=1';
+import * as FX from './fitxa.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -1086,11 +1087,59 @@ function fullFitxa(d) {
       ${cel('escoltesfitxa', d.id, 'neutre', 'Escoltes', tEsc)}
       ${cel('mesfitxa', d.id, 'neutre', 'Més…', 'preferents, juntar, esborrar')}
     </div>
+    ${blocObra5(d)}
     <div class="llegenda"><span><i class="l-falta"></i>falta omplir</span><span><i class="l-ple"></i>omplert</span><span><i class="l-neutre"></i>no s'omple</span></div>
     ${d.parts.length ? blocParts(d) : ''}`, true);
   // La cadena de la fitxa (ACT-742, 7): les fulles que s'obren des d'aquí són a pantalla completa, i en recarregar l'app
   // aquesta fitxa es torna a obrir (ACT-743).
   $('#full').dataset.cadena = d.id; recordaPantalla();
+}
+// Obra 5 (ACT-771, ACT-772): l'artista i copiar. Preferent → «Ves a l'artista»; no preferent → «Tria el següent de X».
+function blocObra5(d) {
+  const pid = FX.preferentDe(db(), d.artista_id);
+  return `<div class="canals fitxa-obra5" style="margin-top:12px">
+    ${pid ? `<button data-vesartista="${pid}">Ves a l'artista <small>${esc(d.art)} · anterior i següent</small></button>`
+          : `<button data-triaseguent="${d.id}">Tria el següent de ${esc(d.art)} <small>el fa preferent, amb aquest disc de proper</small></button>`}
+    <button data-copiade="${d.id}">Copia d'un altre disc <small>gènere, subgèneres, llenguatge, formació i tags de l'àlbum</small></button></div>`;
+}
+function fullCopiaTria(d, filtre = '') {
+  const llista = FX.candidatsCopia(db(), d.album_id, filtre);
+  const files_ = llista.map(r => `<button data-copiaorigen="${r.id}">${esc(r.titol)} <small>${esc(r.art)}</small></button>`).join('')
+    || `<p class="subtitol">${filtre ? 'Cap disc amb aquest nom.' : 'Cap altre disc seu amb gènere o tags: cerca a tot l\'arxiu.'}</p>`;
+  if ($('#copiaLlista') && estat.copia?.id === d.id) { $('#copiaLlista').innerHTML = files_; return; }
+  estat.copia = { id: d.id };
+  obreFull(`<h3>Copia d'un altre disc</h3><p>${esc(d.titol)} · ${esc(d.art)}. A dalt, els seus; per a un altre, cerca'l.</p>
+    <label class="camp"><span>Cerca a tot l'arxiu</span><input id="inCopia" type="text" autocomplete="off" value="${esc(filtre)}"></label>
+    <div class="canals" id="copiaLlista">${files_}</div>`, true);
+  tornaA(d.id);
+  const i = $('#inCopia'); if (i) i.oninput = () => fullCopiaTria(d, i.value);
+}
+function fullCopia(d, de) {
+  const items = FX.copiable(db(), de), o = db().exec('SELECT a.titol FROM album a WHERE a.id = ' + (+de))[0]?.values[0][0] || '';
+  estat.copia = { id: d.id, de };
+  obreFull(`<h3>Què es copia</h3><p>De «${esc(o)}» a «${esc(d.titol)}». El gènere, el llenguatge, la formació, la veu i l'estació substitueixen; els subgèneres, els tags i els idiomes se sumen.</p>
+    ${items.length ? `<div class="copia-caselles">${items.map(x => `<label class="camp" style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-clau="${esc(x.clau)}" ${x.marcat ? 'checked' : ''}><span>${esc(x.txt)}</span></label>`).join('')}</div>
+      <p class="gris" style="font-size:12px">Amor, Acompanyat, Absorbeix i En directe surten desmarcats: marca'ls només si també valen per a aquest disc.</p>
+      <div class="barra-accions" style="position:static;padding:8px 0 0"><button class="bt principal" data-fescopia="${d.id}|${+de}">Copia</button></div>`
+      : '<p class="gris">Aquest disc no té res per copiar.</p>'}`, true);
+  tornaA(d.id);
+}
+// La pregunta en sortir de rotació (ACT-771): després de la nota, i només si l'artista és preferent.
+function preguntaSortida(id) {
+  const d = D.fitxa(db(), id); if (!d) return;
+  const pid = FX.preferentDe(db(), d.artista_id); if (!pid) return;
+  obreFull(`<h3>I ara, de ${esc(d.art)}?</h3><p>${esc(d.titol)} ha sortit de rotació. El disc anterior o el següent, comptat des d'aquest, passa a ser el proper.</p>
+    <div class="canals"><button data-veisortida="${pid}:ant:${d.album_id}">◀ Disc anterior <small>des de «${esc(d.titol)}»</small></button>
+      <button data-veisortida="${pid}:seg:${d.album_id}">Disc següent ▶ <small>des de «${esc(d.titol)}»</small></button></div>
+    <div class="barra-accions" style="position:static;padding:8px 0 0"><button class="bt discret" data-tornafull="1">Ara no</button></div>`);
+}
+function fullVeiDe(partida, dir, v) {
+  const quin = dir === 'seg' ? 'següent' : 'anterior';
+  estat.vei = { ...v, dir, partida, candidats: [] };
+  obreFull(`<h3>El disc ${quin}</h3><p>${esc(partida.art)} · des de «${esc(partida.titol)}»</p>
+    ${v.pid ? substitueix(D.partidesVei(db(), v.pid)) : `<p>El que triïs passa a ser el proper, i ${esc(partida.art)} entra a Artistes Preferents.</p>`}
+    <div class="canals" id="veins"><p class="subtitol">Cercant…</p></div>`, true);
+  cercaVei();
 }
 // «fa X», per a la marca «Per afinar» (ACT-686): el símptoma de la ACT-676 es llegeix en aquesta xifra.
 function fa(iso) {
@@ -1171,6 +1220,7 @@ function fullGenere(d) {
   const subs = [...new Set([...g.vistos, ...F.subgeneresUsats(db())])];
   obreFull(`<h3>El gènere</h3><p>${esc(d.titol)} · ${esc(d.art)}</p>
     ${d.n_edicions > 1 ? `<p class="gris" style="font-size:11.5px;margin:2px 0 6px">És de l'àlbum: canvia a les ${d.n_edicions} edicions.</p>` : ''}
+    ${!g.generes.length && (estat.comAltres = FX.generePelsAltres(db(), d.album_id)) ? `<div class="canals"><button data-comaltres="1">Com els altres de ${esc(d.art)} <small>${esc(estat.comAltres.generes.join(' · '))}</small></button></div>` : ''}
     <h4 class="gen-eix">Ordre <small>· la primera és la principal</small></h4>
     <div class="gen-triats">${g.generes.map((x, i) => `<div class="gen-triat"><span>${i + 1}. ${esc(x)}</span>
       ${i ? `<button class="mes" data-genamunt="${i}" aria-label="Puja ${esc(x)}">↑</button>` : ''}<button class="mes" data-gentreu="${i}" aria-label="Treu ${esc(x)}">✕</button></div>`).join('') || '<p class="gris">Encara cap. Toca una branca.</p>'}</div>
@@ -1790,7 +1840,7 @@ document.addEventListener('click', e => {
   }
   if (d.punt !== undefined) { const id = +d.id; delete $('#full').dataset.encaraNo; estat.sortint = null; estat.tagsSortida = null; tancaFull();
     const nom = D.ESCALA.find(([, v]) => v === +d.punt)[0];
-    fes(D.puntua(id, +d.punt), 'Puntuat: ' + nom, { abans: estat.abansSortida }); return; }
+    fes(D.puntua(id, +d.punt), 'Puntuat: ' + nom, { abans: estat.abansSortida }).then(() => preguntaSortida(id)); return; }
   if (d.puntencara) { delete $('#full').dataset.encaraNo; estat.sortint = null; estat.tagsSortida = null; tancaFull(); fes(D.encaraNo(+d.puntencara), 'Sense nota, de moment. Tornarà.', { abans: estat.abansSortida }); return; }
   if (d.torna) { delete $('#full').dataset.encaraNo; estat.sortint = null; estat.tagsSortida = null; tancaFull(); fes(D.tornaARotacio(+d.torna), 'Torna a la rotació', { abans: estat.abansSortida }); return; }
   if (d.espera) { tancaFull(); fes(D.deixaEsperant(+d.espera), 'La caixa queda esperant', { abans: estat.abansSortida }); return; }
@@ -1841,6 +1891,7 @@ document.addEventListener('click', e => {
     fes(E.confirmaDurada(id), 'Durada confirmada: no tornarà a avisar mentre no la canviïs.'); if (obert) { const x = rot(id); if (x) fullFitxa(x); } return; }
   if (d.jaafinat) { const id = +d.jaafinat; fes(F.jaAfinat(id), 'Afinat'); const x = rot(id); if (x) fullFitxa(x); return; }
   if (d.generefitxa) { const x = rot(d.generefitxa); if (x) { estat.gen = null; fullGenere(x); } return; }
+  if (d.comaltres) { const s = estat.comAltres; if (s) tocaGenere(g => { g.generes = [...s.generes]; }); return; }
   if (d.genbr) { tocaGenere(g => { const i = g.generes.indexOf(d.genbr); if (i >= 0) g.generes.splice(i, 1); else g.generes.push(d.genbr); }); return; }
   if (d.genamunt) { tocaGenere(g => { const i = +d.genamunt; [g.generes[i - 1], g.generes[i]] = [g.generes[i], g.generes[i - 1]]; }); return; }
   if (d.gentreu) { tocaGenere(g => { g.generes.splice(+d.gentreu, 1); }); return; }
@@ -2046,7 +2097,16 @@ document.addEventListener('click', e => {
   if (d.discografia) { fullDiscografia(+d.discografia); return; }
   if (d.veimb) { const c = $('#veins'); if (c) c.innerHTML = '<p class="subtitol">Cercant…</p>'; cercaVei(d.veimb); return; }
   if (d.triavei) { const v = estat.vei, x = v?.candidats[+d.triavei]; if (!x) return;
-    tancaFull(); fes(D.posaProper(v.pid, x.titol), 'El proper: ' + x.titol); return; }
+    tancaFull(); fes(v.nouPref ? FX.fesPreferentAmbProper(v.nouPref, x.titol) : D.posaProper(v.pid, x.titol),
+      v.nouPref ? `${v.partida.art} a Artistes Preferents · el proper: ${x.titol}` : 'El proper: ' + x.titol); return; }
+  if (d.vesartista) { N.apuntaAlcada('artista', { sup: estat.superficie, sub: estat.sub }); tancaFull(); estat.artista = +d.vesartista; pintaArtista(estat.artista); vesA('artista'); return; }
+  if (d.triaseguent) { const x = rot(d.triaseguent); if (!x) return; fullVeiDe(FX.partidaDelDisc(db(), x.album_id), 'seg', { pid: null, nouPref: x.artista_id }); tornaA(x.id); return; }
+  if (d.veisortida) { const [pid, dir, al] = d.veisortida.split(':'); fullVeiDe(FX.partidaDelDisc(db(), +al), dir, { pid: +pid }); return; }
+  if (d.copiade) { const x = rot(d.copiade); if (x) { estat.copia = null; fullCopiaTria(x); } return; }
+  if (d.copiaorigen) { const x = estat.copia && rot(estat.copia.id); if (x) fullCopia(x, +d.copiaorigen); return; }
+  if (d.fescopia) { const [id, de] = d.fescopia.split('|').map(Number), claus = [...$('#full').querySelectorAll('input[data-clau]:checked')].map(i => i.dataset.clau);
+    const x = rot(id); if (!x) return;
+    fes(FX.copia(de, x.album_id, claus), 'Copiat: ' + claus.length + (claus.length === 1 ? ' cosa' : ' coses')).then(() => { const y = rot(id); if (y) fullFitxa(y); }); return; }
   if (d.triaproper) { fullProper(+d.triaproper); return; }
   if (d.desaproper) { const t2 = $('#inProper').value.trim(); if (!t2) { avisa('Cal un títol.'); return; }
     tancaFull(); fes(D.posaProper(estat.properDe, t2), 'El proper: ' + t2); return; }

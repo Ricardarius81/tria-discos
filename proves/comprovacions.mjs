@@ -2473,6 +2473,113 @@ export const COMPROVACIONS = [
     igual(JSON.stringify(p), JSON.stringify([{ numero: 1, nom: 'Acte 1', durada: 105 }, { numero: 2, nom: 'Acte 2', durada: 65 }, { numero: 3, nom: 'Acte 3', durada: 78 }]), 'Part.Numero, Part.Nom i Part.Durada de la caixa nova');
     igual(consulta(`SELECT e.durada_total FROM edicio e JOIN album a ON a.id = e.album_id WHERE a.titol = 'Banc Parsifal Nou'`)[0]?.durada_total, 248, 'Edició.Durada_total de la caixa nova');
   } },
+  // ───────── obra 5: la fitxa (ACT-771, ACT-772) ─────────
+  { bloc: 'obra 5: la fitxa (ACT-771, ACT-772)' },
+  { nom: 'fitxa (ACT-771): un disc d\'un preferent porta «Ves a l\'artista» i obre la seva pàgina, amb anterior i següent', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    const id = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'), D = await import('./js/dades.js?v=25');
+      let r; await A.canvia(db => { r = D.posaEnRotacio({ art: 'Miles Davis', tit: 'Banc Nefertiti', min: 40, canal: 'youtube' })(db); }); return r.id; });
+    await esperaDesat(); await reobre(pagina);
+    const pid = consulta(`SELECT pr.id FROM preferent pr JOIN artista ar ON ar.id = pr.artista_id WHERE ar.nom_canonic = 'Miles Davis'`)[0]?.id;
+    cal(pid, 'Miles Davis havia de ser preferent al sintètic');
+    await pagina.locator(`[data-fitxa="${id}"]`).first().click(); await pagina.waitForSelector('#full.obert');
+    igual(await pagina.locator('#full [data-triaseguent]').count(), 0, 'un preferent no porta «Tria el següent»');
+    igual(await pagina.locator('#full [data-vesartista]').getAttribute('data-vesartista').catch(() => null), String(pid), 'el botó «Ves a l\'artista» porta Preferent.id');
+    await pagina.click('#full [data-vesartista]'); await pagina.waitForSelector('#s-artista.activa');
+    const t = await pagina.locator('#s-artista').innerText();
+    cal(t.includes('Disc anterior') && t.includes('Disc següent'), 'la pàgina de l\'artista havia de portar anterior i següent: ' + JSON.stringify(t.slice(0, 300)));
+  } },
+  { nom: 'fitxa (ACT-771): un no preferent porta «Tria el següent de X»; triar-lo el fa preferent amb aquell disc de proper, i en sortir de rotació es pregunta pel següent', sintetic: true, async fes({ pagina, consulta, esperaDesat, fonts }) {
+    const ib = (name, prev, next) => `{{Infobox album\n| name = ${name}\n| type = studio\n| artist = [[Talk Talk]]\n| chronology = [[Talk Talk discography|Talk Talk]]\n${prev ? `| prev_title = ''[[${prev}]]''\n| prev_year = 1986\n` : ''}${next ? `| next_title = ''[[${next}]]''\n| next_year = 1991\n` : ''}}}`;
+    fonts.actiu = true;
+    fonts.wp.cerques['spirit of eden'] = ['Spirit of Eden'];
+    fonts.wp.pagines['Spirit of Eden'] = ib('Spirit of Eden', 'The Colour of Spring', 'Laughing Stock');
+    fonts.wp.pagines['Laughing Stock'] = ib('Laughing Stock', 'Spirit of Eden', null);
+    fonts.wp.pagines['The Colour of Spring'] = ib('The Colour of Spring', null, 'Spirit of Eden');
+    try {
+      const ids = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'), D = await import('./js/dades.js?v=25');
+        let r, s; await A.canvia(db => { r = D.posaEnRotacio({ art: 'Talk Talk', tit: 'Spirit of Eden', min: 41, canal: 'youtube' })(db);
+          s = D.posaEnRotacio({ art: 'Banc Ningú', tit: 'Banc Res', min: 30, canal: 'youtube' })(db); }); return [r.id, s.id]; });
+      await esperaDesat(); await reobre(pagina);
+      await pagina.locator(`[data-fitxa="${ids[0]}"]`).first().click(); await pagina.waitForSelector('#full.obert');
+      igual(await pagina.locator('#full [data-vesartista]').count(), 0, 'un no preferent no porta «Ves a l\'artista»');
+      cal(/Tria el següent de Talk Talk/.test(await pagina.locator('#full [data-triaseguent]').innerText().catch(() => '')), 'falta «Tria el següent de Talk Talk»');
+      await pagina.click('#full [data-triaseguent]'); await pagina.waitForSelector('#veins [data-triavei]', { timeout: 15000 });
+      cal((await pagina.locator('#veins').innerText()).includes('Laughing Stock'), 'el següent havia de ser Laughing Stock');
+      await pagina.click('#veins [data-triavei="0"]'); await esperaDesat();
+      igual(consulta(`SELECT pr.proper_titol AS t FROM preferent pr JOIN artista ar ON ar.id = pr.artista_id WHERE ar.nom_canonic = 'Talk Talk'`)[0]?.t, 'Laughing Stock', 'Preferent.proper_titol de Talk Talk després de triar el següent');
+      // Sortir de rotació: després de la nota, la pregunta pel següent o l'anterior, perquè ara és preferent.
+      await reobre(pagina);
+      await pagina.locator(`[data-fitxa="${ids[0]}"]`).first().click(); await pagina.waitForSelector('#full.obert');
+      await pagina.click('#full [data-treure]'); await pagina.waitForSelector('#full [data-punt]');
+      await pagina.locator('#full [data-punt]').first().click();
+      await pagina.waitForSelector('#full.obert [data-veisortida]', { timeout: 5000 }).catch(() => {});
+      igual(await pagina.locator('#full.obert [data-veisortida]').count(), 2, 'després de la nota d\'un preferent, anterior i següent');
+      await pagina.click('#full [data-veisortida*=":seg:"]'); await pagina.waitForSelector('#veins [data-triavei]', { timeout: 15000 });
+      cal((await pagina.locator('#full').innerText()).includes('des de «Spirit of Eden»'), 'el següent es compta des del disc que surt');
+      await pagina.click('[data-tornafull]'); await esperaDesat();
+      // Un no preferent: la nota i prou.
+      await reobre(pagina);
+      await pagina.locator(`[data-fitxa="${ids[1]}"]`).first().click(); await pagina.waitForSelector('#full.obert');
+      await pagina.click('#full [data-treure]'); await pagina.waitForSelector('#full [data-punt]');
+      await pagina.locator('#full [data-punt]').first().click(); await pagina.waitForTimeout(600);
+      igual(await pagina.locator('#full.obert [data-veisortida]').count(), 0, 'un no preferent no porta la pregunta');
+      igual(consulta(`SELECT COUNT(*) AS n FROM preferent pr JOIN artista ar ON ar.id = pr.artista_id WHERE ar.nom_canonic = 'Banc Ningú'`)[0].n, 0, 'Banc Ningú continua sense Preferent');
+      await esperaDesat();
+    } finally { fonts.actiu = false; }
+  } },
+  { nom: 'fitxa (ACT-772 a): «Com els altres de X» posa d\'un toc el gènere més repetit de l\'artista; amb empat no surt', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    const ids = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'), D = await import('./js/dades.js?v=25'), F = await import('./js/afinacio.js?v=4');
+      const o = {};
+      await A.canvia(db => {
+        const fes = (art, tit, g) => { const r = D.posaEnRotacio({ art, tit, min: 40, canal: 'youtube' })(db);
+          const al = db.exec('SELECT album_id FROM edicio WHERE id = ' + r.id)[0].values[0][0];
+          if (g) F.desaGenere(al, { generes: g, llenguatge: [], formacio: [], instrument: '', subgeneres: [] })(db); return r.id; };
+        fes('Banc Garbarek', 'Banc G1', ['Jazz']); fes('Banc Garbarek', 'Banc G2', ['Jazz', 'Ambient']); fes('Banc Garbarek', 'Banc G3', ['Jazz', 'Ambient']);
+        o.nou = fes('Banc Garbarek', 'Banc G4', null);
+        fes('Banc Empat', 'Banc E1', ['Jazz']); fes('Banc Empat', 'Banc E2', ['Rock']); o.empat = fes('Banc Empat', 'Banc E3', null);
+      });
+      return o; });
+    await esperaDesat(); await reobre(pagina);
+    await pagina.locator(`[data-fitxa="${ids.empat}"]`).first().click(); await pagina.waitForSelector('#full.obert');
+    await pagina.click('#full [data-generefitxa]'); await pagina.waitForSelector('#full .gen-branques');
+    igual(await pagina.locator('#full [data-comaltres]').count(), 0, 'amb empat (Jazz 1, Rock 1) no surt la suggeriment');
+    await pagina.click('[data-tornafull]').catch(() => {});
+    await reobre(pagina);
+    await pagina.locator(`[data-fitxa="${ids.nou}"]`).first().click(); await pagina.waitForSelector('#full.obert');
+    await pagina.click('#full [data-generefitxa]'); await pagina.waitForSelector('#full .gen-branques');
+    const t = await pagina.locator('#full [data-comaltres]').innerText().catch(() => '');
+    cal(/Com els altres de Banc Garbarek/.test(t) && /Jazz · Ambient/.test(t), 'falta «Com els altres de Banc Garbarek» amb Jazz · Ambient: ' + JSON.stringify(t));
+    await pagina.click('#full [data-comaltres]'); await esperaDesat();
+    igual(consulta(`SELECT a.generes FROM album a JOIN edicio e ON e.album_id = a.id WHERE e.id = ${ids.nou}`)[0].generes, '["Jazz","Ambient"]', 'Àlbum.Gènere després de «Com els altres»');
+    await pagina.click('[data-tornafull]').catch(() => {});
+  } },
+  { nom: 'fitxa (ACT-772): «Copia d\'un altre disc» ensenya què es copiarà, amb Amor, Acompanyat, Absorbeix i En directe desmarcats; el gènere substitueix i els subgèneres i els tags se sumen', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    const ids = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'), D = await import('./js/dades.js?v=25'), F = await import('./js/afinacio.js?v=4');
+      const o = {};
+      await A.canvia(db => {
+        const fes = (tit, g, s, tags) => { const r = D.posaEnRotacio({ art: 'Banc Coltrane', tit, min: 40, canal: 'youtube' })(db);
+          const al = db.exec('SELECT album_id FROM edicio WHERE id = ' + r.id)[0].values[0][0];
+          F.desaGenere(al, { generes: g, llenguatge: [], formacio: [], instrument: '', subgeneres: s })(db);
+          db.run('UPDATE album SET tags = ? WHERE id = ?', [tags.length ? JSON.stringify(tags) : null, al]); return { ed: r.id, al }; };
+        o.de = fes('Banc Origen', ['Jazz'], ['Modal'], ['Absorbeix', 'Apte per dormir', 'Apte per «Amor»', 'En directe', 'Apte per acompanyat', 'Instrumental / amb veu: instrumental']);
+        o.a = fes('Banc Desti', ['Rock'], ['Hard Bop'], ['Acústic']);
+      });
+      return o; });
+    await esperaDesat(); await reobre(pagina);
+    await pagina.locator(`[data-fitxa="${ids.a.ed}"]`).first().click(); await pagina.waitForSelector('#full.obert');
+    await pagina.click('#full [data-copiade]'); await pagina.waitForSelector(`#full [data-copiaorigen="${ids.de.al}"]`, { timeout: 5000 });
+    await pagina.click(`#full [data-copiaorigen="${ids.de.al}"]`); await pagina.waitForSelector('#full [data-fescopia]');
+    const marcat = async c => pagina.locator(`#full input[data-clau="${c}"]`).isChecked().catch(() => 'no hi és');
+    for (const c of ['tag:Absorbeix', 'tag:Apte per «Amor»', 'tag:En directe', 'tag:Apte per acompanyat']) igual(await marcat(c), false, `casella ${c}`);
+    for (const c of ['genere', 'subgeneres', 'tag:Apte per dormir', 'veu:instrumental']) igual(await marcat(c), true, `casella ${c}`);
+    await pagina.click('#full [data-fescopia]'); await esperaDesat();
+    const r = consulta(`SELECT generes, subgeneres, tags FROM album WHERE id = ${ids.a.al}`)[0];
+    igual(r.generes, '["Jazz"]', 'Àlbum.Gènere (substitueix)');
+    igual(r.subgeneres, '["Hard Bop","Modal"]', 'Àlbum.Subgèneres (se sumen)');
+    const tg = JSON.parse(r.tags || '[]');
+    cal(tg.includes('Acústic') && tg.includes('Apte per dormir') && tg.includes('Instrumental / amb veu: instrumental') && !tg.includes('Absorbeix') && !tg.includes('Apte per «Amor»') && !tg.includes('En directe') && !tg.includes('Apte per acompanyat'),
+      'Àlbum.tags: s\'havien de sumar Apte per dormir i la veu, sense els quatre desmarcats: ' + r.tags);
+  } },
   { bloc: 'el que no ha de passar mai', guarda: true },
   { nom: 'cap petició no surt a internet', async fes({ fugides }) {
     const fora = fugides.filter(h => !/musicbrainz|coverartarchive|wikipedia|wikimedia|wikidata|bandcamp/.test(h));
