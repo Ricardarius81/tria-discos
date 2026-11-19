@@ -444,11 +444,11 @@ function pintaHistorial() {
     const d = f.d, fons = d.portada && I.adreca(d.portada) ? `--img:url('${esc(I.adreca(d.portada))}')` : '';
     h += `<div class="hfila" style="${fons}">
       <button class="hcap" data-fitxa="${d.id}" aria-label="Fitxa de ${esc(d.titol)}">
-        <span class="hcob">${esc(inicials(d.art))}${d.portada ? IMG(d.portada) : ''}${icoPila(d.id)}</span>
+        <span class="hcob">${esc(inicials(d.art))}${d.portada ? IMG(d.portada) : ''}</span>
         <span class="htxt"><span class="htit">${esc(d.titol)}</span><span class="hart">${esc(d.art)}</span>
           <span class="hmeta"><u>${quan(f.darrera)}</u> · ${n}</span></span>
       </button>
-      <span class="hdreta">${d.min ? `<span class="hdur">${d.min}′</span>` : ''}
+      <span class="hdreta"><span class="hdl">${icoPila(d.id)}${d.min ? `<span class="hdur">${d.min}′</span>` : ''}</span>
         ${d.rotacio_actual ? `<span class="hja">en rotació</span>` : `<button class="hrot" data-hrot="${d.id}">＋ Rotació</button>`}</span>${botoPlay(d, 'hplay')}
     </div>`;
   }
@@ -487,9 +487,9 @@ function pintaArxiu() {
   $('#arxiuCompte').textContent = f ? `${ll.length} de ${tots.length} discos` : `${tots.length} discos, per artista`;
   // Dues edicions del mateix àlbum: el nom de l'edició, si en té, i sempre la durada (ACT-637).
   caixa.innerHTML = ll.map(x => `<button class="ar-fila" data-fitxa="${x.id}">
-      <span class="hcob">${esc(inicials(x.art))}${x.portada ? IMG(x.portada) : ''}${icoPila(x.id)}</span>
+      <span class="hcob">${esc(inicials(x.art))}${x.portada ? IMG(x.portada) : ''}</span>
       <span class="htxt"><span class="htit">${esc(x.titol)}</span><span class="hart">${esc(x.art)}${x.n_edicions > 1 && x.nom_edicio ? ' · ' + esc(x.nom_edicio) : ''}${x.n_parts ? ` · <i>${x.n_parts} parts</i>` : ''}${x.rotacio_actual ? ' · <i>en rotació</i>' : ''}</span></span>
-      <span class="m">${x.durada_total}′</span></button>`).join('')
+      ${icoPila(x.id)}<span class="m">${x.durada_total}′</span></button>`).join('')
     || `<p class="subtitol" style="margin:14px 0 0">${tots.length ? 'Res amb aquest nom.' : 'L\'arxiu encara és buit.'}</p>`;
   I.omple(caixa);
 }
@@ -500,7 +500,7 @@ function pintaArxiu() {
 const PILA = 'tria-pila';
 // ACT-773: la icona de Pila a la cantonada de la portada, quan l'àlbum té una entrada casada sense data_sortida. Es calcula un
 // cop per pintada (estat.enPiles) i es fa servir a Discos en rotació, a l'Historial i a La Prestatgeria.
-const icoPila = edId => { const l = estat.enPiles?.get(edId); return l ? `<span class="ico-pila" data-icopila="${esc(l.map(x => x.nom).join(' · '))}">${l.map(x => `<i title="${esc(x.nom)}">${esc(P.figura(x.nom))}</i>`).join('')}</span>` : ''; };
+const icoPila = edId => { const l = estat.enPiles?.get(edId); return l ? `<span class="ico-pila" data-icopila="${esc(l.map(x => x.nom).join(' · '))}">${l.map(x => `<i title="${esc(x.nom)}">${P.figura(x.nom)}</i>`).join('')}</span>` : ''; };
 const edDe = id => D.edicio(db(), +id) || D.fitxa(db(), +id);
 const darreraPila = ps => { let v = null; try { v = +localStorage.getItem(PILA); } catch {} return ps.find(p => p.id === v) || ps[0] || null; };
 function pintaPiles() {

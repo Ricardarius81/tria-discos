@@ -798,6 +798,16 @@ body[data-estil="ricard"] .apar-tabs button[aria-selected="true"]{background:var
 .fitxa-piles .a-pila{white-space:nowrap}
 #full input.cerca{display:block; width:100%; margin:0 0 8px}
 .ico-pila{position:absolute; top:4px; right:4px; z-index:2; display:inline-flex; gap:2px; pointer-events:none}
-.ico-pila i{display:inline-grid; place-items:center; width:18px; height:18px; border-radius:50%; background:var(--os,#333); color:var(--fons,#fff);
-  font:600 10px/1 system-ui, sans-serif; font-style:normal}
-.coberta .ico-pila{top:auto; bottom:9px; right:9px}
+.ico-pila i{display:inline-grid; place-items:center; width:16px; height:16px; color:var(--os-2); font-style:normal}
+.ico-pila svg.pf{width:16px; height:16px; display:block}
+/* ACT-797: a la portada de Rotació, a dalt a l'esquerra (a dalt a la dreta hi ha el ▶, a baix la durada i la marca de portada pendent). */
+.coberta .ico-pila{top:8px; left:8px; right:auto; bottom:auto}
+.coberta .ico-pila i{width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,.5); color:#fff}
+.coberta .ico-pila svg.pf{width:15px; height:15px}
+.coberta:has(> .ico-pila){padding-top:34px} /* sense portada, el títol no queda sota la icona */
+/* A les files de l'Historial i La Prestatgeria, just a l'esquerra de la durada i a l'alçada del text. */
+.hdl{display:flex; align-items:center; gap:5px}
+.hdreta .ico-pila, .ar-fila .ico-pila{position:static; align-self:center}
+.hdreta .ico-pila i{color:#fff; opacity:.85}
+.ar-fila .ico-pila{margin-left:auto; flex:none}
+.ar-fila .ico-pila + .m{margin-left:6px}

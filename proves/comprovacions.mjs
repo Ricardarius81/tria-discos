@@ -2521,7 +2521,7 @@ export const COMPROVACIONS = [
     await esperaDesat(); await reobre(pagina); await pagina.click('[data-sub="rot"]'); await pagina.waitForTimeout(150);
     igual(await pagina.locator('#reixa .coberta[data-fitxa="1"] .ico-pila[data-icopila="Gimnàs"]').count(), 1, 'Angel\'s Flight a Discos en rotació');
     await pagina.click('[data-sub="hist"]'); await pagina.waitForTimeout(150);
-    const files = await pagina.evaluate(() => [...document.querySelectorAll('#hist .hcap[data-fitxa]')].map(b => [b.dataset.fitxa, !!b.querySelector('.ico-pila')]));
+    const files = await pagina.evaluate(() => [...document.querySelectorAll('#hist .hfila')].filter(f => f.querySelector('.hcap[data-fitxa]')).map(f => [f.querySelector('.hcap').dataset.fitxa, !!f.querySelector('.ico-pila')]));
     cal(files.some(([id]) => id === '1' || id === '5'), 'a l\'Historial no hi ha cap disc de les Piles per provar-ho: ' + JSON.stringify(files));
     cal(files.every(([id, ico]) => ico === (id === '1' || id === '5')), 'les icones de l\'Historial: ' + JSON.stringify(files));
     await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="tots"]'); await pagina.waitForTimeout(150);
@@ -2531,6 +2531,29 @@ export const COMPROVACIONS = [
     await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'); await A.canvia(db => db.run('DELETE FROM pila_entrada WHERE album_id = 1')); });
     await esperaDesat(); await reobre(pagina); await pagina.click('[data-sub="rot"]'); await pagina.waitForTimeout(150);
     igual(await pagina.locator('#reixa .coberta[data-fitxa="1"] .ico-pila').count(), 0, 'sense la entrada, sense icona');
+  } },
+
+  { nom: 'icona de Pila de línia fina (ACT-797): figures en traç (manuella, avió, cotxe; una Pila nova, la inicial en un cercle), a dalt a l\'esquerra de la portada de Rotació i a l\'esquerra de la durada a les files', sintetic: true, async fes({ pagina, esperaDesat }) {
+    const fig = await pagina.evaluate(async () => { const P = await import('./js/piles.js?v=1'); return ['Gimnàs', 'Avió/Tren/Bus', 'Cotxe', 'Lectura'].map(n => P.figura(n)); });
+    fig.slice(0, 3).forEach((s, i) => cal(/^<svg[^>]*class="pf"/.test(s) && /stroke/.test(s) && !/[\u{1F300}-\u{1FAFF}✈]/u.test(s), 'la figura ' + i + ' no és de traç: ' + s.slice(0, 80)));
+    cal(new Set(fig.slice(0, 3)).size === 3, 'les tres figures són iguals');
+    cal(/<circle/.test(fig[3]) && />L</.test(fig[3]), 'una Pila nova, la inicial en un cercle: ' + fig[3].slice(0, 120));
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'), P = await import('./js/piles.js?v=1'); await A.canvia(P.afegeix(1, null, null, 1)); });
+    await esperaDesat(); await reobre(pagina); await pagina.click('[data-sub="rot"]'); await pagina.waitForTimeout(150);
+    const cob = await pagina.evaluate(() => { const c = document.querySelector('#reixa .coberta[data-fitxa="1"]'), i = c?.querySelector('.ico-pila'); if (!i) return null;
+      const a = c.getBoundingClientRect(), b = i.getBoundingClientRect(); return { esq: b.left - a.left, dalt: b.top - a.top, dreta: a.right - b.right, svg: !!i.querySelector('svg') }; });
+    cal(cob && cob.svg, 'a la portada de Rotació, la icona en traç: ' + JSON.stringify(cob));
+    cal(cob.esq < 16 && cob.dalt < 16 && cob.dreta > 40, 'a dalt a l\'esquerra de la portada: ' + JSON.stringify(cob));
+    await pagina.click('[data-sub="hist"]'); await pagina.waitForTimeout(150);
+    const hf = await pagina.evaluate(() => { const i = [...document.querySelectorAll('#hist .hfila')].map(f => f.querySelector('.hdreta .ico-pila')).find(Boolean); if (!i) return null;
+      const d = i.nextElementSibling, a = i.getBoundingClientRect(), b = d?.getBoundingClientRect(); return { abans: d?.className, mig: b ? Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) : 99, dinsCob: !!i.closest('.hcob') }; });
+    cal(hf && hf.abans === 'hdur' && hf.mig < 4 && !hf.dinsCob, 'a l\'Historial, just a l\'esquerra de la durada i a l\'alçada del text: ' + JSON.stringify(hf));
+    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="tots"]'); await pagina.waitForTimeout(150);
+    const pf = await pagina.evaluate(() => { const i = document.querySelector('#arxiu [data-fitxa="1"] .ico-pila'); if (!i) return null;
+      const d = i.nextElementSibling, a = i.getBoundingClientRect(), b = d?.getBoundingClientRect(); return { abans: d?.className, mig: b ? Math.abs((a.top + a.bottom) / 2 - (b.top + b.bottom) / 2) : 99, dinsCob: !!i.closest('.hcob') }; });
+    cal(pf && pf.abans === 'm' && pf.mig < 4 && !pf.dinsCob, 'a La Prestatgeria, just a l\'esquerra de la durada: ' + JSON.stringify(pf));
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'); await A.canvia(db => db.run('DELETE FROM pila_entrada WHERE album_id = 1')); });
+    await esperaDesat();
   } },
 
   // ───────── el que no ha de passar mai ─────────
