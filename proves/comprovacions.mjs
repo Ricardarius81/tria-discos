@@ -7,6 +7,7 @@ import { OBRA_A } from './obraA.mjs';
 import { OBRA_B } from './obraB.mjs';
 import { OBRA_C } from './obraC.mjs';
 import { OBRA_E } from './obraE.mjs';
+import { OBRA_F } from './obraF.mjs';
 const cal = (cond, msg) => { if (!cond) throw new Error(msg); };
 const igual = (a, b, msg) => cal(a === b, `${msg}: s'esperava ${JSON.stringify(b)} i hi ha ${JSON.stringify(a)}`);
 
@@ -2565,6 +2566,7 @@ export const COMPROVACIONS = [
   ...OBRA_B,   // l'obra B (ACT-814 3, ACT-817, ACT-818), en fitxer propi
   ...OBRA_C,   // l'obra C (ACT-809, ACT-810, ACT-814 4), en fitxer propi
   ...OBRA_E,   // l'obra E (ACT-815 6), en fitxer propi
+  ...OBRA_F,   // l'obra F (retocs), en fitxer propi
 
   // ───────── el que no ha de passar mai ─────────
   { bloc: 'obra 4: Parsifal, les òperes per actes (ACT-777)' },
@@ -2659,7 +2661,8 @@ export const COMPROVACIONS = [
       await esperaDesat(); await reobre(pagina);
       await pagina.locator(`[data-fitxa="${ids[0]}"]`).first().click(); await pagina.waitForSelector('#full.obert');
       igual(await pagina.locator('#full [data-vesartista]').count(), 0, 'un no preferent no porta «Ves a l\'artista»');
-      cal(/Tria el següent de Talk Talk/.test(await pagina.locator('#full [data-triaseguent]').innerText().catch(() => '')), 'falta «Tria el següent de Talk Talk»');
+      // ACT-800 (obra F): el botó es diu «Tria el proper de X» (ofereix el següent i l'anterior); abans, «Tria el següent de X».
+      cal(/Tria el proper de Talk Talk/.test(await pagina.locator('#full [data-triaseguent]').innerText().catch(() => '')), 'falta «Tria el proper de Talk Talk»');
       await pagina.click('#full [data-triaseguent]'); await pagina.waitForSelector('#veins [data-triavei]', { timeout: 15000 });
       cal((await pagina.locator('#veins').innerText()).includes('Laughing Stock'), 'el següent havia de ser Laughing Stock');
       await pagina.click('#veins [data-triavei="0"]'); await esperaDesat();

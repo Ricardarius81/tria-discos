@@ -148,3 +148,12 @@ export function sortides(db) {
 export const COLORS_PILA = ['#3f9d5a', '#3d7fd6', '#8f6cc8', '#1d9a9a', '#7d8b2b', '#5d6e84', '#8c6a46', '#2f5aa3'];
 export function colorsPiles(db) { const m = new Map(); piles(db).forEach((p, i) => m.set(p.id, COLORS_PILA[i % COLORS_PILA.length])); return m; }
 export const figura = (nom, color = null) => { const s = figura0(nom); return color ? s.replace('<svg ', `<svg style="color:${color}" `) : s; };
+
+// Crear i treure Piles (§7.7, 18-10, i Hoja de obra F): la nova tria el seu context (Pila.contextos) i va al final
+// (Pila.posicio), i per l'ordre pren el color següent (ACT-814, 4.1). Treure-la s'emporta les seves entrades.
+export const creaPila = (nom, contextos) => db => {
+  const pos = (un(db, 'SELECT MAX(posicio) AS m FROM pila')?.m || 0) + 1;
+  db.run('INSERT INTO pila (nom, contextos, posicio) VALUES (?, ?, ?)', [String(nom).trim(), JSON.stringify(contextos), pos]);
+  return un(db, 'SELECT last_insert_rowid() AS id').id;
+};
+export const treuPila = id => db => { db.run('DELETE FROM pila_entrada WHERE pila_id = ?', [id]); db.run('DELETE FROM pila WHERE id = ?', [id]); };

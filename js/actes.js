@@ -38,12 +38,25 @@ export function numeroDActe(pista) {
 // La llista de pistes de MusicBrainz ({ title, length en ms }) agrupada per actes: [{ numero, nom, durada en minuts }].
 // Només si TOTES les pistes diuen el seu acte, n'hi ha dos o més i totes tenen durada (decisió POR RATIFICAR (4)): si no,
 // cap proposta, i el disc entra com sempre.
+// Des de la ACT-798 (Ricard, 19-11, «sí»), que canvia la (4): una pista sense acte ja no impedeix proposar parts; pren
+// l'acte de la pista anterior, i si és la primera, l'1. La família del preludi (ACT-798, confirmada a la ACT-799, sense
+// Intermezzo ni Zwischenspiel) pren el de la pista SEGÜENT que en diu un: un preludi obre l'acte que ve. CONSEQÜÈNCIA DITA:
+// una pista extra al final (entrevista, bonus) cau a l'últim acte. Calen dos actes o més, i que totes tinguin durada.
+const PRELUDI = /\b(vorspiel|einleitung|ouverture|overture|prelude|introduction|entr ?acte|preludio|sinfonia|introduzione|obertura|introduccion|preludi|introduccio)\b/;
+export const esPreludi = t => PRELUDI.test(sense(t).replace(/['’]/g, ' '));
 export function partsPerActe(pistes) {
   if (!pistes?.length) return null;
   const per = new Map();
-  for (const p of pistes) {
-    const n = numeroDActe(p.title);
-    if (n === null || !(p.length > 0)) return null;
+  const ns = pistes.map(p => numeroDActe(p.title));
+  if (!ns.some(n => n !== null)) return null;
+  let ant = null;
+  for (let i = 0; i < pistes.length; i++) {
+    const p = pistes[i];
+    if (!(p.length > 0)) return null;
+    let n = ns[i];
+    if (n === null && esPreludi(p.title)) n = ns.slice(i + 1).find(x => x !== null) ?? null;
+    if (n === null) n = ant ?? 1;
+    ant = n;
     per.set(n, (per.get(n) || 0) + p.length);
   }
   if (per.size < 2) return null;

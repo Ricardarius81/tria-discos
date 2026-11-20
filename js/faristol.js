@@ -557,13 +557,23 @@ const PILA = 'tria-pila';
 const icoPila = edId => { const l = estat.enPiles?.get(edId); return l ? `<span class="ico-pila" data-icopila="${esc(l.map(x => x.nom).join(' · '))}">${l.map(x => `<i title="${esc(x.nom)}">${P.figura(x.nom, estat.colorsPila?.get(x.pila_id))}</i>`).join('')}</span>` : ''; };
 const edDe = id => D.edicio(db(), +id) || D.fitxa(db(), +id);
 const darreraPila = ps => { let v = null; try { v = +localStorage.getItem(PILA); } catch {} return ps.find(p => p.id === v) || ps[0] || null; };
+function fullNovaPila(repinta = false) {
+  const nom = repinta ? $('#inNovaPila')?.value || '' : '';
+  if (!repinta) estat.novaPilaCtx = new Set();
+  const cx = estat.novaPilaCtx, col = P.COLORS_PILA[P.piles(db()).length % P.COLORS_PILA.length];
+  obreFull(`<h3>Una Pila nova</h3><p>Els seus discos en surten quan sonen en el context que triïs. Pren el color següent: <span class="punt-color" style="background:${col}"></span></p>
+    <label class="camp"><span>Nom</span><input id="inNovaPila" type="text" autocomplete="off" value="${esc(nom)}" placeholder="p. ex. Platja"></label>
+    <div class="camp"><span>Context</span></div>
+    <div class="sf-chips">${E.CONTEXTOS.map(c => `<button class="${cx.has(c) ? 'principal' : ''}" data-ctxnovapila="${esc(c)}">${esc(c)}</button>`).join('')}</div>
+    <div class="barra-accions" style="position:static;padding:10px 0 0"><button class="bt principal" data-desanovapila="1">Crea-la</button></div>`);
+}
 function pintaPiles() {
   const caixa = $('#piles'); if (!caixa) return;
   const ps = P.piles(db()), p = darreraPila(ps);
   if (!p) { caixa.innerHTML = ''; return; }
   const ents = P.entrades(db(), p.id), ja = P.jaEscoltats(db(), p.id);
   caixa.innerHTML = `<div class="apar-tabs pila-tabs" role="tablist">${ps.map(x => `<button role="tab" data-pila="${x.id}" aria-selected="${x.id === p.id}">${esc(x.nom)}</button>`).join('')}</div>
-    <button class="afegeix" data-afegeixpila="${p.id}">＋ Afegeix</button>
+    <div class="pila-gestio"><button class="afegeix" data-afegeixpila="${p.id}">＋ Afegeix</button><button class="mes" data-novapila="1">＋ Pila</button><button class="mes discret" data-treupila="${p.id}">Treu la Pila</button></div>
     <div class="llista-grup pila-llista">${ents.map(filaPila).join('') || '<p class="subtitol" style="margin:14px 0 0">La Pila és buida.</p>'}</div>
     ${ja.length ? `<button class="ar-fila pila-ja" data-jaescoltats="${p.id}"><span class="htxt"><span class="htit">Ja escoltats</span></span><span class="m">${ja.length}</span></button>` : ''}`;
   I.omple(caixa);   // ACT-814 (4.2): les portades de les entrades
@@ -843,8 +853,10 @@ function blocNou(x) {
     <label class="camp"><span>Durada en minuts <small class="gris">· ${x.proposta.font}</small></span>
       <input data-sfdur="${esc(x.clau)}" type="number" inputmode="numeric" min="1" value="${esc(estat.nouMinDe?.[x.clau] ?? x.proposta.minuts)}"></label>
     ${x.proposta.font === 'el que ha sonat' ? `<p class="sf-pre">Només és la del disc si l'has sentit sencer.</p>` : ''}
-    ${x.proposta.parts ? `<p class="sf-q" data-sfparts="${esc(x.clau)}">Una caixa de ${x.proposta.parts.length} parts, una per acte <small class="gris">· segons MusicBrainz</small></p>
-      <p class="sf-pre">${x.proposta.parts.map(p => `${esc(p.nom)} · ${p.durada}′`).join('<br>')}</p>` : ''}
+    ${x.proposta.parts && estat.sensePartsDe?.[x.clau] ? `<p class="sf-pre" data-sfparts="${esc(x.clau)}">Entrarà sense parts. <button class="sf-link" data-sfambparts="${esc(x.clau)}">Torna a les parts</button></p>`
+      : x.proposta.parts ? `<p class="sf-q" data-sfparts="${esc(x.clau)}">Una caixa de ${x.proposta.parts.length} parts, una per acte <small class="gris">· segons MusicBrainz</small></p>
+      <p class="sf-pre">${x.proposta.parts.map(p => `${esc(p.nom)} · ${p.durada}′`).join('<br>')}</p>
+      <div class="sf-chips"><button class="mes" data-sfsenseparts="${esc(x.clau)}">Sense parts</button></div>` : ''}
     <p class="sf-q">Per on l'escoltes?</p>
     <div class="sf-chips">${Object.keys(CANALS).map(k => `<button class="${canal === k ? 'triat' : ''}" data-sfcanal="${esc(x.clau)}|${esc(k)}">${esc(CANALS[k].nom)}</button>`).join('')}
       ${altreCanal(estat.altreCanalDe === 'nou:' + x.clau, 'nou', x.clau)}</div>
@@ -1293,7 +1305,7 @@ function blocObra5(d) {
   const pid = FX.preferentDe(db(), d.artista_id);
   return `<div class="canals fitxa-obra5" style="margin-top:12px">
     ${pid ? `<button data-vesartista="${pid}">Ves a l'artista <small>${esc(d.art)} · anterior i següent</small></button>`
-          : `<button data-triaseguent="${d.id}">Tria el següent de ${esc(d.art)} <small>el fa preferent, amb aquest disc de proper</small></button>`}
+          : `<button data-triaseguent="${d.id}">Tria el proper de ${esc(d.art)} <small>el següent o l'anterior; el fa preferent</small></button>`}
     <button data-copiade="${d.id}">Copia d'un altre disc <small>gènere, subgèneres, llenguatge, formació i tags de l'àlbum</small></button>
     <button data-info="${d.id}">Info <small>la Wikipedia, MusicBrainz, Discogs, RYM i AllMusic</small></button></div>`;
 }
@@ -1362,7 +1374,8 @@ function fullVeiDe(partida, dir, v) {
   const quin = dir === 'seg' ? 'següent' : 'anterior';
   estat.vei = { ...v, dir, partida, candidats: [] };
   obreFull(`<h3>El disc ${quin}</h3><p>${esc(partida.art)} · des de «${esc(partida.titol)}»</p>
-    ${v.pid ? substitueix(D.partidesVei(db(), v.pid)) : `<p>El que triïs passa a ser el proper, i ${esc(partida.art)} entra a Artistes Preferents.</p>`}
+    ${v.pid ? substitueix(D.partidesVei(db(), v.pid)) : `<p>El que triïs passa a ser el proper, i ${esc(partida.art)} entra a Artistes Preferents.</p>
+      <div class="canals"><button data-veinou="${dir === 'seg' ? 'ant' : 'seg'}">${dir === 'seg' ? '◀ Vull l\'anterior' : 'Vull el següent ▶'} <small>des de «${esc(partida.titol)}»</small></button></div>`}
     <div class="canals" id="veins"><p class="subtitol">Cercant…</p></div>`, true);
   cercaVei();
 }
@@ -2029,6 +2042,16 @@ document.addEventListener('click', e => {
   if (d.gps) { estat.gps = 'Mirant…'; detectaLloc(true); return; }
   if (t.id === 'btAfinacio') { if (!A.estat.db) return; tancaFull(); vesA('prestatgeria'); if (estat.psub === 'afi') pintaPrestatgeria(); else psub('afi'); return; }
   if (d.asub) { aparador(d.asub); return; }
+  if (d.novapila) { fullNovaPila(); return; }
+  if (d.ctxnovapila) { const s = (estat.novaPilaCtx ||= new Set()); s.has(d.ctxnovapila) ? s.delete(d.ctxnovapila) : s.add(d.ctxnovapila); fullNovaPila(true); return; }
+  if (d.desanovapila) { const nom = $('#inNovaPila')?.value, cx = [...(estat.novaPilaCtx || [])];
+    if (!String(nom || '').trim()) { avisa('Posa-li nom.'); return; } if (!cx.length) { avisa('Tria almenys un context: per ell surten els discos de la Pila.'); return; }
+    let id; fes(y => (id = P.creaPila(nom, cx)(y)), `Pila «${String(nom).trim()}» creada.`); estat.novaPilaCtx = null; tancaFull();
+    try { localStorage.setItem(PILA, id); } catch {} pintaPiles(); return; }
+  if (d.treupila) { const p = P.piles(db()).find(x => x.id === +d.treupila); if (!p) return; const n = P.entrades(db(), p.id).length;
+    obreFull(`<h3>Treu la Pila «${esc(p.nom)}»?</h3><p>${n ? `Les seves ${n === 1 ? 'entrada' : n + ' entrades'} se'n van amb ella, també les ja escoltades.` : 'És buida.'} Tens «Desfés».</p>
+      <div class="barra-accions" style="position:static;padding:4px 0 0"><button class="bt principal" data-treupilasi="${p.id}">Treu-la</button><button class="bt" data-tornafull="1">No</button></div>`); return; }
+  if (d.treupilasi) { tancaFull(); fes(P.treuPila(+d.treupilasi), 'Pila treta.'); try { localStorage.removeItem(PILA); } catch {} pintaPiles(); return; }
   if (d.pila) { try { localStorage.setItem(PILA, d.pila); } catch {} pintaPiles(); return; }
   if (d.tocaentrada) { tocaEntrada(+d.tocaentrada); return; }
   if (d.edicionspila) { const x = P.entrades(db(), P.entrada(db(), +d.edicionspila)?.pila_id).find(e => e.id === +d.edicionspila); if (x) fullEdicionsPila(x); return; }
@@ -2297,12 +2320,14 @@ document.addEventListener('click', e => {
   if (d.sfnoupref) { (estat.nouPrefDe ||= {})[d.sfnoupref] = !estat.nouPrefDe?.[d.sfnoupref]; pintaSafata(); return; }
   if (d.sfnouignora) { const x = E.discosNous(db(), mbCache).nous.find(y => y.clau === d.sfnouignora); if (!x) return;
     fes(E.ignora(x.scr), (x.album || x.pista) + ': ignorat'); return; }
+  if (d.sfsenseparts) { (estat.sensePartsDe ||= {})[d.sfsenseparts] = true; pintaSafata(); return; }
+  if (d.sfambparts) { if (estat.sensePartsDe) delete estat.sensePartsDe[d.sfambparts]; pintaSafata(); return; }
   if (d.sfnou) { const [k, on] = d.sfnou.split('|');
     const x = E.discosNous(db(), mbCache).nous.find(y => y.clau === k); if (!x) return;
     const min = parseInt(document.querySelector(`[data-sfdur="${CSS.escape(k)}"]`)?.value, 10);
     if (!min || min < 1) { avisa('Cap disc entra sense durada.'); return; }
     const a = D.trobaArtista(db(), x.artista), canal = estat.nouCanalDe?.[k] || D.canalPerDefecte(db(), a?.id), pref = estat.nouPrefDe?.[k];
-    fes(y => { const r = E.creaDiscNou({ album: x.album || x.pista, artista: x.artista, recording_msid: x.recording_msid, minuts: min, canal, rotacio: on === 'rotacio', parts: x.proposta.parts })(y);
+    fes(y => { const r = E.creaDiscNou({ album: x.album || x.pista, artista: x.artista, recording_msid: x.recording_msid, minuts: min, canal, rotacio: on === 'rotacio', parts: estat.sensePartsDe?.[k] ? null : x.proposta.parts })(y);   // ACT-787 (c)
                if (pref) D.afegeixPreferentId(r.artista_id)(y); return r; },
       `${x.album || x.pista} entra a l'arxiu${on === 'rotacio' ? ' i a la rotació' : ''}${pref ? ', i l\'artista a preferents' : ''}`); return; }
   // les preguntes 7, 8 i 9
@@ -2394,6 +2419,7 @@ document.addEventListener('click', e => {
     tancaFull(); fes(v.nouPref ? FX.fesPreferentAmbProper(v.nouPref, x.titol) : D.posaProper(v.pid, x.titol),
       v.nouPref ? `${v.partida.art} a Artistes Preferents · el proper: ${x.titol}` : 'El proper: ' + x.titol); return; }
   if (d.vesartista) { N.apuntaAlcada('artista', { sup: estat.superficie, sub: estat.sub }); tancaFull(); estat.artista = +d.vesartista; pintaArtista(estat.artista); vesA('artista'); return; }
+  if (d.veinou) { const v = estat.vei; if (v?.nouPref) fullVeiDe(v.partida, d.veinou, { pid: null, nouPref: v.nouPref }); return; }   // ACT-799
   if (d.triaseguent) { const x = rot(d.triaseguent); if (!x) return; fullVeiDe(FX.partidaDelDisc(db(), x.album_id), 'seg', { pid: null, nouPref: x.artista_id }); tornaA(x.id); return; }
   if (d.veisortida) { const [pid, dir, al] = d.veisortida.split(':'); fullVeiDe(FX.partidaDelDisc(db(), +al), dir, { pid: +pid }); return; }
   if (d.copiade) { const x = rot(d.copiade); if (x) { estat.copia = null; fullCopiaTria(x); } return; }
