@@ -837,3 +837,7 @@ body[data-estil="ricard"] .apar-tabs button[aria-selected="true"]{background:var
 /* ACT-804 (a): aire entre la barra «▶ Escoltar ara» i la fila de Piles, també amb «Enganxa l'enllaç» al mig */
 .fitxa-piles{padding-top:12px}
 .enllac-bc{margin:12px 0 0}
+/* Obra B (ACT-814, 3.1): «Codi de Bandcamp · canvia'l» a tota edició de Bandcamp */
+.codi-bc{margin:12px 0 0}
+.linia-bc{margin:0 0 6px; font-size:13px; color:var(--os)}
+.full ol.passos{margin:4px 0 10px; padding-left:20px; font-size:13px}

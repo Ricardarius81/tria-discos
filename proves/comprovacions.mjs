@@ -4,6 +4,7 @@
 // Una comprovació falla llançant un error amb una frase que digui què s'esperava i què hi ha.
 import { OBRA1 } from './obra1.mjs';
 import { OBRA_A } from './obraA.mjs';
+import { OBRA_B } from './obraB.mjs';
 const cal = (cond, msg) => { if (!cond) throw new Error(msg); };
 const igual = (a, b, msg) => cal(a === b, `${msg}: s'esperava ${JSON.stringify(b)} i hi ha ${JSON.stringify(a)}`);
 
@@ -2559,6 +2560,7 @@ export const COMPROVACIONS = [
   } },
   ...OBRA1,   // l'obra 1 (ACT-763 a ACT-768), en fitxer propi
   ...OBRA_A,   // l'obra A (ACT-812, ACT-813), en fitxer propi
+  ...OBRA_B,   // l'obra B (ACT-814 3, ACT-817, ACT-818), en fitxer propi
 
   // ───────── el que no ha de passar mai ─────────
   { bloc: 'obra 4: Parsifal, les òperes per actes (ACT-777)' },

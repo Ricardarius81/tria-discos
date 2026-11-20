@@ -27,6 +27,7 @@ import * as R from './rajoles.js?v=1';
 import * as B from './bandcamp.js?v=1';
 import * as J from './arreglos.js?v=1';
 import * as PR from './proper.js?v=1';
+import * as CB from './codibc.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -1189,14 +1190,46 @@ function tornaA(id) { const b = $('#full .torna-full'); if (b && id) { delete b.
 // ACT-767 i ACT-766: «Enganxa l'enllaç» a la fitxa d'un disc de Bandcamp sense codi (una edició sense parts), i l'avís
 // si la tasca de nit no l'ha trobat en B.NITS nits.
 function blocEnllac(d) {
-  if (d.app_escolta !== 'bandcamp' || d.bc || d.parts.length) return '';
-  const nits = B.apartat(db(), d.id);
+  if (d.app_escolta !== 'bandcamp' || d.parts.length) return '';
+  // ACT-814 (3.1): a tota edició de Bandcamp, també amb codi: «Codi de Bandcamp · canvia'l».
+  if (d.bc) return `<div class="codi-bc"><p class="linia-bc">Codi de Bandcamp <b>${esc(d.bc)}</b> <button class="sf-link" data-codibc="${d.id}">canvia'l</button></p></div>`;
+  const nits = B.apartat(db(), d.id), rp = CB.repte(db(), d.id);
   return `<div class="enllac-bc">
+    <p class="linia-bc">Codi de Bandcamp <b>encara no</b> <button class="sf-link" data-codibc="${d.id}">canvia'l</button></p>
+    ${rp ? `<p class="avis-bc"><b>La pàgina de Bandcamp té un repte</b> que la tasca de nit no pot passar. Treu-ne el codi amb el marcador «Codi per a la Discoteca» (toca «canvia'l»).</p>` : ''}
     ${nits !== null ? `<p class="avis-bc"><b>Bandcamp no l'ha trobat</b> en ${nits} nits: queda apartat. Enganxa l'enllaç i la tasca hi tornarà.</p>` : ''}
     ${d.bce ? `<p class="gris" style="font-size:12px">Enllaç desat: el ▶ ja l'obre. El codi el treu la tasca aquesta nit.</p>` : ''}
-    <label class="camp"><span>Enganxa l'enllaç <small class="gris">· el de «Compartir» a l'app de Bandcamp</small></span>
+    <label class="camp"><span>Enganxa l'enllaç o el número <small class="gris">· l'enllaç, el de «Compartir» a l'app de Bandcamp</small></span>
       <input id="inEnllacBc" type="url" inputmode="url" autocomplete="off" placeholder="https://….bandcamp.com/album/…" value="${esc(d.bce || '')}"></label>
-    <button class="bt" data-desaenllac="${d.id}">Desa l'enllaç</button></div>`;
+    <button class="bt" data-desaenllac="${d.id}">Desa</button></div>`;
+}
+// «canvia'l» (ACT-814 3.1, ACT-817): enllaç o número, i el marcador explicat pas a pas.
+const BASE_APP = () => location.origin + location.pathname.replace(/[^/]*$/, '');
+function fullCodiBc(d) {
+  obreFull(`<h3>El codi de Bandcamp</h3><p>${esc(d.titol)} · ${esc(d.art)}${d.bc ? ` · ara <b>${esc(d.bc)}</b>` : ' · encara sense codi'}</p>
+    <label class="camp"><span>Enganxa l'enllaç o el número</span>
+      <input id="inEnllacBc" type="text" inputmode="url" autocomplete="off" placeholder="https://….bandcamp.com/album/…  o  1234567890" value=""></label>
+    <p class="gris" style="font-size:12.5px">El número entra al moment. L'enllaç (el de «Compartir» a l'app de Bandcamp, de la versió bona): ${d.bc ? 'el codi d\'ara surt de seguida, el ▶ obre l\'enllaç a la web, i ' : ''}la tasca de nit en treu el codi.</p>
+    <div class="barra-accions" style="position:static;padding:0 0 10px"><button class="bt principal" data-desaenllac="${d.id}">Desa</button></div>
+    <h3 style="margin-top:14px">El marcador «Codi per a la Discoteca»</h3>
+    <p>Per treure tu el codi quan la tasca no pot. Es prepara una sola vegada:</p>
+    <ol class="passos"><li>Toca «Copia el marcador».</li><li>Al Chrome del mòbil, guarda qualsevol pàgina a les adreces d'interès (l'estrella del menú ⋮).</li>
+      <li>Edita aquesta adreça d'interès: posa-li de nom <b>disco</b> i, a l'adreça, esborra el que hi ha i enganxa el que has copiat (comença per «javascript:»).</li></ol>
+    <p>Després, cada vegada: obre al Chrome la pàgina de l'àlbum a Bandcamp, escriu <b>disco</b> a la barra d'adreces i toca el marcador que surt a la llista. La Discoteca s'obre amb el codi posat.</p>
+    <textarea id="txtMarcador" readonly rows="3" style="width:100%;font:11px ui-monospace,monospace">${esc(CB.textMarcador(BASE_APP()))}</textarea>
+    <div class="barra-accions" style="position:static;padding:4px 0 0"><button class="bt" data-copiamarcador="1">Copia el marcador</button></div>`, true);
+}
+// El marcador obre l'app amb ?bc=…&enllac=…: el codi va al disc que té aquest enllaç, o es pregunta a quin.
+function marcadorBandcamp() {
+  const m = CB.llegeixMarcador(location.search); if (!m) return;
+  try { history.replaceState(null, '', location.pathname); } catch {}
+  const id = CB.edicioPerEnllac(db(), m.enllac);
+  if (id) { fes(CB.desaCodi(id, m.codi, m.enllac), 'Codi de Bandcamp posat: el ▶ ja obre el disc a l\'app.'); return; }
+  estat.marcador = m;
+  const c = CB.candidatsMarcador(db());
+  obreFull(`<h3>De quin disc és aquest codi?</h3><p>Codi ${esc(m.codi)}${m.enllac ? ` · ${esc(m.enllac.replace(/^https:\/\//, ''))}` : ''}</p>
+    <div class="canals">${c.map(x => `<button data-marcadorde="${x.id}">${esc(x.titol)} <small>${esc(x.art)}${x.nom_edicio ? ' · ' + esc(x.nom_edicio) : ''}${x.codi_bandcamp ? ' · ja té codi' : ' · sense codi'}${x.rotacio_actual ? ' · en rotació' : ''}</small></button>`).join('')
+      || '<p class="subtitol">No hi ha cap disc de Bandcamp a l\'arxiu.</p>'}</div>`, true);
 }
 
 function fullFitxa(d) {
@@ -2228,9 +2261,13 @@ document.addEventListener('click', e => {
   if (d.hrot) { const id = +d.hrot, x = D.fitxa(db(), id); if (!x) return;
     fes(D.posaIdEnRotacio(id), `${x.titol} entra a Discos en Rotació`); if (t.closest('#full')) fullFitxa(rot(id)); return; }
   if (d.hgrup) { fullGrupHistorial(d.hgrup); return; }
-  if (d.desaenllac) { const id = +d.desaenllac, url = B.llegeixEnllac($('#inEnllacBc')?.value);
-    if (!url) { avisa('No hi trobo cap enllaç d\'un àlbum de Bandcamp (https://….bandcamp.com/album/…).'); return; }
-    { const dins = !!t.closest('#full'); fes(B.desaEnllac(id, url), 'Enllaç desat: el ▶ ja l\'obre. El codi arriba aquesta nit.'); const x = D.fitxa(db(), id); if (x && dins) fullFitxa(x); } return; }
+  if (d.desaenllac) { const id = +d.desaenllac, txt = $('#inEnllacBc')?.value;
+    if (!CB.llegeixNumero(txt) && !B.llegeixEnllac(txt)) { avisa('No hi trobo cap enllaç d\'un àlbum de Bandcamp (https://….bandcamp.com/album/…) ni cap número.'); return; }
+    { const dins = !!t.closest('#full'); fes(CB.desaCodiOEnllac(id, txt), r => r.codi ? 'Codi desat: el ▶ ja obre el disc a l\'app.' : r.treu ? 'Enllaç desat: el codi vell ha sortit. El ▶ obre l\'enllaç; el codi nou arriba aquesta nit.' : 'Enllaç desat: el ▶ ja l\'obre. El codi arriba aquesta nit.');
+      const x = D.fitxa(db(), id); if (x && dins) fullFitxa(x); } return; }
+  if (d.codibc) { const x = D.fitxa(db(), +d.codibc); if (x) { fullCodiBc(x); tornaA(x.id); } return; }
+  if (d.copiamarcador) { const tx = $('#txtMarcador'); try { navigator.clipboard.writeText(tx.value).then(() => avisa('Marcador copiat.'), () => { tx.select(); avisa('Selecciona i copia el text.'); }); } catch { tx.select(); } return; }
+  if (d.marcadorde) { const m = estat.marcador; estat.marcador = null; tancaFull(); if (m) fes(CB.desaCodi(+d.marcadorde, m.codi, m.enllac), 'Codi de Bandcamp posat: el ▶ ja obre el disc a l\'app.'); return; }
   if (d.histmes) { estat.histMax = (estat.histMax || FINESTRA_HIST) + FINESTRA_HIST; pintaHistorial(); return; }   // ACT-737
 
   // La fitxa que creix (bloc 3.2 bis)
@@ -2396,6 +2433,7 @@ function mostraMaquina() {
   $('#peu').hidden = false;
   if (estat.superficie === 'entrada' && !tornaPantalla()) { vesA('faristol'); sub('rot'); }
   pinta(); marcaDesat();
+  marcadorBandcamp();   // ACT-817: l'app oberta pel marcador «Codi per a la Discoteca»
 }
 function entrada(text, botons = '', classe = '') {
   vesA('entrada'); $('#peu').hidden = true; document.body.classList.remove('desconnectat');
@@ -2483,12 +2521,12 @@ async function bustia() {
     // Dos passos independents: si la lectura dels codis falla, els pendents s'escriuen igualment (i a l'inrevés).
     try {
       const codis = await A.llegeixCodisBustia();
-      const fets = codis.length ? await fes(E.aplicaCodis(codis), null, { desfes: false, auto: true }) : [];
+      const fets = codis.length ? await fes(CB.aplicaCodisV(codis), null, { desfes: false, auto: true }) : [];   // ACT-814 (3.2, 3.3)
       if (fets.length) avisa(`Bandcamp: ${fets.length === 1 ? 'un codi nou' : fets.length + ' codis nous'}. El ▶ ja obre el disc a l'app.`);
     } catch (e) { b.errors.push('codis: ' + e.message); }
     try {
       // ACT-766: els que no s'han trobat en B.NITS nits queden apartats (fora del fitxer) i s'avisa una vegada.
-      const r = B.pendentsAmbNits(db()), pend = r.envia, text = B.textPendents(pend);
+      const r = B.pendentsAmbNits(db()), pend = r.envia, text = B.textPendents(pend.map(x => ({ ...x, clau: CB.clauAmbVersio(db(), x.clau) })));
       if (B.nitsNoves(db())) await fes(B.apuntaNits(), null, { desfes: false, auto: true });
       if (r.nous.length) avisa(r.nous.length === 1 ? `Bandcamp: «${r.nous[0].titol}» no s'ha trobat en ${B.NITS} nits. Queda apartat: enganxa l'enllaç a la seva fitxa.`
                                                    : `Bandcamp: ${r.nous.length} discos no s'han trobat en ${B.NITS} nits. Queden apartats: enganxa l'enllaç a la fitxa de cadascun.`);
