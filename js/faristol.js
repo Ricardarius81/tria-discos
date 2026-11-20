@@ -26,6 +26,7 @@ import * as FX from './fitxa.js?v=1';
 import * as R from './rajoles.js?v=1';
 import * as B from './bandcamp.js?v=1';
 import * as J from './arreglos.js?v=1';
+import * as PR from './proper.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -112,6 +113,16 @@ function tancaFull() {
              avisa(tg ? 'Sense nota: el disc continua en rotació, i els tags que has tocat es queden.' : 'Sense tocar res: el disc continua en rotació.'); }
   }
   f.classList.remove('obert'); $('#fons').classList.remove('obert');
+  if (estat.dubteProper) setTimeout(obreDubteProper, 250);
+}
+// «Era aquest el proper?» (ACT-812, 1.1): una sola vegada, quan entra en rotació un disc de l'artista que no és el proper.
+// Si hi ha una fulla oberta, espera que es tanqui.
+function obreDubteProper() {
+  const x = estat.dubteProper; if (!x || $('#full').classList.contains('obert')) return;
+  estat.dubteProper = null;
+  obreFull(`<h3>Era aquest el proper?</h3><p>El proper de ${esc(x.nom)} era «${esc(x.proper)}». Ara ha entrat en rotació «${esc(x.titol)}».</p>
+    <div class="barra-accions" style="position:static;padding:4px 0 0"><button class="bt principal" data-eraproper="${x.pid}">Sí, era aquest</button>
+      <button class="bt" data-tornafull="1">No: el proper s'espera</button></div>`);
 }
 // «Sense desar» (ACT-750 a): un toc de Ricard que encara espera la calma o la pujada, o una pujada que ha fallat. El que
 // han llegit les lectures automàtiques i espera el rellotge de 30 s no ho és: és a la còpia del mòbil i puja sol.
@@ -131,13 +142,16 @@ function marcaDesat(r) {
 }
 
 // Fer un canvi: s'escriu a l'arxiu, es pinta de seguida i es desa. «Desfés» torna l'arxiu a com era abans.
-async function fes(fn, text, { desfes = true, abans = null, auto = false } = {}) {
+async function fes(fn, text, { desfes = true, abans = null, auto = false, proper = true } = {}) {
   abans = abans || A.estat.db.export();
   let res;
+  const rotAbans = auto || !proper ? null : PR.enRotacio(A.estat.db);   // ACT-812 (1.1): què entra en rotació amb aquest canvi
   // Les Piles (ACT-707, ACT-744): dins de cada canvi, les entrades que una escolta nova ha tret de la seva Pila.
   const p = A.canvia(d => { res = fn(d); P.sortides(d); }, { auto });
   if (!auto) puntBrut = true;   // ACT-796: un canvi seu (no una lectura automàtica) pot moure L'Afinació
   pinta();
+  if (rotAbans) { const nous = [...PR.enRotacio(A.estat.db)].filter(id => !rotAbans.has(id)), dub = nous.length ? PR.dubtesProper(A.estat.db, nous) : [];
+                  if (dub.length) { estat.dubteProper = dub[0]; setTimeout(obreDubteProper, 350); } }
   if (text) avisa(typeof text === 'function' ? text(res) : text,
     desfes ? async () => { delete $('#full').dataset.encaraNo; if ($('#full').classList.contains('obert')) tancaFull();
                            const r = await A.restaura(abans); puntBrut = true; pinta(); marcaDesat(r); } : null);
@@ -331,7 +345,7 @@ function pintaArtista(id) {
       : `<div class="marcador"><p class="cita">Encara no ha sonat res seu.</p><p>La màquina només sap el que passa des del dia que arrenca. Quan arribin les escoltes, sortirà aquí.</p></div>`}
     <div class="canals" style="margin-top:14px">
       ${botonsVei}
-      ${(!r && !p.proper_titol) ? `<button data-triaproper="${p.id}">Tria el proper disc <small>el primer que vols escoltar</small></button>` : ''}
+      ${!p.proper_titol ? `<button data-triaproper="${p.id}">Tria el proper disc <small>${r ? 'el que vols escoltar després' : 'el primer que vols escoltar'}</small></button>` : ''}
       <button data-canviafoto="${p.id}">Canvia la foto <small>${{ ma: 'la vas pujar tu', triat: 'la vas triar tu', sonda: 'la va trobar la màquina', rebutjat: 'la de la màquina no era' }[p.retrat_origen] || 'no n\'ha arribat cap de sola'}</small></button>
     </div>
     <div class="barra-accions" style="position:static;padding:14px 0 0"><button class="bt discret" data-desprefer="${p.id}">Treu-lo de preferents</button></div>`;
@@ -384,7 +398,8 @@ async function cercaVei(mbid = null) {
   caixa.innerHTML = (r.avis ? `<p class="subtitol">${esc(r.avis)}</p>` : '')
     + (!v.candidats.length && r.motiu ? `<p class="subtitol">No he trobat res: ${esc(r.motiu)}.</p>` : '')
     + v.candidats.map((x, i) => `<button data-triavei="${i}">${esc(x.titol)} <small>${font(x)} · ${esc([x.tipus, x.any].filter(Boolean).join(' · '))}${x.cronologia ? ` · cronologia «${esc(x.cronologia)}»` : ''}</small></button>`).join('')
-    + (!v.candidats.length && !r.avis && !r.motiu ? '<p class="subtitol">Res.</p>' : '');
+    + (!v.candidats.length && !r.avis && !r.motiu ? '<p class="subtitol">Res.</p>' : '')
+    + (v.pid ? `<button data-triaproper="${v.pid}">Escriu-lo tu <small>si la cerca no el troba</small></button>` : '');   // ACT-812 (1.3)
 }
 
 // ───────── l'Historial (§7.7, v1.34 i ACT-448) ─────────
@@ -513,7 +528,7 @@ function pintaArxiu() {
   const nom = R.RAJOLES.find(r => r.clau === clau)?.nom || '';
   cap.hidden = !estat.rajola;
   const ordre = R.ordreRajola(clau);   // ACT-800 a, ACT-801: ascendent o descendent, recordat per rajola; A l'atzar, cap
-  cap.innerHTML = estat.rajola ? `<button class="torna-rajoles" data-rajoles="1">‹ Rajoles</button><b>${esc(nom)}</b>${ordre ? `<button class="ordre-rj" data-ordre-rj="${clau}" aria-label="Canvia l'ordre">${ordre === 'asc' ? '↑ ascendent' : '↓ descendent'}</button>` : ''}` : '';
+  cap.innerHTML = estat.rajola ? `<button class="torna-rajoles" data-rajoles="1">← Tornar</button><b>${esc(nom)}</b>${ordre ? `<button class="ordre-rj" data-ordre-rj="${clau}" aria-label="Canvia l'ordre">${ordre === 'asc' ? '↑ ascendent' : '↓ descendent'}</button>` : ''}` : '';
   const ss = R.ordena(R.seccions(db(), clau), clau, ordre), tots = ss.reduce((a, s) => a + s.files.length, 0);
   const filtra = ll => f ? ll.filter(x => x.cerca.includes(f)) : ll;
   const fs = ss.map(s => ({ ...s, files: filtra(s.files), ...(s.tambe ? { tambe: filtra(s.tambe) } : {}) }));
@@ -814,8 +829,9 @@ function blocQ2(q) {
 function blocNou(x) {
   const a = D.trobaArtista(db(), x.artista);
   const canal = estat.nouCanalDe?.[x.clau] || D.canalPerDefecte(db(), a?.id);
-  const pref = estat.nouPrefDe?.[x.clau];
+  const pref = estat.nouPrefDe?.[x.clau], pr = PR.properDelDisc(db(), x.artista, x.album || x.pista);
   return `<div data-nou="${esc(x.clau)}"><p class="sf-q">Disc nou: la durada i el canal</p>
+    ${pr ? `<p class="sf-pre es-proper"><b>És el proper de ${esc(pr.nom)}.</b> Posa'l en rotació i la nota s'esborra.</p>` : ''}
     <label class="camp"><span>Durada en minuts <small class="gris">· ${x.proposta.font}</small></span>
       <input data-sfdur="${esc(x.clau)}" type="number" inputmode="numeric" min="1" value="${esc(estat.nouMinDe?.[x.clau] ?? x.proposta.minuts)}"></label>
     ${x.proposta.font === 'el que ha sonat' ? `<p class="sf-pre">Només és la del disc si l'has sentit sencer.</p>` : ''}
@@ -826,8 +842,8 @@ function blocNou(x) {
       ${altreCanal(estat.altreCanalDe === 'nou:' + x.clau, 'nou', x.clau)}</div>
     ${canal === 'bandcamp' ? `<p class="sf-pre">El codi de Bandcamp el busca Claude cada nit. No has de fer res.</p>` : ''}
     <div class="sf-chips" style="margin-top:12px">
-      <button class="principal" data-sfnou="${esc(x.clau)}|arxiu">Desa'l</button>
-      <button data-sfnou="${esc(x.clau)}|rotacio">Desa'l i posa'l en rotació</button>
+      <button class="${pr ? '' : 'principal'}" data-sfnou="${esc(x.clau)}|arxiu">Desa'l</button>
+      <button class="${pr ? 'principal' : ''}" data-sfnou="${esc(x.clau)}|rotacio">Desa'l i posa'l en rotació</button>
       ${a && D.preferents(db()).some(p => p.artista_id === a.id) ? '' : `<button class="${pref ? 'triat' : ''}" data-sfnoupref="${esc(x.clau)}">${pref ? '✓ ' : ''}Afegeix l'artista a preferents</button>`}
       <button class="mes" data-sfnouignora="${esc(x.clau)}">Ignora</button>
     </div></div>`;
@@ -1200,7 +1216,7 @@ function fullFitxa(d) {
     <div class="fitxa-cap">
       <div class="fitxa-portada cap-cob">${d.portada ? IMG(d.portada) : `<span class="inicials">${esc(inicials(d.art))}</span>`}</div>
       <div class="cap-txt">
-        <h3>${esc(d.titol)}</h3><p class="cap-art">${esc(d.art)}</p>
+        <h3>${esc(d.titol)} <button class="sf-link" data-canvianoms="${d.id}">canvia</button></h3><p class="cap-art">${esc(d.art)}</p>
         <div class="cap-ed"><span class="min ${d.min ? '' : 'falta'}">${d.min ? d.min + '′' : 'falta la durada'}</span><button class="sf-link" data-durada="${d.id}">canvia</button><br>
           Edició <button class="sf-link" data-canviaedicio="${d.id}">${edicio}</button>
           ${d.parts.length ? `<br>${d.esperant ? 'Cap part viva: la caixa espera' : 'Part viva: ' + esc(d.viva.nom || '') + ' · ' + d.viva.numero + ' de ' + d.parts.length}` : ''}
@@ -1266,7 +1282,11 @@ function fullCopia(d, de) {
 function preguntaSortida(id) {
   const d = D.fitxa(db(), id); if (!d) return;
   const pid = FX.preferentDe(db(), d.artista_id); if (!pid) return;
-  obreFull(`<h3>I ara, de ${esc(d.art)}?</h3><p>${esc(d.titol)} ha sortit de rotació. El disc anterior o el següent, comptat des d'aquest, passa a ser el proper.</p>
+  const pr = PR.properDe(db(), d.artista_id);   // ACT-812 (1.2): si ja té proper, primer aquest
+  obreFull(`<h3>I ara, de ${esc(d.art)}?</h3>${pr ? `<div class="marcador"><p class="cita">El proper: ${esc(pr.proper_titol)}.</p><p>El que havies decidit escoltar després.</p>
+      <div class="barra-accions" style="position:static;padding:4px 0 0"><button class="bt principal" data-posaproper="${pr.id}">Posa'l en rotació</button>
+        <button class="bt" data-escproper="${pr.id}">Escoltar ara</button></div></div><p>O un altre, comptat des de ${esc(d.titol)}:</p>`
+      : `<p>${esc(d.titol)} ha sortit de rotació. El disc anterior o el següent, comptat des d'aquest, passa a ser el proper.</p>`}
     <div class="canals"><button data-veisortida="${pid}:ant:${d.album_id}">◀ Disc anterior <small>des de «${esc(d.titol)}»</small></button>
       <button data-veisortida="${pid}:seg:${d.album_id}">Disc següent ▶ <small>des de «${esc(d.titol)}»</small></button></div>
     <div class="barra-accions" style="position:static;padding:8px 0 0"><button class="bt discret" data-tornafull="1">Ara no</button></div>`);
@@ -1645,19 +1665,22 @@ function fullRepren(d) {
     <div class="canals">${d.parts.map(p => `<button data-reprenpart="${d.id}:${p.numero}">${esc(p.nom || 'Part ' + p.numero)} <small>${p.durada ? p.durada + '′' : 'sense durada'}</small></button>`).join('')}</div>`);
 }
 
-function fullAfegeixDisc() {
-  estat.nouCanal = 'amazon';
+function fullAfegeixDisc(pre = null) {
+  estat.nouCanal = pre?.canal || 'amazon';
   const botons = () => [...Object.keys(CANALS), ...Object.keys(NOMS_FISICS)]
     .map(k => `<button data-noucanal="${k}" class="${estat.nouCanal === k ? 'triat' : ''}">${CANALS[k]?.nom || NOMS_FISICS[k]}</button>`).join('');
   obreFull(`<h3>Posa un disc en rotació</h3>
     <p>Els discos que sonen arriben sols a la safata. Aquí en poses un a mà: un de físic, o un que encara no ha sonat. Cap disc entra sense durada: llegeix-la del disc o de l'app, no de memòria.</p>
-    <label class="camp"><span>Artista</span><input id="inArt" type="text" autocomplete="off"></label>
-    <label class="camp"><span>Títol</span><input id="inTit" type="text" autocomplete="off"></label>
-    <label class="camp"><span>Durada en minuts</span><input id="inMin" type="number" inputmode="numeric" min="1"><span class="ajuda">Si el disc ja té fitxa a l'arxiu, es queda la seva durada i aquí no cal res.</span></label>
+    <label class="camp"><span>Artista</span><input id="inArt" type="text" autocomplete="off" value="${esc(pre?.art || '')}"></label>
+    <label class="camp"><span>Títol</span><input id="inTit" type="text" autocomplete="off" value="${esc(pre?.tit || '')}"></label>
+    <label class="camp"><span>Durada en minuts <small class="gris" id="fontMin"></small></span><input id="inMin" type="number" inputmode="numeric" min="1"><span class="ajuda">Si el disc ja té fitxa a l'arxiu, es queda la seva durada i aquí no cal res.</span></label>
+    ${pre ? `<div class="canals"><button data-buscaa="1">Busca-ho a ${esc(nomCanal(estat.nouCanal))} <small>per validar la durada a l'app</small></button></div>` : ''}
     <div class="camp"><span>Per on l'escoltes</span></div>
     <div class="canals-tria" id="nousCanals">${botons()}</div>
     <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-desaama="1">Posa'l en rotació</button></div>`);
   estat.pintaCanals = () => { $('#nousCanals').innerHTML = botons(); };
+  // ACT-812 (1.2 A): amb el proper, la durada que proposa MusicBrainz; la valida ell a l'app del canal.
+  if (pre) PR.duradaMB(pre.art, pre.tit).then(x => { const m = $('#inMin'); if (x && m && !m.value) { m.value = x.minuts; $('#fontMin').textContent = '· ' + x.font + ', valida-la'; } });
   $('#inArt').addEventListener('change', e => {
     const a = D.trobaArtista(db(), e.target.value);
     if (a) { estat.nouCanal = D.canalPerDefecte(db(), a.id); estat.pintaCanals(); }
@@ -1665,6 +1688,14 @@ function fullAfegeixDisc() {
   setTimeout(() => $('#inArt')?.focus(), 50);
 }
 
+// Canviar els noms (ACT-813): el títol de l'àlbum, el de l'edició i el de l'artista. Sense «suprimir».
+function fullNoms(d) {
+  obreFull(`<h3>Canvia els noms</h3><p>El títol és de l'àlbum (totes les edicions). El de l'artista canvia a tots els seus discos, i el vell es guarda per reconèixer les escoltes que arribin amb aquell nom.</p>
+    <label class="camp"><span>Títol</span><input id="inNomTit" type="text" autocomplete="off" value="${esc(d.titol)}"></label>
+    <label class="camp"><span>Nom de l'edició</span><input id="inNomEd" type="text" autocomplete="off" value="${esc(d.nom_edicio || '')}" placeholder="sense nom"></label>
+    <label class="camp"><span>Artista</span><input id="inNomArt" type="text" autocomplete="off" value="${esc(d.art)}"></label>
+    <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-desanoms="${d.id}">Desa</button></div>`, true);
+}
 function fullProper(id) {
   const p = D.preferents(db()).find(x => x.id === id); if (!p) return;
   estat.properDe = id;
@@ -1928,9 +1959,9 @@ document.addEventListener('click', e => {
   if (d.afegeixalbum) { const [pila, alb] = d.afegeixalbum.split(':').map(Number); tancaFull(); fes(P.afegeix(pila, null, null, alb), 'Afegit a la Pila.'); return; }
   if (d.afegeixapila) { fullTriaPila(+d.afegeixapila); return; }
   if (d.posaapila) { const [pila, ed] = d.posaapila.split(':').map(Number), x = rot(ed);
-    if (x) fes(P.afegeix(pila, null, null, x.album_id), 'Afegit a la Pila.').then(() => { const y = rot(ed); if (y) fullFitxa(y); }); return; }
+    if (x) { fes(P.afegeix(pila, null, null, x.album_id), 'Afegit a la Pila.'); const y = rot(ed); if (y) fullFitxa(y); } return; }   // ACT-813 (2.1): al moment, no quan acaba de desar
   if (d.treuentrada) { const ed = +d.fitxaed;
-    fes(P.treu(+d.treuentrada), 'Tret de la Pila.', { desfes: false }).then(() => { const y = ed && rot(ed); if (y) fullFitxa(y); else tancaFull(); }); return; }
+    fes(P.treu(+d.treuentrada), 'Tret de la Pila.', { desfes: false }); { const y = ed && rot(ed); if (y) fullFitxa(y); else tancaFull(); } return; }
   if (d.tornapila) { tancaFull(); fes(P.tornaALaPila(+d.tornapila), 'Torna a ser a la Pila, a dalt de tot.'); return; }
   if (t.id === 'btSafata') { if (!A.estat.db) return; if (estat.superficie !== 'safata') { estat.abansSafata = estat.superficie; N.apuntaAlcada('safata', { sup: estat.superficie }); } tancaFull(); vesA('safata'); pintaSafata(); llegeixEscoltes(); return; }
   if (d.tornasafata) { vesA(estat.abansSafata || 'faristol');
@@ -2002,7 +2033,7 @@ document.addEventListener('click', e => {
     const nom = D.ESCALA.find(([, v]) => v === +d.punt)[0];
     fes(D.puntua(id, +d.punt), 'Puntuat: ' + nom, { abans: estat.abansSortida }).then(() => preguntaSortida(id)); return; }
   if (d.puntencara) { delete $('#full').dataset.encaraNo; estat.sortint = null; estat.tagsSortida = null; tancaFull(); fes(D.encaraNo(+d.puntencara), 'Sense nota, de moment. Tornarà.', { abans: estat.abansSortida }); return; }
-  if (d.torna) { delete $('#full').dataset.encaraNo; estat.sortint = null; estat.tagsSortida = null; tancaFull(); fes(D.tornaARotacio(+d.torna), 'Torna a la rotació', { abans: estat.abansSortida }); return; }
+  if (d.torna) { delete $('#full').dataset.encaraNo; estat.sortint = null; estat.tagsSortida = null; tancaFull(); fes(D.tornaARotacio(+d.torna), 'Torna a la rotació', { abans: estat.abansSortida, proper: false }); return; }
   if (d.espera) { tancaFull(); fes(D.deixaEsperant(+d.espera), 'La caixa queda esperant', { abans: estat.abansSortida }); return; }
   if (d.treuedicio) { const id = +d.treuedicio; const x = rot(id); tancaFull(); fes(D.treu(id), 'Fora de rotació', { abans: estat.abansSortida }); if (x) fullPuntuar(x); return; }
   if (d.seguent) { const [id, n] = d.seguent.split(':').map(Number); tancaFull(); fes(D.posaPart(id, n), 'La part ' + n + ' entra en rotació', { abans: estat.abansSortida }); return; }
@@ -2199,7 +2230,7 @@ document.addEventListener('click', e => {
   if (d.hgrup) { fullGrupHistorial(d.hgrup); return; }
   if (d.desaenllac) { const id = +d.desaenllac, url = B.llegeixEnllac($('#inEnllacBc')?.value);
     if (!url) { avisa('No hi trobo cap enllaç d\'un àlbum de Bandcamp (https://….bandcamp.com/album/…).'); return; }
-    fes(B.desaEnllac(id, url), 'Enllaç desat: el ▶ ja l\'obre. El codi arriba aquesta nit.').then(() => { const x = D.fitxa(db(), id); if (x && t.closest('#full')) fullFitxa(x); }); return; }
+    { const dins = !!t.closest('#full'); fes(B.desaEnllac(id, url), 'Enllaç desat: el ▶ ja l\'obre. El codi arriba aquesta nit.'); const x = D.fitxa(db(), id); if (x && dins) fullFitxa(x); } return; }
   if (d.histmes) { estat.histMax = (estat.histMax || FINESTRA_HIST) + FINESTRA_HIST; pintaHistorial(); return; }   // ACT-737
 
   // La fitxa que creix (bloc 3.2 bis)
@@ -2269,8 +2300,17 @@ document.addEventListener('click', e => {
   if (d.copiaorigen) { const x = estat.copia && rot(estat.copia.id); if (x) fullCopia(x, +d.copiaorigen); return; }
   if (d.fescopia) { const [id, de] = d.fescopia.split('|').map(Number), claus = [...$('#full').querySelectorAll('input[data-clau]:checked')].map(i => i.dataset.clau);
     const x = rot(id); if (!x) return;
-    fes(FX.copia(de, x.album_id, claus), 'Copiat: ' + claus.length + (claus.length === 1 ? ' cosa' : ' coses')).then(() => { const y = rot(id); if (y) fullFitxa(y); }); return; }
+    fes(FX.copia(de, x.album_id, claus), 'Copiat: ' + claus.length + (claus.length === 1 ? ' cosa' : ' coses')); { const y = rot(id); if (y) fullFitxa(y); } return; }
   if (d.triaproper) { fullProper(+d.triaproper); return; }
+  if (d.eraproper) { tancaFull(); fes(PR.esborraProper(+d.eraproper), 'D\'acord: el proper era aquest, nota esborrada.'); return; }
+  if (d.posaproper) { const p = D.preferents(db()).find(x => x.id === +d.posaproper); if (!p) return;
+    fullAfegeixDisc({ art: p.nom, tit: p.proper_titol, canal: D.canalPerDefecte(db(), p.artista_id) }); return; }
+  if (d.buscaa) { const art = $('#inArt').value.trim(), tit = $('#inTit').value.trim(), e = enllac(estat.nouCanal, { art, tit });
+    if (e.href && e.href !== '#') window.open(e.href, e.ext ? '_blank' : '_self'); return; }
+  if (d.canvianoms) { const x = D.fitxa(db(), +d.canvianoms); if (x) { fullNoms(x); tornaA(x.id); } return; }
+  if (d.desanoms) { const id = +d.desanoms, v = { titol: $('#inNomTit').value, nomEdicio: $('#inNomEd').value, artista: $('#inNomArt').value };
+    let r; fes(y => (r = PR.canviaNoms(id, v)(y)), x => x.error || (x.canvis.length ? 'Canviat: ' + x.canvis.join(', ') + '.' : 'Res a canviar.'));
+    if (!r?.error) { const x = D.fitxa(db(), id); if (x) fullFitxa(x); } return; }
   if (d.desaproper) { const t2 = $('#inProper').value.trim(); if (!t2) { avisa('Cal un títol.'); return; }
     tancaFull(); fes(D.posaProper(estat.properDe, t2), 'El proper: ' + t2); return; }
   if (d.treuproper) { fes(D.posaProper(+d.treuproper, null), 'Nota esborrada'); return; }
