@@ -85,11 +85,12 @@ export const OBRA1 = [
     const r = await pagina.evaluate(async () => { const B = await import('./js/bandcamp.js?v=1');
       const t = (d, h) => new Date(2026, 10, d, h, 0).getTime();
       return { n: B.NITS, mateixDia: B.nitsEntre(new Date(t(10, 20)).toISOString(), t(10, 23)), duesNits: B.nitsEntre(new Date(t(10, 20)).toISOString(), t(12, 23)),
-               tresNits: B.nitsEntre(new Date(t(10, 23)).toISOString(), t(13, 1)) }; });
+               abansDeLaTasca: B.nitsEntre(new Date(t(10, 23)).toISOString(), t(13, 1)), tresNits: B.nitsEntre(new Date(t(10, 23)).toISOString(), t(13, 7)) }; });
     igual(r.n, 3, 'NITS');
     igual(r.mateixDia, 0, 'el mateix dia');
     igual(r.duesNits, 2, 'del dia 10 a les 20 h al dia 12 a les 23 h');
-    igual(r.tresNits, 3, 'del dia 10 a les 23 h al dia 13 a la 1 h (unes 26 hores)');
+    igual(r.abansDeLaTasca, 2, 'del dia 10 a les 23 h al dia 13 a la 1 h: la passada de la 1:30 encara compta');
+    igual(r.tresNits, 3, 'del dia 10 a les 23 h al dia 13 a les 7 h');
   } },
   { nom: 'Bandcamp (ACT-791, ACT-793 c): un enllaç de segell amb domini propi s\'accepta; a Android el ▶ prova l\'app de Bandcamp (intent amb el paquet) i, si no, el navegador', async fes({ pagina }) {
     const r = await pagina.evaluate(async () => { const B = await import('./js/bandcamp.js?v=1');

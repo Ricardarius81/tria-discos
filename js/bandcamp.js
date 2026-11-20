@@ -41,7 +41,9 @@ export const desaEnllac = (id, url) => db => {
 // ACT-790: N = 3 nits de calendari («si falla tres dias seguidos, fuera»): es compten els canvis de dia, a l'hora d'aquest
 // mòbil, des que el disc va entrar per primer cop al fitxer de pendents. Una nit que la tasca no corre compta igual.
 export const NITS = 3;
-const migdia = t => { const d = new Date(t); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); };
+// El dia canvia a les 6 del matí, no a mitjanit: la tasca corre cap a la 1:30, i així la seva passada de la tercera nit
+// encara compta abans d'apartar el disc (si no, obrir l'app entre les 0 i la 1:30 l'apartaria amb només dues proves).
+const migdia = t => { const d = new Date(t - 6 * 36e5); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); };
 export const nitsEntre = (des, ara = Date.now()) => Math.round((migdia(ara) - migdia(Date.parse(des))) / 864e5);
 // Una fila de meta per disc («bc-nits:E43»), no una sola amb tots: a l'arxiu gran del banc una sola fila passava dels
 // 32767 caràcters que admet una cel·la de l'Excel de la còpia (trobat a la puerta del 19-11).
