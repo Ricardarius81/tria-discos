@@ -45,7 +45,7 @@ export function generePelsAltres(db, albumId) {
   const a = un(db, 'SELECT artista_id FROM album WHERE id = ?', [albumId]); if (!a) return null;
   const n = new Map();
   for (const r of files(db, 'SELECT generes FROM album WHERE artista_id = ? AND id <> ?', [a.artista_id, albumId])) {
-    const g = llista(r.generes).filter(x => F.BRANQUES.includes(x)); if (!g.length) continue;
+    const g = llista(r.generes).filter(Boolean);   // ACT-809: també les branques noves if (!g.length) continue;
     const k = JSON.stringify(g); n.set(k, (n.get(k) || 0) + 1);
   }
   const ord = [...n].sort((x, y) => y[1] - x[1]);

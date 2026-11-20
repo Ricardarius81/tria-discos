@@ -841,3 +841,7 @@ body[data-estil="ricard"] .apar-tabs button[aria-selected="true"]{background:var
 .codi-bc{margin:12px 0 0}
 .linia-bc{margin:0 0 6px; font-size:13px; color:var(--os)}
 .full ol.passos{margin:4px 0 10px; padding-left:20px; font-size:13px}
+/* Obra C (ACT-814, 4.2): la portada de cada entrada de Pila; les de text, inicials de l'àlbum */
+.cob-pila{flex:0 0 44px; width:44px; height:44px; border-radius:6px; overflow:hidden; background:var(--vora); display:flex; align-items:center; justify-content:center; font:600 14px system-ui,sans-serif; color:var(--os)}
+.cob-pila img{width:100%; height:100%; object-fit:cover}
+.cob-pila.text{border:1px dashed var(--os); background:transparent}

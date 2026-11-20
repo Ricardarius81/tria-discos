@@ -28,6 +28,7 @@ import * as B from './bandcamp.js?v=1';
 import * as J from './arreglos.js?v=1';
 import * as PR from './proper.js?v=1';
 import * as CB from './codibc.js?v=1';
+import * as BR from './branques.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -169,7 +170,7 @@ function recalculaEdicio(y, id) { const d = E.desDeEdicions(y, [id]); return d ?
 function pinta() {
   if (!A.estat.db) return;
   sincroCanals();
-  try { estat.enPiles = P.edicionsEnPiles(db()); } catch { estat.enPiles = null; }
+  try { estat.enPiles = P.edicionsEnPiles(db()); estat.colorsPila = P.colorsPiles(db()); } catch { estat.enPiles = null; }
   pintaReixa(); pintaFiles(); pintaHistorial(); pintaSafata(); alertaCopia(); if (puntBrut) { puntBrut = false; programaPunt(); } pintaPiles();
   if (estat.superficie === 'prestatgeria') pintaPrestatgeria();
   if (estat.superficie === 'artista' && estat.artista) pintaArtista(estat.artista);
@@ -551,7 +552,7 @@ function pintaArxiu() {
 const PILA = 'tria-pila';
 // ACT-773: la icona de Pila a la cantonada de la portada, quan l'àlbum té una entrada casada sense data_sortida. Es calcula un
 // cop per pintada (estat.enPiles) i es fa servir a Discos en rotació, a l'Historial i a La Prestatgeria.
-const icoPila = edId => { const l = estat.enPiles?.get(edId); return l ? `<span class="ico-pila" data-icopila="${esc(l.map(x => x.nom).join(' · '))}">${l.map(x => `<i title="${esc(x.nom)}">${P.figura(x.nom)}</i>`).join('')}</span>` : ''; };
+const icoPila = edId => { const l = estat.enPiles?.get(edId); return l ? `<span class="ico-pila" data-icopila="${esc(l.map(x => x.nom).join(' · '))}">${l.map(x => `<i title="${esc(x.nom)}">${P.figura(x.nom, estat.colorsPila?.get(x.pila_id))}</i>`).join('')}</span>` : ''; };
 const edDe = id => D.edicio(db(), +id) || D.fitxa(db(), +id);
 const darreraPila = ps => { let v = null; try { v = +localStorage.getItem(PILA); } catch {} return ps.find(p => p.id === v) || ps[0] || null; };
 function pintaPiles() {
@@ -563,8 +564,12 @@ function pintaPiles() {
     <button class="afegeix" data-afegeixpila="${p.id}">＋ Afegeix</button>
     <div class="llista-grup pila-llista">${ents.map(filaPila).join('') || '<p class="subtitol" style="margin:14px 0 0">La Pila és buida.</p>'}</div>
     ${ja.length ? `<button class="ar-fila pila-ja" data-jaescoltats="${p.id}"><span class="htxt"><span class="htit">Ja escoltats</span></span><span class="m">${ja.length}</span></button>` : ''}`;
+  I.omple(caixa);   // ACT-814 (4.2): les portades de les entrades
 }
-const filaPila = x => `<div class="membre pila-fila" data-entrada="${x.id}">
+// ACT-814 (4.2): la portada de les entrades casades; les de text, un quadre amb les inicials de l'àlbum (encara no és a l'arxiu).
+const cobPila = x => { const d = x.album_id && x.edicio_id ? D.fitxa(db(), x.edicio_id) : null;
+  return d?.portada ? `<span class="cob-pila">${IMG(d.portada)}</span>` : `<span class="cob-pila text" title="${x.album_id ? '' : 'encara no és a l\'arxiu'}">${esc(inicials(x.titol) || '?')}</span>`; };
+const filaPila = x => `<div class="membre pila-fila" data-entrada="${x.id}">${cobPila(x)}
     <button class="txt" data-tocaentrada="${x.id}"><b>${esc(x.titol)}</b><small>${esc(x.artista)}</small></button>${playEntrada(x)}</div>`;
 // El ▶ (ACT-714 e): casada amb una edició, la llança; amb diverses, obre les edicions; de text, cerca al canal de l'artista
 // (D.canalPerDefecte, com el ▶ del proper disc) i, sense artista a l'arxiu, a Amazon (ACT-712).
@@ -1416,7 +1421,10 @@ function fullGenere(d) {
     <div class="gen-triats">${g.generes.map((x, i) => `<div class="gen-triat"><span>${i + 1}. ${esc(x)}</span>
       ${i ? `<button class="mes" data-genamunt="${i}" aria-label="Puja ${esc(x)}">↑</button>` : ''}<button class="mes" data-gentreu="${i}" aria-label="Treu ${esc(x)}">✕</button></div>`).join('') || '<p class="gris">Encara cap. Toca una branca.</p>'}</div>
     <h4 class="gen-eix">Branques</h4>
-    <div class="chips gen-branques">${F.BRANQUES.map(b => xip('genbr', b, g.generes.includes(b))).join('')}</div>
+    <div class="chips gen-branques">${[...new Set([...BR.branques(db()), ...g.generes])].map(b => BR.esNova(b)
+        ? `<span class="sub-amb-llapis">${xip('genbr', b, g.generes.includes(b))}<button class="llapis" data-renombranca="${esc(b)}" aria-label="Canvia el nom de ${esc(b)}">✎</button></span>`
+        : xip('genbr', b, g.generes.includes(b))).join('')}
+      <button class="mes" data-altrabranca="1">＋ Altra branca</button></div>
     ${cl ? `<h4 class="gen-eix">Llenguatge</h4><div class="chips">${F.LLENGUATGES.map(v => xip('genll', v, g.llenguatge.includes(v))).join('')}</div>
       <h4 class="gen-eix">Formació</h4><div class="chips">${F.FORMACIONS.map(v => xip('genfo', v, g.formacio.includes(v))).join('')}</div>
       ${g.formacio.includes(F.INSTRUMENT_SOL) ? `<label class="camp"><span>Instrument solista <small>(opcional)</small></span><input id="inInstrument" type="text" autocomplete="off" value="${esc(g.instrument)}" placeholder="p. ex. piano"></label>` : ''}` : ''}
@@ -1452,6 +1460,17 @@ function reanomenaSub(vell, nou) {
   g.subgeneres = canvia(g.subgeneres); g.vistos = canvia(g.vistos);
   estat.renomSub = null;
   const d = D.fitxa(db(), g.id); if (d) { fullGenere(d); }
+}
+// El ✎ d'una branca nova (ACT-809 a): canviar-li el nom o fondre-la amb una altra.
+function fullRenomBranca(vell) {
+  const g = estat.gen; if (!g) return;
+  estat.renomBranca = vell;
+  const n = BR.albumsAmbBranca(db(), vell);
+  obreFull(`<h3>Canvia el nom de la branca</h3><p>«${esc(vell)}» · ${n === 1 ? 'un disc' : n + ' discos'}. Canvia a tots. Si el nom nou ja és una altra branca, es fonen.</p>
+    <label class="camp"><span>Nom nou</span><input id="inRenomBranca" type="text" autocomplete="off" value="${esc(vell)}"></label>
+    <div class="barra-accions" style="position:static;padding:4px 0 0"><button class="bt principal" data-desarenombranca="1">Canvia el nom</button></div>`);
+  const b = $('#full .torna-full'); if (b) { delete b.dataset.tornafull; b.dataset.tornagenere = g.id; }
+  setTimeout(() => $('#inRenomBranca')?.select(), 30);
 }
 function tocaGenere(fn) {
   const g = estat.gen; if (!g) return;
@@ -2116,6 +2135,21 @@ document.addEventListener('click', e => {
   if (d.jaafinat) { const id = +d.jaafinat; fes(F.jaAfinat(id), 'Afinat'); const x = rot(id); if (x) fullFitxa(x); return; }
   if (d.generefitxa) { const x = rot(d.generefitxa); if (x) { estat.gen = null; fullGenere(x); } return; }
   if (d.comaltres) { const s = estat.comAltres; if (s) tocaGenere(g => { g.generes = [...s.generes]; }); return; }
+  if (d.altrabranca) { t.outerHTML = `<span class="nou-idioma"><input id="inBranca" type="text" autocomplete="off" placeholder="p. ex. Electrònica"><button data-desabranca="1">Afegeix</button></span>`;
+    setTimeout(() => $('#inBranca')?.focus(), 30); return; }
+  if (d.desabranca || d.brancaigualment) { const v = d.brancaigualment || BR.brancaCanonica(db(), $('#inBranca')?.value); if (!v) { avisa('Escriu el nom de la branca.'); return; }
+    // ACT-809 (b): si el nom ja és un subgènere, s'avisa i tria ell.
+    const sg = !d.brancaigualment && !BR.branques(db()).includes(v) && BR.esSubgenere(db(), v);
+    if (sg) { const g = estat.gen; obreFull(`<h3>«${esc(v)}» ja és un subgènere</h3><p>Si la crees com a branca, hi haurà dues coses amb el mateix nom: la branca i el subgènere.</p>
+        <div class="barra-accions" style="position:static;padding:4px 0 0"><button class="bt principal" data-brancaigualment="${esc(v)}">Crea-la igualment</button>
+        <button class="bt" data-tornagenere="${g?.id}">No</button></div>`); return; }
+    if (!estat.gen?.generes.includes(v)) tocaGenere(g => { g.generes.push(v); }); else { const x = D.fitxa(db(), estat.gen.id); if (x) fullGenere(x); }
+    return; }
+  if (d.renombranca) { fullRenomBranca(d.renombranca); return; }
+  if (d.desarenombranca) { const vell = estat.renomBranca, nou = $('#inRenomBranca')?.value, g = estat.gen; if (!vell || !g) return;
+    let r; fes(y => (r = BR.reanomenaBranca(vell, nou)(y)), x => x.fos ? `Fosos: tot és «${x.nom}» (${x.albums === 1 ? 'un disc' : x.albums + ' discos'}).` : `Ara es diu «${x.nom}».`, { desfes: false });
+    if (r) { const k = F.clauSubgenere(vell); g.generes = [...new Map(g.generes.map(x => F.clauSubgenere(x) === k ? r.nom : x).map(x => [F.clauSubgenere(x), x])).values()]; }
+    estat.renomBranca = null; const x = D.fitxa(db(), g.id); if (x) fullGenere(x); return; }
   if (d.genbr) { tocaGenere(g => { const i = g.generes.indexOf(d.genbr); if (i >= 0) g.generes.splice(i, 1); else g.generes.push(d.genbr); }); return; }
   if (d.genamunt) { tocaGenere(g => { const i = +d.genamunt; [g.generes[i - 1], g.generes[i]] = [g.generes[i], g.generes[i - 1]]; }); return; }
   if (d.gentreu) { tocaGenere(g => { g.generes.splice(+d.gentreu, 1); }); return; }

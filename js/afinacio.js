@@ -107,7 +107,8 @@ export const falta = g => !g.generes.length ? 'sense gènere'
 // Els subgèneres (ACT-733) només es desen si hi ha almenys una branca: sense branca, la columna queda buida i la fulla els
 // recorda mentre és oberta. Així es compleix que un disc amb subgènere sempre té branca (decisió de construcció de Claude).
 export const desaGenere = (albumId, { generes, llenguatge, formacio, instrument, subgeneres = null }) => db => {
-  const gs = [...new Set(generes.filter(g => BRANQUES.includes(g)))];
+  // ACT-809: també les branques noves (qualsevol nom net); una sola vegada cada una, comparades com els subgèneres.
+  const gs = [...new Map(generes.map(subgenereNet).filter(Boolean).map(g => [clauSubgenere(g), g])).values()];
   const cl = gs.includes(CLASSICA);
   const ll = cl ? LLENGUATGES.filter(x => llenguatge.includes(x)) : [];
   const fo = cl ? FORMACIONS.filter(x => formacio.includes(x)) : [];

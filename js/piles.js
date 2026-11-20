@@ -75,14 +75,14 @@ export function edicionsEnPiles(db) {
 }
 // La icona d'una Pila (ACT-773; ACT-797, figures de línia fina, no emojis): Gimnàs una manuella en diagonal, Avió/Tren/Bus
 // un avió en diagonal, Cotxe un cotxe; una Pila nova, la seva inicial dins un cercle. Torna l'SVG, ja escapat.
-const SVG = d => `<svg class="pf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const SVG = d => `<svg class="pf" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const FIGURA = {
   'Gimnàs': SVG('<g transform="rotate(-45 12 12)"><path d="M8 12h8"/><rect x="5" y="7.5" width="3" height="9" rx="1"/><rect x="16" y="7.5" width="3" height="9" rx="1"/><path d="M3.2 10.5v3M20.8 10.5v3"/></g>'),
   'Avió/Tren/Bus': SVG('<path transform="rotate(45 12 12)" d="M12 2.8c.7 0 1.2.8 1.2 1.7v5l6.8 4.1v1.7l-6.8-2v4.4l2.1 1.6v1.3L12 19.7l-3.3.9v-1.3l2.1-1.6v-4.4l-6.8 2v-1.7l6.8-4.1v-5c0-.9.5-1.7 1.2-1.7z"/>'),
   'Cotxe': SVG('<path d="M5.2 16.5H3.5V13l2-4.3h8.4l3.6 4H20a1 1 0 0 1 1 1v2.8h-1.8M8.8 16.5h6.4M5.5 12.7h12"/><circle cx="7" cy="16.5" r="1.8"/><circle cx="17" cy="16.5" r="1.8"/>'),
 };
 const escInicial = c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] || c);
-export const figura = nom => FIGURA[nom] || SVG(`<circle cx="12" cy="12" r="9"/><text x="12" y="12" dy=".36em" text-anchor="middle" font-size="11" font-weight="600" font-family="system-ui,sans-serif" fill="currentColor" stroke="none">${escInicial(String(nom || '?').trim().charAt(0).toUpperCase() || '?')}</text>`);
+const figura0 = nom => FIGURA[nom] || SVG(`<circle cx="12" cy="12" r="9"/><text x="12" y="12" dy=".36em" text-anchor="middle" font-size="11" font-weight="600" font-family="system-ui,sans-serif" fill="currentColor" stroke="none">${escInicial(String(nom || '?').trim().charAt(0).toUpperCase() || '?')}</text>`);
 
 // Els àlbums de l'arxiu amb el seu artista (nom canònic i persona), per casar i per suggerir.
 const albums = db => files(db, `SELECT a.id, a.titol, ar.nom_canonic AS art, ar.persona FROM album a JOIN artista ar ON ar.id = a.artista_id`);
@@ -141,3 +141,10 @@ export function sortides(db) {
   }
   return n;
 }
+
+// Obra C (ACT-814, 4.1): un color per Pila, per ordre i sense camp nou (opció A): Gimnàs verd, Avió/Tren/Bus blau, Cotxe
+// lila, i cada Pila nova el següent d'una paleta fixa sense daurat, magenta, taronja ni vermell (són de l'app: preferents,
+// Drive, falta omplir i alarma). Trac un terç més gruixut (1.6 → 2.1, ACT-814). Camp: Pila.id (l'ordre de piles()).
+export const COLORS_PILA = ['#3f9d5a', '#3d7fd6', '#8f6cc8', '#1d9a9a', '#7d8b2b', '#5d6e84', '#8c6a46', '#2f5aa3'];
+export function colorsPiles(db) { const m = new Map(); piles(db).forEach((p, i) => m.set(p.id, COLORS_PILA[i % COLORS_PILA.length])); return m; }
+export const figura = (nom, color = null) => { const s = figura0(nom); return color ? s.replace('<svg ', `<svg style="color:${color}" `) : s; };
