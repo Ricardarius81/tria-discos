@@ -29,6 +29,7 @@ import * as J from './arreglos.js?v=1';
 import * as PR from './proper.js?v=1';
 import * as CB from './codibc.js?v=1';
 import * as BR from './branques.js?v=1';
+import * as INF from './info.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -143,6 +144,7 @@ function marcaDesat(r) {
   }
 }
 
+addEventListener('tria-desat', () => marcaDesat());   // l'avís «sense desar» es torna a mirar a cada pujada acabada (arreglo 20-11)
 // Fer un canvi: s'escriu a l'arxiu, es pinta de seguida i es desa. «Desfés» torna l'arxiu a com era abans.
 async function fes(fn, text, { desfes = true, abans = null, auto = false, proper = true } = {}) {
   abans = abans || A.estat.db.export();
@@ -1292,7 +1294,34 @@ function blocObra5(d) {
   return `<div class="canals fitxa-obra5" style="margin-top:12px">
     ${pid ? `<button data-vesartista="${pid}">Ves a l'artista <small>${esc(d.art)} · anterior i següent</small></button>`
           : `<button data-triaseguent="${d.id}">Tria el següent de ${esc(d.art)} <small>el fa preferent, amb aquest disc de proper</small></button>`}
-    <button data-copiade="${d.id}">Copia d'un altre disc <small>gènere, subgèneres, llenguatge, formació i tags de l'àlbum</small></button></div>`;
+    <button data-copiade="${d.id}">Copia d'un altre disc <small>gènere, subgèneres, llenguatge, formació i tags de l'àlbum</small></button>
+    <button data-info="${d.id}">Info <small>la Wikipedia, MusicBrainz, Discogs, RYM i AllMusic</small></button></div>`;
+}
+// «Info» (ACT-815, 6): A, els enllaços; B, la fitxa de la Wikipedia (en anglès) i de MusicBrainz, desada per veure-la sense
+// connexió. Es busca només quan es toca «Busca la fitxa» o quan no n'hi ha cap de desada i hi ha xarxa.
+function fullInfo(d, cercant = false) {
+  const rel = INF.releaseDeLAlbum(db(), d.album_id), inf = INF.desada(db(), d.album_id);
+  const links = INF.enllacos({ art: d.art, titol: d.titol, release: inf?.mb?.release || rel });
+  const w = inf?.wiki, m = inf?.mb;
+  const fitxa = inf ? `${w ? `<div class="info-wiki"><h4 class="gen-eix">Wikipedia <small>· en anglès</small></h4><p class="info-resum" lang="en">${esc(w.resum).replace(/\n+/g, '</p><p class="info-resum" lang="en">')}</p>
+        <p><a href="${esc(w.url)}" target="_blank" rel="noopener">${esc(w.titol)} a la Wikipedia</a></p></div>` : '<p class="gris">La Wikipedia no té cap pàgina d\'aquest disc (o no l\'he trobada).</p>'}
+      ${m ? `<h4 class="gen-eix">MusicBrainz</h4><p>${[m.data, m.segell, m.cataleg].filter(Boolean).map(esc).join(' · ') || 'sense data ni segell'}</p>
+        ${m.pistes.length ? `<ol class="info-pistes">${m.pistes.map(t => `<li>${esc(t.titol)}${t.min ? ` <small>${t.min}′</small>` : ''}</li>`).join('')}</ol>` : ''}` : '<p class="gris">MusicBrainz no té aquest disc (o no l\'he trobat).</p>'}
+      <p class="gris" style="font-size:11.5px">Desada ${esc(fa(inf.quan))}: es veu sense connexió.</p>` : '';
+  obreFull(`<h3>Info</h3><p>${esc(d.titol)} · ${esc(d.art)}</p>
+    <div class="canals">${links.map(l => `<a class="bt-enllac" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.nom)} <small>${esc(l.nota)}</small></a>`).join('')}</div>
+    ${fitxa}
+    <div class="barra-accions" style="position:static;padding:8px 0 0"><button class="bt ${inf ? '' : 'principal'}" data-buscainfo="${d.id}" ${cercant ? 'disabled' : ''}>${cercant ? 'Cercant…' : inf ? 'Torna-la a buscar' : 'Busca la fitxa'}</button></div>`, true);
+  tornaA(d.id);
+}
+async function buscaInfo(id) {
+  const d = D.fitxa(db(), id); if (!d) return;
+  if (!navigator.onLine) { avisa('Sense connexió: la fitxa es busca amb xarxa.'); return; }
+  fullInfo(d, true);
+  const r = await INF.busca({ art: d.art, titol: d.titol, release: INF.releaseDeLAlbum(db(), d.album_id) });
+  if (!r.wiki && !r.mb) { avisa('Ni la Wikipedia ni MusicBrainz en saben res.'); }
+  fes(INF.desa(d.album_id, r), null, { desfes: false });
+  if ($('#full.obert [data-buscainfo]')) fullInfo(D.fitxa(db(), id));
 }
 function fullCopiaTria(d, filtre = '') {
   const llista = FX.candidatsCopia(db(), d.album_id, filtre);
@@ -2378,6 +2407,8 @@ document.addEventListener('click', e => {
     fullAfegeixDisc({ art: p.nom, tit: p.proper_titol, canal: D.canalPerDefecte(db(), p.artista_id) }); return; }
   if (d.buscaa) { const art = $('#inArt').value.trim(), tit = $('#inTit').value.trim(), e = enllac(estat.nouCanal, { art, tit });
     if (e.href && e.href !== '#') window.open(e.href, e.ext ? '_blank' : '_self'); return; }
+  if (d.info) { const x = D.fitxa(db(), +d.info); if (x) fullInfo(x); return; }
+  if (d.buscainfo) { buscaInfo(+d.buscainfo); return; }
   if (d.canvianoms) { const x = D.fitxa(db(), +d.canvianoms); if (x) { fullNoms(x); tornaA(x.id); } return; }
   if (d.desanoms) { const id = +d.desanoms, v = { titol: $('#inNomTit').value, nomEdicio: $('#inNomEd').value, artista: $('#inNomArt').value };
     let r; fes(y => (r = PR.canviaNoms(id, v)(y)), x => x.error || (x.canvis.length ? 'Canviat: ' + x.canvis.join(', ') + '.' : 'Res a canviar.'));

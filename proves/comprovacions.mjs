@@ -6,6 +6,7 @@ import { OBRA1 } from './obra1.mjs';
 import { OBRA_A } from './obraA.mjs';
 import { OBRA_B } from './obraB.mjs';
 import { OBRA_C } from './obraC.mjs';
+import { OBRA_E } from './obraE.mjs';
 const cal = (cond, msg) => { if (!cond) throw new Error(msg); };
 const igual = (a, b, msg) => cal(a === b, `${msg}: s'esperava ${JSON.stringify(b)} i hi ha ${JSON.stringify(a)}`);
 
@@ -2563,6 +2564,7 @@ export const COMPROVACIONS = [
   ...OBRA_A,   // l'obra A (ACT-812, ACT-813), en fitxer propi
   ...OBRA_B,   // l'obra B (ACT-814 3, ACT-817, ACT-818), en fitxer propi
   ...OBRA_C,   // l'obra C (ACT-809, ACT-810, ACT-814 4), en fitxer propi
+  ...OBRA_E,   // l'obra E (ACT-815 6), en fitxer propi
 
   // ───────── el que no ha de passar mai ─────────
   { bloc: 'obra 4: Parsifal, les òperes per actes (ACT-777)' },

@@ -369,6 +369,9 @@ async function desaAra({ forca = false, intern = false } = {}) {
     if (r.modifiedTime === ara.modifiedTime) return { desat: false, motiu: 'el Drive no ha canviat la data' };
     estat.base = r.modifiedTime;
     if (versio === v) { estat.pendent = false; estat.manual = false; }   // si entremig hi ha hagut un toc, continua pendent
+    // Arreglo (20-11, trobat al banc): la pantalla torna a mirar «sense desar» cada vegada que una pujada acaba, la llanci qui
+    // la llanci. Abans només ho feia qui havia llançat el canvi, i un desat d'un altre camí deixava l'avís encès amb tot desat.
+    try { dispatchEvent(new CustomEvent('tria-desat')); } catch {}
     await desaLocal();
     return { desat: true };
   } catch (e) { return { desat: false, motiu: e.message }; }

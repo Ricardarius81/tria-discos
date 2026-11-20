@@ -92,7 +92,7 @@ export const GSI_FALS = `window.google = { accounts: { oauth2: { initTokenClient
 // com sempre, perquè la sonda de portades i fotos no canviï de comportament.
 const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 export class FontsFalses {
-  constructor() { this.actiu = false; this.wp = { cerques: {}, pagines: {} }; this.mb = { artistes: {}, grups: {}, releases: {} }; this.caa = {}; this.crides = []; }
+  constructor() { this.actiu = false; this.wp = { cerques: {}, pagines: {}, extractes: {} }; this.mb = { artistes: {}, grups: {}, releases: {}, cerquesRelease: {} }; this.caa = {}; this.crides = []; }
   async atén(route) {
     if (!this.actiu) return false;
     const u = new URL(route.request().url()), q = u.searchParams;
@@ -101,6 +101,11 @@ export class FontsFalses {
       if (q.get('list') === 'search') {
         const s = (q.get('srsearch') || '').toLowerCase(), k = Object.keys(this.wp.cerques).find(k => s.includes(k.toLowerCase()));
         this.crides.push('wp cerca ' + s); await json({ query: { search: (this.wp.cerques[k] || []).map(title => ({ title })) } }); return true;
+      }
+      // Obra E (ACT-815, 6): el resum de la pàgina (prop=extracts), per a «Info».
+      if (q.get('prop') === 'extracts') {
+        const t = q.get('titles'), x = this.wp.extractes[t]; this.crides.push('wp resum ' + t);
+        await json({ query: { pages: [x ? { title: t, extract: x } : { title: t, missing: true }] } }); return true;
       }
       if (q.get('action') === 'parse') {
         const p = q.get('page'), w = this.wp.pagines[p]; this.crides.push('wp pàgina ' + p);
@@ -127,6 +132,12 @@ export class FontsFalses {
       if (u.pathname === '/ws/2/release-group' && this.mb.grups[q.get('artist')]) {
         const l = this.mb.grups[q.get('artist')]; this.crides.push('mb grups ' + q.get('artist'));
         await json({ 'release-group-count': l.length, 'release-groups': l }); return true;
+      }
+      // Obra E: la cerca d'edicions (release/?query=…), per a «Info» i la durada del proper.
+      if (u.pathname === '/ws/2/release/') {
+        const s = q.get('query') || '', k = Object.keys(this.mb.cerquesRelease).find(k => s.includes('"' + k + '"'));
+        if (!k) return false;
+        this.crides.push('mb cerca release ' + k); await json({ releases: this.mb.cerquesRelease[k] }); return true;
       }
       // ACT-777: una edició amb les seves pistes (inc=recordings), per al disc nou de la safata.
       const rel = u.pathname.match(/^\/ws\/2\/release\/([^/]+)$/);
