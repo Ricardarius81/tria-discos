@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sonda segells · MusicBrainz i Discogs</title>
+<style>
+  :root{color-scheme:light dark}
+  body{font:14px/1.45 system-ui,sans-serif;margin:0 auto;padding:16px;max-width:760px}
+  h1{font-size:19px;margin:0 0 4px} p{margin:0 0 10px;color:#888;font-size:13px}
+  pre{white-space:pre-wrap;word-break:break-word;font:12px ui-monospace,monospace}
+</style>
+</head>
+<body>
+<h1>Sonda: segells a MusicBrainz i Discogs (ACT-817)</h1>
+<p>Només llegeix. Per a cada segell: què en sap MusicBrainz (llançaments i números de catàleg) i si Discogs contesta a una pàgina web (CORS), a partir de l'enllaç de Discogs que MusicBrainz guarda del segell.</p>
+<pre id="o">començant…</pre>
+<script>
+const SEGELLS = ['Quiet Details', 'Home Normal', 'Sonic Pieces', 'Past Inside The Present', "Dragon's Eye Recordings", 'A Strangely Isolated Place'];
+const MB = 'https://musicbrainz.org/ws/2';
+const o = document.getElementById('o'); let txt = '';
+const log = s => { txt += s + '\n'; o.textContent = txt; };
+const dorm = ms => new Promise(r => setTimeout(r, ms));
+async function mb(u) { await dorm(1100); const r = await fetch(MB + u + (u.includes('?') ? '&' : '?') + 'fmt=json'); if (!r.ok) throw new Error('MB ' + r.status); return r.json(); }
+async function discogs(u) {
+  try { const r = await fetch('https://api.discogs.com' + u); const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch {} return { ok: r.ok, status: r.status, j }; }
+  catch (e) { return { ok: false, status: 'XARXA/CORS: ' + e.message }; }
+}
+(async () => {
+  txt = '';
+  const s = await discogs('/database/search?q=Quiet+Details&type=label');
+  log('Discogs cerca sense clau: ' + s.status + (s.j && s.j.message ? ' · ' + s.j.message : ''));
+  for (const nom of SEGELLS) {
+    log('\n== ' + nom);
+    try {
+      const q = await mb('/label?query=' + encodeURIComponent('label:"' + nom + '"') + '&limit=3');
+      const l = (q.labels || [])[0];
+      if (!l) { log('MB: cap segell'); continue; }
+      log('MB: ' + l.name + ' · ' + (l.type || '?') + ' · ' + (l.country || '?') + ' · score ' + l.score + ' · ' + l.id);
+      const det = await mb('/label/' + l.id + '?inc=url-rels');
+      const urls = (det.relations || []).map(r => r.url && r.url.resource).filter(Boolean);
+      log('MB enllaços: ' + (urls.filter(u => /discogs|bandcamp/.test(u)).join(' · ') || 'cap de Discogs ni Bandcamp'));
+      let rels = [], off = 0, total = 0;
+      do { const b = await mb('/release?label=' + l.id + '&inc=labels&limit=100&offset=' + off); total = b['release-count']; rels = rels.concat(b.releases || []); off += 100; } while (off < total && off < 300);
+      const cat = rels.map(r => { const li = (r['label-info'] || []).find(x => x.label && x.label.id === l.id); return { t: r.title, c: li && li['catalog-number'], d: r.date || '' }; });
+      const ambCat = cat.filter(x => x.c && !/none/i.test(x.c));
+      log('MB llançaments: ' + total + ' · amb número de catàleg: ' + ambCat.length);
+      ambCat.sort((a, b) => a.c.localeCompare(b.c, 'en', { numeric: true }));
+      log('MB catàleg (primers i últims): ' + ambCat.slice(0, 4).concat(ambCat.length > 8 ? [{ c: '…', t: '' }] : [], ambCat.slice(-4)).map(x => x.c + ' ' + x.t + (x.d ? ' (' + x.d.slice(0, 4) + ')' : '')).join(' | '));
+      const dg = urls.find(u => /discogs\.com\/label\/(\d+)/.test(u));
+      if (dg) {
+        const id = dg.match(/label\/(\d+)/)[1];
+        const r = await discogs('/labels/' + id + '/releases?per_page=100');
+        if (r.ok && r.j) {
+          const rs = r.j.releases || [];
+          log('Discogs (CORS bé): ' + (r.j.pagination && r.j.pagination.items) + ' llançaments · mostra: ' + rs.slice(0, 4).map(x => x.catno + ' ' + x.title).join(' | '));
+        } else log('Discogs: ' + r.status);
+      } else log('Discogs: sense enllaç a MusicBrainz, no es pot provar');
+    } catch (e) { log('error: ' + e.message); }
+  }
+  log('\nFET');
+})();
+</script>
+</body>
+</html>
