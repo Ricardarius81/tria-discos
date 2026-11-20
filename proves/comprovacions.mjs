@@ -8,6 +8,7 @@ import { OBRA_B } from './obraB.mjs';
 import { OBRA_C } from './obraC.mjs';
 import { OBRA_E } from './obraE.mjs';
 import { OBRA_F } from './obraF.mjs';
+import { OBRA_D } from './obraD.mjs';
 const cal = (cond, msg) => { if (!cond) throw new Error(msg); };
 const igual = (a, b, msg) => cal(a === b, `${msg}: s'esperava ${JSON.stringify(b)} i hi ha ${JSON.stringify(a)}`);
 
@@ -628,13 +629,14 @@ export const COMPROVACIONS = [
     });
     cal(r.desat, 'no s\'ha desat la resposta: ' + r.motiu);
     const esc = consulta('SELECT id, context, atencio, completitud, unio FROM escolta WHERE edicio_id = 9 ORDER BY data_hora');
-    igual(esc.length, 3, 'trossos (Escolta) de Savall');
+    // ACT-815 (obra D, el «repàs»): la Part I que torna sis hores després d'una escolta que compta és una pista ja sonada i
+    // no arriba al 50 %: és un repàs i va a l'escolta d'abans. Abans d'aquesta regla obria una escolta nova (eren 3 trossos).
+    igual(esc.length, 2, 'trossos (Escolta) de Savall');
     igual(esc[0].unio, esc[0].id, 'Escolta.unio del primer tros (la unió porta el seu id)');
     igual(esc[1].unio, esc[0].id, 'Escolta.unio del tros de Dormir (de la mateixa escolta sencera)');
-    cal(esc[2].unio !== esc[0].unio, 'la primera pista que torna quan ja compta no obre una escolta nova (Escolta.unio)');
     igual(esc[0].completitud, 0.606, 'Escolta.completitud del tros d\'Amor');
     igual(esc[1].completitud, 0.354, 'Escolta.completitud del tros de Dormir (la Part III repetida compta un sol cop)');
-    igual(JSON.stringify(esc.map(e => e.context)), '["Amor","Dormir","Dormir"]', 'Escolta.context de cada tros');
+    igual(JSON.stringify(esc.map(e => e.context)), '["Amor","Dormir"]', 'Escolta.context de cada tros (ACT-815: el repàs no fa tros propi)');
     const { SQL_COMPTA } = await import('../js/escoltes.js');
     igual(consulta(`SELECT COUNT(DISTINCT COALESCE(s.unio, s.id)) AS n FROM escolta s WHERE s.edicio_id = 9 AND ${SQL_COMPTA}`)[0].n, 1, 'escoltes senceres de Savall que compten');
   } },
@@ -676,7 +678,8 @@ export const COMPROVACIONS = [
     igual(r.u1.length, 1, 'escoltes senceres (Escolta.unio) amb 69′: la «Come On» repetida no n\'obre una altra');
     cal(r.u1[0][1] >= 0.95 && r.u1[0][1] <= 1.05, 'la cobertura de l\'escolta (suma d\'Escolta.completitud) no és d\'un disc sencer: ' + r.u1[0][1]);
     igual(r.h1.n, 1, 'escoltes del Chuck Berry a l\'Historial'); igual(r.h1.mitges, false, '«a mitges» amb el disc sencer');
-    igual(r.u2.length, 2, 'escoltes (Escolta.unio) després de repetir dues cançons amb el disc ja sencer');
+    // ACT-815 (obra D): dues cançons ja sonades, 40 minuts després d'un disc sencer, són un repàs: no obren escolta (abans, 2).
+    igual(r.u2.length, 1, 'escoltes (Escolta.unio) després de repetir dues cançons amb el disc ja sencer (ACT-815, repàs)');
     igual(r.h2.n, 1, 'escoltes que compten després de repetir-ne dues'); igual(r.h2.mitges, false, '«a mitges» per dues cançons repetides després d\'un disc sencer (ACT-696)');
     cal(r.h2.darrera > r.h1.darrera, 'el disc no puja amb les dues cançons repetides');
     igual(r.u3.length, 2, 'escoltes senceres amb el disc dues vegades en 15 hores'); igual(r.h3.n, 2, 'escoltes que compten amb el disc dues vegades en 15 hores');
@@ -2567,6 +2570,7 @@ export const COMPROVACIONS = [
   ...OBRA_C,   // l'obra C (ACT-809, ACT-810, ACT-814 4), en fitxer propi
   ...OBRA_E,   // l'obra E (ACT-815 6), en fitxer propi
   ...OBRA_F,   // l'obra F (retocs), en fitxer propi
+  ...OBRA_D,   // l'obra D (ACT-815 5), en fitxer propi
 
   // ───────── el que no ha de passar mai ─────────
   { bloc: 'obra 4: Parsifal, les òperes per actes (ACT-777)' },
