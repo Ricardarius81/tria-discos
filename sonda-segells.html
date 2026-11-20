@@ -16,12 +16,12 @@
 <p>Només llegeix. Per a cada segell: què en sap MusicBrainz (llançaments i números de catàleg) i si Discogs contesta a una pàgina web (CORS), a partir de l'enllaç de Discogs que MusicBrainz guarda del segell.</p>
 <pre id="o">començant…</pre>
 <script>
-const SEGELLS = ['Quiet Details', 'Home Normal', 'Sonic Pieces', 'Past Inside The Present', "Dragon's Eye Recordings", 'A Strangely Isolated Place'];
+const SEGELLS = new URLSearchParams(location.search).get('s')?.split('|') || ['Quiet Details', 'Home Normal', 'Sonic Pieces', 'Past Inside The Present', "Dragon's Eye Recordings", 'A Strangely Isolated Place'];
 const MB = 'https://musicbrainz.org/ws/2';
 const o = document.getElementById('o'); let txt = '';
 const log = s => { txt += s + '\n'; o.textContent = txt; };
 const dorm = ms => new Promise(r => setTimeout(r, ms));
-async function mb(u) { await dorm(1100); const r = await fetch(MB + u + (u.includes('?') ? '&' : '?') + 'fmt=json'); if (!r.ok) throw new Error('MB ' + r.status); return r.json(); }
+async function mb(u) { for (let i = 0; i < 5; i++) { await dorm(1500 + i * 2500); const r = await fetch(MB + u + (u.includes('?') ? '&' : '?') + 'fmt=json'); if (r.ok) return r.json(); if (r.status !== 503) throw new Error('MB ' + r.status); } throw new Error('MB 503 cinc vegades'); }
 async function discogs(u) {
   try { const r = await fetch('https://api.discogs.com' + u); const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch {} return { ok: r.ok, status: r.status, j }; }
   catch (e) { return { ok: false, status: 'XARXA/CORS: ' + e.message }; }
