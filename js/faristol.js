@@ -13,6 +13,7 @@ import * as D from './dades.js?v=25';
 import * as E from './escoltes.js?v=15';
 import { partsPerActe } from './actes.js?v=1';
 import * as AP from './actespregunta.js?v=1';
+import * as SG from './segells.js?v=1';
 import * as LB from './listenbrainz.js?v=2';
 import * as I from './imatges.js?v=5';
 import * as T from './tags.js?v=1';
@@ -174,7 +175,7 @@ function pinta() {
   if (!A.estat.db) return;
   sincroCanals();
   try { estat.enPiles = P.edicionsEnPiles(db()); estat.colorsPila = P.colorsPiles(db()); } catch { estat.enPiles = null; }
-  pintaReixa(); pintaFiles(); pintaHistorial(); pintaSafata(); alertaCopia(); if (puntBrut) { puntBrut = false; programaPunt(); } pintaPiles();
+  pintaReixa(); pintaFiles(); pintaHistorial(); pintaSafata(); alertaCopia(); if (puntBrut) { puntBrut = false; programaPunt(); } pintaPiles(); pintaSegells();
   if (estat.superficie === 'prestatgeria') pintaPrestatgeria();
   if (estat.superficie === 'artista' && estat.artista) pintaArtista(estat.artista);
   I.omple();
@@ -271,6 +272,7 @@ function botoPlay(d, classe) {
 }
 function pintaReixa() {
   const rot = D.rotacio(db()), prefs = D.artistesPreferents(db());
+  let segs; try { segs = SG.edicionsDeSegellsPreferents(db()); } catch { segs = new Set(); }   // obra G (7.8): marc platejat
   $('#reixa').innerHTML = grups(rot).map(d => { if (d.grup) return tileGrup(d, prefs);
     const part = d.esperant
       ? `<span class="part">esperant</span><button class="repren" data-repren="${d.id}">Reprèn</button>`
@@ -282,7 +284,7 @@ function pintaReixa() {
     const play = d.esperant ? '' : (canal
       ? `<a class="escoltar" ${aAttrs(enllac(canal, { art: d.art, tit: d.titol, bc: d.bc, bce: d.bce }))} data-obre="${d.id}" aria-label="Escoltar ara ${esc(tit)}">▶</a>`
       : `<button class="escoltar" data-escoltar="${d.id}" aria-label="Escoltar ara ${esc(tit)}">▶</button>`);
-    return `<div class="disc${prefs.has(d.artista_id) ? ' pref' : ''}">
+    return `<div class="disc${prefs.has(d.artista_id) ? ' pref' : ''}${segs.has(d.id) ? ' seg' : ''}">
       <button class="coberta ${d.portada ? 'amb-img' : ''}" data-fitxa="${d.id}" aria-label="Fitxa de ${esc(tit)}">
         ${d.portada ? IMG(d.portada) : ''}${icoPila(d.id)}<span class="a">${esc(d.art)}</span><span class="t">${esc(tit)}</span><span class="filet"></span>${dur}
       </button>${play}
@@ -1294,6 +1296,7 @@ function fullFitxa(d) {
         <h3>${esc(d.titol)} <button class="sf-link" data-canvianoms="${d.id}">canvia</button></h3><p class="cap-art">${esc(d.art)}</p>
         <div class="cap-ed"><span class="min ${d.min ? '' : 'falta'}">${d.min ? d.min + '′' : 'falta la durada'}</span><button class="sf-link" data-durada="${d.id}">canvia</button><br>
           Edició <button class="sf-link" data-canviaedicio="${d.id}">${edicio}</button>
+          <br>Segell <button class="sf-link" data-segellfitxa="${d.id}">${esc(SG.segellDe(db(), d.id) || 'cap')} · canvia'l</button>
           ${d.parts.length ? `<br>${d.esperant ? 'Cap part viva: la caixa espera' : 'Part viva: ' + esc(d.viva.nom || '') + ' · ' + d.viva.numero + ' de ' + d.parts.length}` : ''}
           ${d.formats.length ? `<br><small>${esc(d.formats.map(f => NOMS_FISICS[f] || f).join(', '))}</small>` : ''}</div>
       </div>
@@ -1355,7 +1358,8 @@ async function buscaInfo(id) {
   fullInfo(d, true);
   const r = await INF.busca({ art: d.art, titol: d.titol, release: INF.releaseDeLAlbum(db(), d.album_id) });
   if (!r.wiki && !r.mb) { avisa('Ni la Wikipedia ni MusicBrainz en saben res.'); }
-  fes(INF.desa(d.album_id, r), null, { desfes: false });
+  const relEd = SG.releaseDeLEdicio(db(), id);   // obra G (7.2): el segell, només de l'edició exacta i si no en té
+  fes(y => { INF.desa(d.album_id, r)(y); SG.segellDeMB(id, relEd, r.mb)(y); }, null, { desfes: false });
   if ($('#full.obert [data-buscainfo]')) fullInfo(D.fitxa(db(), id));
 }
 function fullCopiaTria(d, filtre = '') {
@@ -1821,6 +1825,74 @@ function fullProper(id) {
     <label class="camp"><span>Títol</span><input id="inProper" type="text" autocomplete="off" value="${esc(p.proper_titol || '')}"></label>
     <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-desaproper="1">Desa'l</button></div>`);
   setTimeout(() => $('#inProper')?.focus(), 50);
+}
+
+// ───────── Segells Preferents (obra G, ACT-816, ACT-817, ACT-827) ─────────
+// Com Artistes Preferents (7.1): la llista, el proper a mà o l'anterior i el següent per número de catàleg (segells.js),
+// i la portada del disc del segell en rotació o, si no, de l'últim que ha sonat. Camps: segell_preferent.*, Edició.segell.
+function pintaSegells() {
+  const caixa = $('#segells'); if (!caixa) return;
+  let ss; try { ss = SG.segellsPreferents(db()); } catch { caixa.innerHTML = ''; return; }
+  caixa.innerHTML = ss.map(s => {
+    const r = s.rot, cob = (r || s.darrer)?.portada || null;
+    const linia = r ? `Ara estudies <em>${esc(r.titol)}</em> · ${esc(r.art)}` : s.proper_titol ? `El proper: <em>${esc(s.proper_titol)}</em>${s.proper_artista ? ' · ' + esc(s.proper_artista) : ''}`
+      : s.darrer ? `L'últim: <em>${esc(s.darrer.titol)}</em>` : 'Encara no ha sonat res seu';
+    return `<div class="fila fila-segell" data-filasegell="${s.id}">
+      <button class="fila-cap" data-segell="${s.id}">
+        <span class="foto quadrat segell ${r ? 'viu' : ''}">${esc(inicials(s.nom))}${cob ? IMG(cob) : ''}</span>
+        <span class="fila-txt"><span class="nom">${esc(s.nom)}</span><span class="estat">${linia}</span></span>
+      </button></div>`;
+  }).join('') || `<p class="subtitol" style="margin:12px 0 0">Encara no hi ha cap segell preferent.</p>`;
+  I.omple(caixa);
+}
+function fullSegell(id, veins = null) {
+  const s = SG.segellsPreferents(db()).find(x => x.id === id); if (!s) { tancaFull(); return; }
+  const r = s.rot, ref = r || s.darrer;
+  const canal = ref?.app_escolta || 'amazon';
+  const pr = s.proper_titol ? `<div class="marcador"><p class="cita">El proper: ${esc(s.proper_titol)}${s.proper_artista ? ', de ' + esc(s.proper_artista) : ''}.</p>
+      <p>Quan entri en rotació, la nota s'esborra.</p>
+      <div class="barra-accions" style="position:static;padding:4px 0 0"><a class="bt principal" ${aAttrs(enllac(canal, { art: s.proper_artista || '', tit: s.proper_titol }))}>Busca'l a ${esc(nomCanal(canal))}</a>
+      <button class="bt discret" data-segtreuproper="${s.id}">Treu-lo</button></div></div>` : '';
+  const v = veins === 'buscant' ? `<p class="sf-pre">Buscant a MusicBrainz i, si cal, a Discogs…</p>`
+    : veins?.error ? `<p class="sf-pre">${esc(veins.error)}</p>`
+    : veins ? `<p class="sf-pre">Des de «${esc(veins.partida.titol)}» (núm. ${veins.partida.n}), segons ${esc(veins.font)}:</p>
+      ${[['◀ Anterior', veins.anterior], ['Següent ▶', veins.seguent]].map(([t, e]) => e
+        ? `<div class="marcador"><p class="cita">${t}: ${esc(e.titol)}</p><p>${esc(e.artista)} · ${esc(e.cataleg)}</p>
+           <div class="barra-accions" style="position:static;padding:4px 0 0"><button class="bt" data-segposaproper="${s.id}" data-art="${esc(e.artista)}" data-tit="${esc(e.titol)}">Posa'l de proper</button></div></div>`
+        : `<p class="sf-pre">${t}: no n'hi ha cap a la llista.</p>`).join('')}` : '';
+  obreFull(`<h3>${esc(s.nom)}</h3>
+    <p class="subtitol">${r ? `Ara estudies ${esc(r.titol)} (${esc(r.art)}).` : s.darrer ? `L'últim que ha sonat: ${esc(s.darrer.titol)} (${esc(s.darrer.art)}).` : 'Encara no ha sonat res seu des que la màquina arrenca.'}
+      ${s.n ? ` ${s.n === 1 ? 'Un disc' : s.n + ' discos'} a l'arxiu amb aquest segell.` : ''}</p>
+    ${pr}
+    <div class="canals" style="margin-top:12px">
+      <button data-segvei="${s.id}">◀ Anterior i següent ▶ <small>pel número de catàleg</small></button>
+      <button data-segpropma="${s.id}">${s.proper_titol ? 'Canvia el proper' : 'Tria el proper'} <small>a mà: artista i títol</small></button>
+    </div>
+    ${v}
+    <div class="barra-accions" style="position:static;padding:14px 0 0"><button class="bt discret" data-segtreu="${s.id}">Treu-lo de Segells Preferents</button></div>`);
+}
+function fullProperSegell(id) {
+  const s = SG.segellsPreferents(db()).find(x => x.id === id); if (!s) return;
+  obreFull(`<h3>El proper de ${esc(s.nom)}</h3>
+    <label class="camp"><span>Artista</span><input id="inSegArt" type="text" autocomplete="off" value="${esc(s.proper_artista || '')}"></label>
+    <label class="camp"><span>Títol</span><input id="inSegTit" type="text" autocomplete="off" value="${esc(s.proper_titol || '')}"></label>
+    <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-segdesaproper="${s.id}">Desa'l</button></div>`);
+  setTimeout(() => $('#inSegArt')?.focus(), 50);
+}
+function fullAfegeixSegell() {
+  obreFull(`<h3>Afegeix un segell</h3>
+    <p>Entra al capdavant de la llista. Escriu el nom com el vols veure: els discos hi casen pel segell de la seva fitxa.</p>
+    <label class="camp"><span>Nom</span><input id="inSegell" type="text" autocomplete="off"></label>
+    <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-desasegell="1">Afegeix-lo</button></div>`);
+  setTimeout(() => $('#inSegell')?.focus(), 50);
+}
+function fullSegellFitxa(id) {
+  const sg = SG.segellDe(db(), id) || '';
+  obreFull(`<h3>Segell</h3>
+    <p>El de l'edició. Mai el posa la màquina per deducció: tu, o la tasca de Bandcamp quan la pàgina és la d'un segell.</p>
+    <label class="camp"><span>Segell</span><input id="inSegFitxa" type="text" autocomplete="off" value="${esc(sg)}"></label>
+    <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-desasegellfitxa="${id}">Desa'l</button></div>`);
+  tornaA(id);
 }
 
 function fullAfegeixArtista() {
@@ -2430,6 +2502,22 @@ document.addEventListener('click', e => {
 
   // Artistes Preferents
   if (t.id === 'btAfegeixArtista') { fullAfegeixArtista(); return; }
+  // Segells Preferents (obra G)
+  if (t.id === 'btAfegeixSegell') { fullAfegeixSegell(); return; }
+  if (d.desasegell) { const n = $('#inSegell').value.trim(); if (!n) { avisa('Cal un nom.'); return; }
+    tancaFull(); fes(SG.afegeixSegell(n), r => r?.error || `${n} a Segells Preferents`); return; }
+  if (d.segell) { fullSegell(+d.segell); return; }
+  if (d.segvei) { const id = +d.segvei, s = SG.segellsPreferents(db()).find(x => x.id === id); if (!s) return;
+    fullSegell(id, 'buscant'); SG.veinsDeSegell(db(), s).then(v => { if ($('#full.obert') && $('[data-segvei]')) fullSegell(id, v); }); return; }
+  if (d.segposaproper) { const id = +d.segposaproper; tancaFull(); fes(SG.posaProperSegell(id, d.art, d.tit), `El proper: ${d.tit}`); return; }
+  if (d.segpropma) { fullProperSegell(+d.segpropma); return; }
+  if (d.segdesaproper) { const t_ = $('#inSegTit').value.trim(); if (!t_) { avisa('Cal el títol.'); return; }
+    tancaFull(); fes(SG.posaProperSegell(+d.segdesaproper, $('#inSegArt').value.trim(), t_), `El proper: ${t_}`); return; }
+  if (d.segtreuproper) { tancaFull(); fes(SG.posaProperSegell(+d.segtreuproper, null, null), 'Nota del proper treta'); return; }
+  if (d.segtreu) { tancaFull(); fes(SG.treuSegell(+d.segtreu), 'Segell tret de Segells Preferents'); return; }
+  if (d.segellfitxa) { fullSegellFitxa(+d.segellfitxa); return; }
+  if (d.desasegellfitxa) { const id = +d.desasegellfitxa, n = $('#inSegFitxa').value.trim();
+    fes(SG.canviaSegell(id, n), n ? `Segell: ${n}` : 'Segell tret'); const x = rot(id); if (x) fullFitxa(x); return; }
   if (d.desaartista) { const n = $('#inNom').value.trim(); if (!n) { avisa('Cal un nom.'); return; }
     tancaFull(); fes(D.afegeixPreferent(n), r => r.jaHiEra ? n + ' ja hi era.' : n + ' afegit a Artistes Preferents'); return; }
   if (t.id === 'btOrdena') {

@@ -92,7 +92,7 @@ export const GSI_FALS = `window.google = { accounts: { oauth2: { initTokenClient
 // com sempre, perquè la sonda de portades i fotos no canviï de comportament.
 const PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 export class FontsFalses {
-  constructor() { this.actiu = false; this.wp = { cerques: {}, pagines: {}, extractes: {} }; this.mb = { artistes: {}, grups: {}, releases: {}, cerquesRelease: {} }; this.caa = {}; this.crides = []; }
+  constructor() { this.actiu = false; this.wp = { cerques: {}, pagines: {}, extractes: {} }; this.mb = { artistes: {}, grups: {}, releases: {}, cerquesRelease: {}, segells: {} }; this.discogs = {}; this.caa = {}; this.crides = []; }
   async atén(route) {
     if (!this.actiu) return false;
     const u = new URL(route.request().url()), q = u.searchParams;
@@ -123,7 +123,24 @@ export class FontsFalses {
       if (que === 'imatge') { await route.fulfill({ status: 200, contentType: 'image/png', headers: { 'Access-Control-Allow-Origin': '*' }, body: PIXEL }); return true; }
       return false;
     }
+    // Obra G (7.6): les edicions d'un segell a Discogs, pel seu id (sense clau, ACT-827).
+    if (u.host === 'api.discogs.com') {
+      const m = u.pathname.match(/^\/labels\/(\d+)\/releases$/);
+      if (!m || !this.discogs[m[1]]) return false;
+      this.crides.push('discogs segell ' + m[1]); await json({ pagination: { pages: 1 }, releases: this.discogs[m[1]] }); return true;
+    }
     if (u.host === 'musicbrainz.org') {
+      // Obra G (7.6): el segell pel nom, i les seves edicions amb el número de catàleg.
+      if (u.pathname === '/ws/2/label') {
+        const s = q.get('query') || '', k = Object.keys(this.mb.segells).find(k => s.includes('"' + k + '"'));
+        if (!k) return false;
+        this.crides.push('mb segell ' + k); await json({ labels: [{ id: this.mb.segells[k].id, name: k }] }); return true;
+      }
+      if (u.pathname === '/ws/2/release' && q.get('label')) {
+        const e = Object.values(this.mb.segells).find(x => x.id === q.get('label')); if (!e) return false;
+        const off = +q.get('offset') || 0; this.crides.push('mb edicions del segell ' + e.id);
+        await json({ 'release-count': e.releases.length, releases: e.releases.slice(off, off + 100) }); return true;
+      }
       if (u.pathname === '/ws/2/artist/') {
         const s = q.get('query') || '', k = Object.keys(this.mb.artistes).find(k => s.includes('"' + k + '"'));
         if (!k) return false;

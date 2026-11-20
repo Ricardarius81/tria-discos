@@ -62,6 +62,8 @@ export const aplicaCodisV = files_ => db => {
     const m = String(f.clau).match(/^([EP]\d+)(?:\.(\d+))?$/); if (!m) continue;
     const v = +(m[2] || 1), ara = versio(db, m[1]);
     if (v < ara) continue;
+    // Obra G (ACT-817 7.7): el segell que llegeix la tasca entra només si l'edició no en té cap (mai trepitja el seu).
+    if (f.segell && m[1][0] === 'E') db.run("UPDATE edicio SET segell = ? WHERE id = ? AND (segell IS NULL OR segell = '')", [String(f.segell).trim(), +m[1].slice(1)]);
     if (/^repte$/i.test(String(f.codi).trim())) {
       if (m[1][0] === 'E' && !un(db, 'SELECT codi_bandcamp FROM edicio WHERE id = ?', [+m[1].slice(1)])?.codi_bandcamp && !meta(db, REPTE + m[1]))
         posaMeta(db, REPTE + m[1], f.data || new Date().toISOString());

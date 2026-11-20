@@ -10,6 +10,7 @@ import { OBRA_E } from './obraE.mjs';
 import { OBRA_F } from './obraF.mjs';
 import { OBRA_D } from './obraD.mjs';
 import { OBRA_H } from './obraH.mjs';
+import { OBRA_G } from './obraG.mjs';
 const cal = (cond, msg) => { if (!cond) throw new Error(msg); };
 const igual = (a, b, msg) => cal(a === b, `${msg}: s'esperava ${JSON.stringify(b)} i hi ha ${JSON.stringify(a)}`);
 
@@ -1303,7 +1304,7 @@ export const COMPROVACIONS = [
   // ───────── L'Afinació (v1.49, ACT-656 a ACT-686) ─────────
   { bloc: 'L\'Afinació (v1.49, ACT-656 a ACT-686)' },
   { nom: 'afinació (ACT-681, ACT-696, ACT-733): l\'arxiu és a l\'estructura 10, amb Edició.per_afinar, Edició.durada_confirmada i Àlbum.subgeneres', async fes({ consulta }) {
-    igual(consulta('PRAGMA user_version')[0].user_version, 11, 'estructura de l\'arxiu (la 10 des de la ACT-733; la 11 des de la ACT-744, les Piles)');
+    igual(consulta('PRAGMA user_version')[0].user_version, 12, 'estructura de l\'arxiu (la 10 des de la ACT-733; la 11 des de la ACT-744, les Piles; la 12, els Segells Preferents, obra G)');
     cal(consulta('PRAGMA table_info(album)').some(c => c.name === 'subgeneres'), 'Àlbum no té la columna subgeneres (ACT-733)');
     cal(consulta('PRAGMA table_info(edicio)').some(c => c.name === 'durada_confirmada'), 'Edició no té la columna durada_confirmada (ACT-696)');
     cal(consulta('PRAGMA table_info(edicio)').some(c => c.name === 'per_afinar'), 'Edició no té la columna per_afinar');
@@ -2144,7 +2145,7 @@ export const COMPROVACIONS = [
     });
     cal(!r.dif.length, 'l\'anada i tornada no és idèntica: ' + r.dif.slice(0, 3).join(' | '));
     cal(!r.dif2.length, 'una correcció del títol a Edició ha manat sobre Àlbum: ' + r.dif2.slice(0, 2).join(' | '));
-    igual(r.pestanyes.join(','), 'Edició,Part,Artista,Àlbum,Puntuació,Escolta,Scrobble,Preferent,Llista,Cançó de llista,Pila,Entrada de Pila,Meta', 'pestanyes (les dues de les Piles des de l\'estructura 11)');
+    igual(r.pestanyes.join(','), 'Edició,Part,Artista,Àlbum,Puntuació,Escolta,Scrobble,Preferent,Llista,Cançó de llista,Pila,Entrada de Pila,Segell preferent,Meta', 'pestanyes (les dues de les Piles des de l\'estructura 11; Segell preferent des de la 12)');
     igual(r.llistes, consulta('SELECT COUNT(*) AS n FROM llista_canco')[0].n, 'files de la pestanya Cançó de llista');
     if (!real) cal(r.llistes > 0, 'la pestanya Cançó de llista hauria de portar les cançons de les llistes de les comprovacions d\'abans');
     cal(r.part.length && r.partCols.includes('portada'), 'la pestanya Part no porta la columna portada (ACT-624)');
@@ -2161,7 +2162,7 @@ export const COMPROVACIONS = [
     cal(/^la-meva-discoteca \d{4}-\d{2}-\d{2}\.xlsx$/.test(baixada.suggestedFilename()), 'nom del fitxer: ' + baixada.suggestedFilename());
     const fs = await import('node:fs'), X = await import('../js/excel.js?v=6');
     const l = await X.llegeix(new Uint8Array(fs.readFileSync(await baixada.path())));
-    igual(Object.keys(l).length, 13, 'pestanyes del fitxer baixat (13 des de l\'estructura 11)');
+    igual(Object.keys(l).length, 14, 'pestanyes del fitxer baixat (13 des de l\'estructura 11; 14 des de la 12, Segell preferent)');
     await pagina.click('[data-tornafull]').catch(() => {});
   } },
   { nom: 'sense connexió: la màquina s\'obre amb el codi guardat i la còpia del mòbil', async fes({ pagina, esperaDesat }) {
@@ -2573,6 +2574,7 @@ export const COMPROVACIONS = [
   ...OBRA_F,   // l'obra F (retocs), en fitxer propi
   ...OBRA_D,   // l'obra D (ACT-815 5), en fitxer propi
   ...OBRA_H,   // l'obra H (ACT-787 a i b), en fitxer propi
+  ...OBRA_G,   // l'obra G (Segells Preferents), en fitxer propi
 
   // ───────── el que no ha de passar mai ─────────
   { bloc: 'obra 4: Parsifal, les òperes per actes (ACT-777)' },

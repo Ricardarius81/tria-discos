@@ -484,10 +484,11 @@ async function fitxerBustia(nom, mimeDesti, mimeCos, inicial) {
 export async function llegeixCodisBustia() {
   if (!tePermis()) throw new Error('cal connectar amb el Drive');
   const id = await fitxerBustia(BUSTIA_CODIS, FULL_MIME, 'text/csv', 'clau,codi,data,url\n');
-  const csv = await (await g(`${DRIVE}/${id}/export?mimeType=text/csv`)).text();
-  return csv.trim().split(/\r?\n/).slice(1).map(l => l.split(',').map(x => x.replace(/^"|"$/g, '').trim()))
-    .filter(c => c[0] && c[1]).map(([clau, codi, data, url]) => ({ clau, codi, data: data || '', url: url || '' }));
+  return filesDeCodis(await (await g(`${DRIVE}/${id}/export?mimeType=text/csv`)).text());
 }
+// Obra G (ACT-817 7.7): la cinquena columna, «segell», l'escriu la tasca quan la pàgina diu que la compta és d'un segell.
+export const filesDeCodis = csv => String(csv || '').trim().split(/\r?\n/).slice(1).map(l => l.split(',').map(x => x.replace(/^"|"$/g, '').trim()))
+  .filter(c => c[0] && c[1]).map(([clau, codi, data, url, segell]) => ({ clau, codi, data: data || '', url: url || '', segell: segell || '' }));
 // Sobreescriu el fitxer de pendents (el mateix fitxer sempre: sobreescriure el conserva, sonda d'agost).
 export async function escriuPendentsBustia(text) {
   if (!tePermis()) throw new Error('cal connectar amb el Drive');

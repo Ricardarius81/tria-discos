@@ -62,6 +62,12 @@ export function esborraProperSiEsAquest(db, edicioId) {
                         JOIN artista ar ON ar.id = pr.artista_id WHERE pr.proper_titol IS NOT NULL`)
     .filter(x => norm(x.p) === norm(e.p) && norm(x.proper_titol) === norm(e.titol));
   for (const x of ps) db.run('UPDATE preferent SET proper_titol = NULL WHERE id = ?', [x.id]);
+  // Obra G (7.1): el proper d'un Segell Preferent, igual: el mateix títol normalitzat i, si en té, el mateix artista.
+  try {
+    for (const s of files(db, 'SELECT id, proper_artista, proper_titol FROM segell_preferent WHERE proper_titol IS NOT NULL'))
+      if (norm(s.proper_titol) === norm(e.titol) && (!norm(s.proper_artista) || norm(s.proper_artista) === norm(e.p)))
+        db.run('UPDATE segell_preferent SET proper_artista = NULL, proper_titol = NULL WHERE id = ?', [s.id]);
+  } catch {}
   return ps.length;
 }
 // ACT-738: el que es calcula sobre tot l'arxiu i es demana moltes vegades seguides (cada pintat de la safata ho feia deu

@@ -39,8 +39,9 @@ const CARREGA = {
   }
 };
 const ALTRES = [['album', 'Àlbum'], ['puntuacio', 'Puntuació'], ['escolta', 'Escolta'], ['scrobble', 'Scrobble'], ['preferent', 'Preferent'],
-                ['llista', 'Llista'], ['llista_canco', 'Cançó de llista'], ['pila', 'Pila'], ['pila_entrada', 'Entrada de Pila']];
-export const PESTANYES = ['Edició', 'Part', 'Artista', 'Àlbum', 'Puntuació', 'Escolta', 'Scrobble', 'Preferent', 'Llista', 'Cançó de llista', 'Pila', 'Entrada de Pila', 'Meta'];
+                ['llista', 'Llista'], ['llista_canco', 'Cançó de llista'], ['pila', 'Pila'], ['pila_entrada', 'Entrada de Pila'],
+                ['segell_preferent', 'Segell preferent']];   // obra G, estructura 12
+export const PESTANYES = ['Edició', 'Part', 'Artista', 'Àlbum', 'Puntuació', 'Escolta', 'Scrobble', 'Preferent', 'Llista', 'Cançó de llista', 'Pila', 'Entrada de Pila', 'Segell preferent', 'Meta'];
 
 const campsDe = (db, t) => db.exec(`PRAGMA table_info(${t})`)[0].values.map(v => v[1]);
 
@@ -222,10 +223,11 @@ export function carrega(db, llegit) {
   const posades = {};
   // Les Piles (estructura 11) neixen amb la llavor de la migració: si l'Excel les porta, manen les seves; un Excel d'abans
   // de la estructura 11 no en porta, i llavors es queden les de la llavor.
-  const PILES = ['pila', 'pila_entrada'];
-  if (PILES.every(t => llegit[mapa(db).find(m => m.taula === t)?.full])) PILES.forEach(t => db.run(`DELETE FROM ${t}`));
+  // El mateix amb els Segells Preferents (estructura 12, obra G): si l'Excel els porta, manen; si no, els sis de la llavor.
+  const PILES = ['pila', 'pila_entrada'], SEGELLS = ['segell_preferent'], AMB_LLAVOR = [...PILES, ...SEGELLS];
+  for (const g of [PILES, SEGELLS]) if (g.every(t => llegit[mapa(db).find(m => m.taula === t)?.full])) g.forEach(t => db.run(`DELETE FROM ${t}`));
   for (const m of mapa(db)) {
-    if (PILES.includes(m.taula) && !llegit[m.full]) continue;
+    if (AMB_LLAVOR.includes(m.taula) && !llegit[m.full]) continue;
     const files = llegit[m.full]; if (!files) throw new Error('falta la pestanya ' + m.full);
     const [cap, ...dades] = files;
     const idx = m.cols.filter(c => !c.lectura).map(c => {

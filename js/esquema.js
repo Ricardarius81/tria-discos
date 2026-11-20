@@ -251,12 +251,35 @@ export const MIGRACIONS = [
     (3, 'Cotxe', '["Conduint (sol)","Conduint (acompanyat)"]', 3);
   INSERT INTO pila_entrada (pila_id, artista, titol, data_alta) VALUES
     (1, 'The Prodigy', 'The Fat of the Land', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+  `,
+  // v12 · Segells Preferents (v1.56, ACT-816, ACT-817, ACT-827, obra G). Les regles són a segells.js.
+  //   segell_preferent: nom (es compara normalitzat amb Edició.segell), ordre (manual; els nous entren a dalt), el proper
+  //     a mà —artista i títol, perquè un disc d'un segell és de qualsevol artista— i l'id de Discogs (la segona font de
+  //     l'anterior i el següent). Les sis d'entrada (7.4), amb els id de Discogs de la sonda del 20-11 (ACT-827).
+  //   Noms de la taula i de les columnes fixats en la construcció (el §8.3 els deixava per fixar).
+  `
+  CREATE TABLE segell_preferent (
+    id             INTEGER PRIMARY KEY,
+    nom            TEXT NOT NULL,
+    ordre          INTEGER NOT NULL,
+    proper_artista TEXT,
+    proper_titol   TEXT,
+    discogs_id     INTEGER,
+    data_alta      TEXT
+  );
+  INSERT INTO segell_preferent (nom, ordre, discogs_id, data_alta) VALUES
+    ('Quiet Details', 1, 3052813, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    ('Home Normal', 2, 143072, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    ('Sonic Pieces', 3, 157803, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    ('Past Inside The Present', 4, 1558852, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    ('Dragon''s Eye Recordings', 5, 80927, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    ('A Strangely Isolated Place', 6, 307352, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
   `
 ];
 
 // Les taules de les Llistes de reproducció (v7). No són a TAULES: treure una cançó o esborrar una llista és normal,
 // i la còpia de seguretat no ha d'avisar quan baixen. Sí que van a l'Excel i a la comparació de l'anada i tornada.
-export const TAULES_LLISTES = ['llista', 'llista_canco', 'pila', 'pila_entrada'];   // v11: les Piles, pel mateix motiu
+export const TAULES_LLISTES = ['llista', 'llista_canco', 'pila', 'pila_entrada', 'segell_preferent'];   // v11: les Piles; v12: els Segells Preferents, pel mateix motiu
 
 // Les taules on una baixada de files és sospitosa. Les escoltes i els scrobbles només poden créixer (§3.5).
 export const TAULES = ['artista', 'album', 'edicio', 'puntuacio', 'part', 'escolta', 'preferent', 'scrobble'];

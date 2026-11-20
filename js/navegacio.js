@@ -22,7 +22,7 @@ export function llegeixPantalla() {
 }
 export const recent = (p, ara = Date.now()) => !!p && ara - (p.t || 0) < QUINZE_MINUTS;
 
-export const SUBS_APARADOR = ['pref', 'esc'];
+export const SUBS_APARADOR = ['pref', 'esc', 'seg'];   // obra G: Segells Preferents (7.1)
 export function darrerAparador() { try { const v = localStorage.getItem(APARADOR); return SUBS_APARADOR.includes(v) ? v : 'pref'; } catch { return 'pref'; } }
 export function apuntaAparador(v) { try { localStorage.setItem(APARADOR, v); } catch {} }
 
