@@ -80,6 +80,102 @@ export const OBRA1 = [
     await pagina.click('#btOrdena'); await esperaDesat();
     await pagina.click('[data-sub="rot"]');
   } },
+  // ───────── la ratificació de l'obra 1 (ACT-790 a ACT-796) i la ACT-804 ─────────
+  { nom: 'Bandcamp (ACT-790): les nits es compten de calendari (canvis de dia), no de 24 hores; a la tercera, apartat', async fes({ pagina }) {
+    const r = await pagina.evaluate(async () => { const B = await import('./js/bandcamp.js?v=1');
+      const t = (d, h) => new Date(2026, 10, d, h, 0).getTime();
+      return { n: B.NITS, mateixDia: B.nitsEntre(new Date(t(10, 20)).toISOString(), t(10, 23)), duesNits: B.nitsEntre(new Date(t(10, 20)).toISOString(), t(12, 23)),
+               tresNits: B.nitsEntre(new Date(t(10, 23)).toISOString(), t(13, 1)) }; });
+    igual(r.n, 3, 'NITS');
+    igual(r.mateixDia, 0, 'el mateix dia');
+    igual(r.duesNits, 2, 'del dia 10 a les 20 h al dia 12 a les 23 h');
+    igual(r.tresNits, 3, 'del dia 10 a les 23 h al dia 13 a la 1 h (unes 26 hores)');
+  } },
+  { nom: 'Bandcamp (ACT-791, ACT-793 c): un enllaç de segell amb domini propi s\'accepta; a Android el ▶ prova l\'app de Bandcamp (intent amb el paquet) i, si no, el navegador', async fes({ pagina }) {
+    const r = await pagina.evaluate(async () => { const B = await import('./js/bandcamp.js?v=1');
+      const u = 'https://musica.unsello.com/album/x';
+      return { segell: B.llegeixEnllac('Mira: ' + u + '?from=share'), and: B.hrefEnllac(u, 'Mozilla/5.0 (Linux; Android 14; SM-S918B)'), pc: B.hrefEnllac(u, 'Mozilla/5.0 (X11; Linux x86_64)') }; });
+    igual(r.segell, 'https://musica.unsello.com/album/x', 'l\'enllaç d\'un segell amb domini propi');
+    cal(r.and.startsWith('intent://musica.unsello.com/album/x#Intent;') && r.and.includes('scheme=https') && r.and.includes('package=com.bandcamp.android')
+      && r.and.includes('S.browser_fallback_url=' + encodeURIComponent('https://musica.unsello.com/album/x')), 'a Android: ' + r.and);
+    igual(r.pc, 'https://musica.unsello.com/album/x', 'fora d\'Android, l\'enllaç tal qual');
+  } },
+  { nom: 'rotació (ACT-793 a): ajust únic, els discos que han estat en rotació i ja no hi són prenen la data d\'ara a Edició.data_referencia_rotacio; els que mai hi han estat, no; i no es repeteix', async fes({ pagina }) {
+    const r = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'); const J = await import('./js/arreglos.js?v=1');
+      const viu = J.ajust793Fet(A.estat.db);   // l'app ja l'ha fet en connectar
+      const db = new A.estat.db.constructor(A.estat.db.export()); db.run('DELETE FROM meta WHERE clau = ?', [J.AJUST_793]);
+      db.run("INSERT INTO artista (nom_canonic) VALUES ('Banc Ajust')"); const ar = db.exec('SELECT last_insert_rowid()')[0].values[0][0];
+      const ed = (tit, rot, ref) => { db.run('INSERT INTO album (titol, artista_id) VALUES (?, ?)', [tit, ar]); const al = db.exec('SELECT last_insert_rowid()')[0].values[0][0];
+        db.run("INSERT INTO edicio (album_id, durada_total, rotacio_actual, emparellaments, data_referencia_rotacio) VALUES (?, 40, ?, '[]', ?)", [al, rot, ref]); return db.exec('SELECT last_insert_rowid()')[0].values[0][0]; };
+      const vell = '2026-01-01T00:00:00.000Z', fora = ed('Fora', 0, vell), dins = ed('Dins', 1, vell), mai = ed('Mai', 0, null);
+      const ref = id => db.exec('SELECT data_referencia_rotacio FROM edicio WHERE id = ' + id)[0].values[0][0];
+      const abans = J.ajust793Fet(db), n = J.ajusta793(db), despres = J.ajust793Fet(db), refFora = ref(fora);
+      db.run('UPDATE edicio SET data_referencia_rotacio = ? WHERE id = ?', [vell, fora]); const n2 = J.ajust793Fet(db) ? 'no torna' : J.ajusta793(db);
+      const out = { viu, abans, despres, n: n >= 1, fora: refFora > '2026-11-01', dins: ref(dins), mai: ref(mai), n2 }; db.close(); return out; });
+    igual(r.viu, true, 'l\'app ha fet l\'ajust en connectar (marca a meta)');
+    igual(r.abans, false, 'abans de l\'ajust, la marca a meta'); igual(r.despres, true, 'després, la marca a meta');
+    cal(r.n, 'l\'ajust no ha tocat cap disc'); cal(r.fora, 'el disc que va sortir de la rotació no pren la data d\'ara');
+    igual(r.dins, '2026-01-01T00:00:00.000Z', 'el disc en rotació'); igual(r.mai, null, 'el disc que mai ha estat en rotació');
+    igual(r.n2, 'no torna', 'l\'ajust es torna a fer');
+  } },
+  { nom: 'Agrupacions (ACT-792): s\'ordenen per l\'última escolta de qualsevol dels seus discos (Escolta.data_hora), no per Edició.data_referencia_rotacio', async fes({ pagina }) {
+    const r = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'); const D = await import('./js/dades.js?v=25');
+      const db = new A.estat.db.constructor(A.estat.db.export());
+      db.run("INSERT INTO artista (nom_canonic) VALUES ('Banc Grups')"); const ar = db.exec('SELECT last_insert_rowid()')[0].values[0][0];
+      const h = d => new Date(Date.now() - d * 864e5).toISOString();
+      const disc = (tit, grup, ref, esc) => { db.run('INSERT INTO album (titol, artista_id, conjunt) VALUES (?, ?, ?)', [tit, ar, grup]); const al = db.exec('SELECT last_insert_rowid()')[0].values[0][0];
+        db.run("INSERT INTO edicio (album_id, durada_total, rotacio_actual, emparellaments, data_referencia_rotacio) VALUES (?, 40, 0, '[]', ?)", [al, ref]);
+        const e = db.exec('SELECT last_insert_rowid()')[0].values[0][0];
+        if (esc) db.run("INSERT INTO escolta (edicio_id, data_hora, completitud, atencio) VALUES (?, ?, 1, 'Efectes plens')", [e, esc]); };
+      disc('Ga1', 'Grup escoltat', h(30), h(0.1)); disc('Ga2', 'Grup escoltat', h(30), null);
+      disc('Gb1', 'Grup tret', h(0), h(5)); disc('Gb2', 'Grup tret', h(30), null);
+      const noms = D.grupsArxiu(db).map(g => g.nom).filter(n => n.startsWith('Grup ')); db.close(); return noms; });
+    igual(JSON.stringify(r), JSON.stringify(['Grup escoltat', 'Grup tret']), 'l\'ordre dels grups');
+  } },
+  { nom: 'L\'Afinació (ACT-796): el punt es calcula en obrir l\'arxiu i després d\'un canvi seu, no a cada repintat (una lectura automàtica, navegar)', async fes({ pagina, obreSafata }) {
+    const n = () => pagina.evaluate(() => +(document.getElementById('afiPunt')?.dataset.calculs || 0));
+    await reobre(pagina); await pagina.waitForTimeout(400);
+    const c0 = await n(); cal(c0 >= 1, 'en obrir, el punt no s\'ha calculat');
+    await obreSafata(); await pagina.waitForTimeout(600); await pagina.click('[data-tornasafata]');
+    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-anar="faristol"]'); await pagina.click('[data-sub="hist"]'); await pagina.click('[data-sub="rot"]');
+    await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'); document.dispatchEvent(new Event('visibilitychange')); });
+    await pagina.waitForTimeout(500);
+    igual(await n(), c0, 'càlculs del punt després de llegir ListenBrainz i navegar');
+  } },
+  { nom: 'preferents (ACT-804 b): canviar l\'ordre amb el desplegable (A-Z, Darrera escolta) carrega les fotos de les files', async fes({ pagina, esperaDesat }) {
+    const r = await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21');
+      return A.canvia(db => db.run("UPDATE artista SET retrat = 'release/fals-retrat-banc' WHERE id IN (SELECT artista_id FROM preferent)")); });
+    cal(r.desat, 'no s\'ha desat: ' + r.motiu); await esperaDesat();
+    await reobre(pagina);
+    await pagina.click('[data-sub="pref"]'); await pagina.click('[data-asub="pref"]'); await pagina.waitForTimeout(300);
+    const n = () => pagina.evaluate(() => document.querySelectorAll('#files img[data-ref]:not([src])').length);
+    for (const o of ['az', 'escolta']) {
+      await pagina.selectOption('#ordrePref', o);
+      cal(await pagina.locator('#files img[data-ref]').count() > 0, 'les files no porten cap foto per carregar (' + o + ')');
+      await espera(async () => (await n()) === 0, `amb l'ordre «${o}» hi ha fotos que no es carreguen mai`, 5000);
+    }
+  } },
+  { nom: 'preferents (ACT-804 b): amb un ordre que no és Manual, després de tancar i obrir l\'app les fotos hi són', async fes({ pagina }) {
+    await pagina.evaluate(() => localStorage.setItem('tria-ordre-preferents', 'za'));
+    await reobre(pagina);
+    await pagina.click('[data-sub="pref"]'); await pagina.click('[data-asub="pref"]'); await pagina.waitForTimeout(300);
+    igual(await pagina.locator('#ordrePref').inputValue(), 'za', 'l\'ordre recordat');
+    await espera(async () => (await pagina.evaluate(() => document.querySelectorAll('#files img[data-ref]:not([src])').length)) === 0, 'després de recarregar amb «Z-A», hi ha fotos que no es carreguen', 5000);
+    await pagina.selectOption('#ordrePref', 'manual'); await pagina.click('[data-sub="rot"]');
+  } },
+  { nom: 'fitxa (ACT-804 a): entre «▶ Escoltar ara» i «Afegeix a una Pila» hi ha aire (10 px o més), també amb «Enganxa l\'enllaç» al mig', sintetic: true, async fes({ pagina, esperaDesat }) {
+    const mesura = () => pagina.evaluate(() => {
+      const bot = [...document.querySelectorAll('#full .fitxa-accions .bt')].reduce((m, b) => Math.max(m, b.getBoundingClientRect().bottom), 0);
+      const pila = document.querySelector('#full [data-afegeixapila]')?.getBoundingClientRect().top, bc = document.querySelector('#full .enllac-bc');
+      return { pila: pila - bot, bc: bc ? { dalt: bc.getBoundingClientRect().top - bot, baix: pila - bc.getBoundingClientRect().bottom } : null }; });
+    await pagina.locator('#reixa [data-fitxa]').first().click(); await pagina.waitForSelector('#full [data-afegeixapila]', { timeout: 5000 });
+    const a = await mesura(); await tancaFull(pagina);
+    cal(!a.bc && a.pila >= 10, 'sense «Enganxa l\'enllaç»: ' + JSON.stringify(a));
+    const r = await discBandcamp(pagina, 'Aire Obra U'); cal(r.desat, 'no s\'ha desat: ' + r.motiu); await esperaDesat(); await reobre(pagina);
+    await pagina.evaluate(id => document.querySelector(`#reixa [data-fitxa="${id}"]`)?.click(), r.id); await pagina.waitForSelector('#inEnllacBc', { timeout: 5000 });
+    const b = await mesura(); await tancaFull(pagina);
+    cal(b.bc && b.bc.dalt >= 10 && b.bc.baix >= 10, 'amb «Enganxa l\'enllaç»: ' + JSON.stringify(b));
+  } },
   { nom: 'fitxa (ACT-768 c): cap fitxa és més ampla que la pantalla, tampoc amb un títol llarg sense espais ni amb «Enganxa l\'enllaç»', sintetic: true, async fes({ pagina, esperaDesat }) {
     const r = await discBandcamp(pagina, 'Untitled_Composition_Number_Seventeen_For_Prepared_Piano_And_Electronics_Remastered');
     cal(r.desat, 'no s\'ha desat: ' + r.motiu); await esperaDesat(); await reobre(pagina);
@@ -97,16 +193,16 @@ export const OBRA1 = [
     }
     cal(!mals.length, 'fitxes més amples que la pantalla: ' + mals.slice(0, 3).join(' | '));
   } },
-  { nom: 'Bandcamp (ACT-767): «Enganxa l\'enllaç» desa Edició.enllac_bandcamp, el ▶ l\'obre al moment i el fitxer de pendents el porta; un enllaç que no és de Bandcamp no es desa', sintetic: true, async fes({ pagina, drive, consulta, esperaDesat }) {
+  { nom: 'Bandcamp (ACT-767): «Enganxa l\'enllaç» desa Edició.enllac_bandcamp, el ▶ l\'obre al moment i el fitxer de pendents el porta; un enllaç sense /album/ ni /track/ no es desa', sintetic: true, async fes({ pagina, drive, consulta, esperaDesat }) {
     const troba = nom => [...drive.fitxers.values()].find(f => f.name === nom && !f.trashed);
     const r = await discBandcamp(pagina, 'Anon Obra U');
     cal(r.desat, 'no s\'ha desat: ' + r.motiu); await esperaDesat(); await reobre(pagina);
     const id = r.id;
     await pagina.evaluate(id => document.querySelector(`#reixa [data-fitxa="${id}"]`)?.click(), id);
     await pagina.waitForSelector('#inEnllacBc', { timeout: 5000 });
-    await pagina.fill('#inEnllacBc', 'https://open.spotify.com/album/xyz');
+    await pagina.fill('#inEnllacBc', 'https://example.com/res/xyz');
     await pagina.click(`[data-desaenllac="${id}"]`); await pagina.waitForTimeout(300);
-    igual(consulta('SELECT enllac_bandcamp AS e FROM edicio WHERE id = ?', [id])[0].e, null, 'un enllaç de Spotify a Edició.enllac_bandcamp');
+    igual(consulta('SELECT enllac_bandcamp AS e FROM edicio WHERE id = ?', [id])[0].e, null, 'un enllaç sense /album/ ni /track/ a Edició.enllac_bandcamp');
     await pagina.fill('#inEnllacBc', 'Escolta Anon 1 de 36 a Bandcamp: https://pitp.bandcamp.com/album/anon-1?from=share');
     await pagina.click(`[data-desaenllac="${id}"]`); await esperaDesat();
     igual(consulta('SELECT enllac_bandcamp AS e FROM edicio WHERE id = ?', [id])[0].e, 'https://pitp.bandcamp.com/album/anon-1', 'Edició.enllac_bandcamp');
@@ -117,7 +213,7 @@ export const OBRA1 = [
     const linia = `E${id} | Banc Obra U | Anon Obra U | https://pitp.bandcamp.com/album/anon-1`;
     await espera(() => troba('tria-discos-bustia-pendents.txt')?.bytes.toString('utf8').includes(linia), 'el fitxer de pendents no porta l\'enllaç: ' + JSON.stringify(troba('tria-discos-bustia-pendents.txt')?.bytes.toString('utf8')), 12000);
   } },
-  { nom: 'Bandcamp (ACT-766): un disc sense codi en 7 nits surt del fitxer de pendents, s\'avisa una vegada i la fitxa ho diu; enganxar l\'enllaç el torna a posar', sintetic: true, async fes({ pagina, drive, consulta, esperaDesat }) {
+  { nom: 'Bandcamp (ACT-766): un disc sense codi en 3 nits de calendari (ACT-790) surt del fitxer de pendents, s\'avisa una vegada i la fitxa ho diu; enganxar l\'enllaç el torna a posar', sintetic: true, async fes({ pagina, drive, consulta, esperaDesat }) {
     const troba = nom => [...drive.fitxers.values()].find(f => f.name === nom && !f.trashed);
     const text = () => troba('tria-discos-bustia-pendents.txt')?.bytes.toString('utf8') || '';
     const r = await discBandcamp(pagina, 'Mare Obra U');
@@ -128,15 +224,15 @@ export const OBRA1 = [
     await esperaDesat();
     const des = JSON.parse(consulta('SELECT valor FROM meta WHERE clau = ?', ['bc-nits:E' + id])[0]?.valor || '{}').des;
     cal(des && Date.now() - Date.parse(des) < 120e3, 'la data del primer cop als pendents no s\'apunta: ' + des);
-    // sis nits: encara hi va; set: apartat
-    const n6 = await pagina.evaluate(async id => { const B = await import('./js/bandcamp.js?v=1'), A = await import('./js/arxiu.js?v=21');
-      return B.pendentsAmbNits(A.estat.db, Date.now() + 6.5 * 864e5).envia.some(x => x.clau === 'E' + id); }, id);
-    igual(n6, true, 'a les sis nits, el disc encara va al fitxer');
+    // una nit de calendari: encara hi va; tres: apartat (ACT-790)
+    const n1 = await pagina.evaluate(async id => { const B = await import('./js/bandcamp.js?v=1'), A = await import('./js/arxiu.js?v=21');
+      return B.pendentsAmbNits(A.estat.db, Date.now() + 864e5).envia.some(x => x.clau === 'E' + id); }, id);
+    igual(n1, true, 'a la primera nit, el disc encara va al fitxer');
     const w = await pagina.evaluate(async id => { const A = await import('./js/arxiu.js?v=21');
-      return A.canvia(db => db.run('UPDATE meta SET valor = ? WHERE clau = ?', [JSON.stringify({ des: new Date(Date.now() - 7.2 * 864e5).toISOString() }), 'bc-nits:E' + id])); }, id);
+      return A.canvia(db => db.run('UPDATE meta SET valor = ? WHERE clau = ?', [JSON.stringify({ des: new Date(Date.now() - 3.05 * 864e5).toISOString() }), 'bc-nits:E' + id])); }, id);
     cal(w.desat, 'no s\'ha desat: ' + w.motiu); await esperaDesat();
     await reobre(pagina);
-    await espera(() => !text().includes(`E${id} |`), 'el disc de set nits encara surt als pendents: ' + JSON.stringify(text()), 12000);
+    await espera(() => !text().includes(`E${id} |`), 'el disc de tres nits encara surt als pendents: ' + JSON.stringify(text()), 12000);
     await esperaDesat();
     const m = JSON.parse(consulta('SELECT valor FROM meta WHERE clau = ?', ['bc-nits:E' + id])[0]?.valor || 'null');
     igual(m?.avisat, true, 'l\'avís dels apartats queda apuntat (una sola vegada)');

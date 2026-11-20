@@ -385,7 +385,9 @@ export function totsElsDiscos(db) {
 // llistes (ACT-635): el que ha sonat o s'ha obert més recentment, primer (decisió de construcció de Claude, per ratificar).
 export function grupsArxiu(db) {
   const noms = files(db, 'SELECT conjunt, COUNT(*) AS n FROM album WHERE conjunt IS NOT NULL GROUP BY conjunt HAVING n > 1').map(r => r.conjunt);
-  return noms.map(nom => { const m = grup(db, nom); return { nom, membres: m, clau: m.map(x => x.clau).sort().pop() || '' }; })
+  // ACT-792: per l'última escolta de qualsevol dels seus discos (Escolta.data_hora), no per la Data de referència de rotació
+  // (treure un disc del grup ja no el puja). Un grup sense cap escolta va al final, per nom.
+  return noms.map(nom => { const m = grup(db, nom); return { nom, membres: m, clau: m.map(x => x.darrera_escolta).filter(Boolean).sort().pop() || '' }; })
     .filter(g => g.membres.length > 1)
     .sort((a, b) => b.clau.localeCompare(a.clau) || a.nom.localeCompare(b.nom, 'ca'));
 }

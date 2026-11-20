@@ -18,8 +18,18 @@ export function llegeixEnllac(text) {
   const m = String(text || '').match(/https:\/\/[^\s<>"']+/);
   if (!m) return null;
   let u; try { u = new URL(m[0].replace(/[).,;]+$/, '')); } catch { return null; }
-  if (!/(^|\.)bandcamp\.com$/i.test(u.hostname) || !/^\/(album|track)\//.test(u.pathname)) return null;
+  // ACT-793 c: qualsevol adreça https amb /album/ o /track/ (els segells amb domini propi); la tasca de nit comprova que és Bandcamp.
+  if (!/^\/(album|track)\//.test(u.pathname)) return null;
   return u.origin + u.pathname;
+}
+// ACT-791: a Android, el ▶ d'un disc amb enllaç i sense codi prova l'app de Bandcamp amb un intent amb el seu paquet (com el
+// truc d'AIMP); si no l'obre, el navegador (S.browser_fallback_url). Fora d'Android, l'enllaç tal qual.
+export const PAQUET_BANDCAMP = 'com.bandcamp.android';
+export function hrefEnllac(url, ua = (typeof navigator !== 'undefined' ? navigator.userAgent : '')) {
+  if (!/Android/i.test(ua || '')) return url;
+  let u; try { u = new URL(url); } catch { return url; }
+  return 'intent://' + u.host + u.pathname + u.search + '#Intent;scheme=https;action=android.intent.action.VIEW;package=' + PAQUET_BANDCAMP
+    + ';S.browser_fallback_url=' + encodeURIComponent(url) + ';end';
 }
 // Es desa a Edició.Enllaç de Bandcamp. El compte de nits d'aquest disc torna a zero: amb l'enllaç, la tasca ho té fàcil.
 export const desaEnllac = (id, url) => db => {
@@ -28,9 +38,11 @@ export const desaEnllac = (id, url) => db => {
 };
 
 // ───────── ACT-766: el que no es troba en N nits ─────────
-// N = 7 (decisió de construcció de Claude, per ratificar). Una «nit» són 24 hores des que el disc va entrar per primer
-// cop al fitxer de pendents: la tasca corre cada nit, i la màquina no sap a quina hora ho ha provat.
-export const NITS = 7;
+// ACT-790: N = 3 nits de calendari («si falla tres dias seguidos, fuera»): es compten els canvis de dia, a l'hora d'aquest
+// mòbil, des que el disc va entrar per primer cop al fitxer de pendents. Una nit que la tasca no corre compta igual.
+export const NITS = 3;
+const migdia = t => { const d = new Date(t); return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()); };
+export const nitsEntre = (des, ara = Date.now()) => Math.round((migdia(ara) - migdia(Date.parse(des))) / 864e5);
 // Una fila de meta per disc («bc-nits:E43»), no una sola amb tots: a l'arxiu gran del banc una sola fila passava dels
 // 32767 caràcters que admet una cel·la de l'Excel de la còpia (trobat a la puerta del 19-11).
 const PREFIX = 'bc-nits:';
@@ -51,7 +63,7 @@ export function pendentsAmbNits(db, ara = Date.now()) {
   const envia = [], apartats = [];
   for (const x of totes) {
     const y = { ...x, enllac: enllacos.get(x.clau) || null, des: m[x.clau]?.des || null };
-    const nits = y.des ? Math.floor((ara - Date.parse(y.des)) / 864e5) : 0;
+    const nits = y.des ? nitsEntre(y.des, ara) : 0;
     (nits >= NITS ? apartats : envia).push({ ...y, nits });
   }
   return { envia, apartats, nous: apartats.filter(x => !m[x.clau]?.avisat) };

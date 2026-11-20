@@ -25,6 +25,7 @@ import * as N from './navegacio.js?v=1';
 import * as FX from './fitxa.js?v=1';
 import * as R from './rajoles.js?v=1';
 import * as B from './bandcamp.js?v=1';
+import * as J from './arreglos.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -52,7 +53,7 @@ function enllac(canal, d) {
   const q = d.art + ' ' + d.tit;
   if (canal === 'bandcamp') {
     return d.bc ? { href: 'x-bandcamp://show_tralbum?tralbum_type=a&tralbum_id=' + d.bc, nota: "obre el disc a l'app", ext: false }
-         : d.bce ? { href: d.bce, nota: "obre l'enllaç; el codi arriba de nit", ext: true }   // ACT-767
+         : d.bce ? { href: B.hrefEnllac(d.bce), nota: "obre l'enllaç; el codi arriba de nit", ext: true }   // ACT-767, ACT-791
                  : { href: CANALS.bandcamp.url(q), nota: 'cerca: falta el codi', ext: true };
   }
   if (canal === 'aimp') return { href: AIMP_APP(), nota: "obre l'app; el disc el tries tu", ext: false };
@@ -107,7 +108,7 @@ function tancaFull() {
     // Si has tocat els tags però no la nota, el disc continua en rotació i els tags es queden: són judici sobre el disc,
     // no sobre la sortida (invenció de Claude del 31-10, per validar).
     const tg = estat.tagsSortida; estat.tagsSortida = null; estat.sortint = null;
-    if (b) { A.restaura(b).then(async r => { if (tg) await fes(D.desaTags(tg.id, tg.album_id, tg), null, { desfes: false }); pinta(); marcaDesat(r); });
+    if (b) { A.restaura(b).then(async r => { puntBrut = true; if (tg) await fes(D.desaTags(tg.id, tg.album_id, tg), null, { desfes: false }); pinta(); marcaDesat(r); });
              avisa(tg ? 'Sense nota: el disc continua en rotació, i els tags que has tocat es queden.' : 'Sense tocar res: el disc continua en rotació.'); }
   }
   f.classList.remove('obert'); $('#fons').classList.remove('obert');
@@ -135,10 +136,11 @@ async function fes(fn, text, { desfes = true, abans = null, auto = false } = {})
   let res;
   // Les Piles (ACT-707, ACT-744): dins de cada canvi, les entrades que una escolta nova ha tret de la seva Pila.
   const p = A.canvia(d => { res = fn(d); P.sortides(d); }, { auto });
+  if (!auto) puntBrut = true;   // ACT-796: un canvi seu (no una lectura automàtica) pot moure L'Afinació
   pinta();
   if (text) avisa(typeof text === 'function' ? text(res) : text,
     desfes ? async () => { delete $('#full').dataset.encaraNo; if ($('#full').classList.contains('obert')) tancaFull();
-                           const r = await A.restaura(abans); pinta(); marcaDesat(r); } : null);
+                           const r = await A.restaura(abans); puntBrut = true; pinta(); marcaDesat(r); } : null);
   marcaDesat();
   const r = await p; marcaDesat(r);
   return res;
@@ -153,7 +155,7 @@ function pinta() {
   if (!A.estat.db) return;
   sincroCanals();
   try { estat.enPiles = P.edicionsEnPiles(db()); } catch { estat.enPiles = null; }
-  pintaReixa(); pintaFiles(); pintaHistorial(); pintaSafata(); alertaCopia(); programaPunt(); pintaPiles();
+  pintaReixa(); pintaFiles(); pintaHistorial(); pintaSafata(); alertaCopia(); if (puntBrut) { puntBrut = false; programaPunt(); } pintaPiles();
   if (estat.superficie === 'prestatgeria') pintaPrestatgeria();
   if (estat.superficie === 'artista' && estat.artista) pintaArtista(estat.artista);
   I.omple();
@@ -859,7 +861,8 @@ function pintaSafata() {
   // es conserva, i el cursor també.
   const escrivint = document.activeElement?.id === 'inLlista';
   // ACT-768 (a): la durada escrita d'un disc nou es queda encara que es torni a pintar (triar el canal, una lectura).
-  for (const i of document.querySelectorAll('[data-sfdur]')) (estat.nouMinDe ||= {})[i.dataset.sfdur] = i.value;
+  // Només la que ha tocat ell (value ≠ defaultValue): la proposta pot canviar sola (una part per acte, ACT-777) i ha de seguir.
+  for (const i of document.querySelectorAll('[data-sfdur]')) if (i.value !== i.defaultValue) (estat.nouMinDe ||= {})[i.dataset.sfdur] = i.value;
   try { pintaSafata_(); } finally { if (escrivint) { const i = $('#inLlista'); if (i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } } }
 }
 function pintaSafata_() {
@@ -1841,10 +1844,14 @@ function detectaLloc(manual) {
 // El punt taronja de L'Afinació (ACT-769, opció A): sense número, encès sempre que la llista no és buida. Es calcula una mica
 // després de pintar, una sola vegada per tanda de canvis, perquè la llista sencera no frena el toc.
 let puntEnEspera = null;
+// ACT-796: el punt ja no es recalcula a cada repintat (recórrer l'arxiu creix amb els anys, ACT-785): només en obrir l'arxiu
+// (mostraMaquina, també en carregar-lo del Drive), després d'un canvi seu (fes sense auto) i en desfer.
+let puntBrut = true;
 function programaPunt() {
   clearTimeout(puntEnEspera);
   puntEnEspera = setTimeout(() => { const p = $('#afiPunt'); if (!p || !A.estat.db) return;
-    try { p.hidden = !N.hiHaPerAfinar(db()); } catch { p.hidden = true; } }, 120);
+    try { p.hidden = !N.hiHaPerAfinar(db()); } catch { p.hidden = true; }
+    p.dataset.calculs = (+p.dataset.calculs || 0) + 1; }, 120);   // quantes vegades s'ha calculat (el banc ho mira, ACT-796)
 }
 // L'Aparador (ACT-705): la pestanya del mig del Faristol, amb Artistes Preferents i Discos per escoltar. Obre la darrera
 // subpantalla usada (ACT-706).
@@ -2345,6 +2352,7 @@ function tornaPantalla() {
   return true;
 }
 function mostraMaquina() {
+  puntBrut = true;   // ACT-796: obrir l'arxiu o carregar-lo del Drive
   $('#peu').hidden = false;
   if (estat.superficie === 'entrada' && !tornaPantalla()) { vesA('faristol'); sub('rot'); }
   pinta(); marcaDesat();
@@ -2401,6 +2409,8 @@ async function connecta(ambGest) {
 
 // Després de connectar: l'ajust únic del «car pendent» i, en segon pla, la sonda d'imatges.
 async function despresDeConnectar() {
+  // ACT-793 a: un sol cop a la vida de l'arxiu, en silenci (només són dates; marca a meta, no es repeteix en cap mòbil).
+  if (!J.ajust793Fet(db())) await fes(J.ajusta793, null, { desfes: false, auto: true });
   if (!D.ajustFet(db())) {   // (amb l'arxiu d'abans del 30-10; ja aplicat, no torna a passar)
     try { await A.copiaAlDrive('abans del car pendent del 30-10'); }
     catch (e) { avisa('No he pogut fer la còpia de seguretat (' + e.message + '): l\'ajust del car pendent espera a la propera connexió.'); return; }

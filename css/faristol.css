@@ -834,3 +834,6 @@ body[data-estil="ricard"] .apar-tabs button[aria-selected="true"]{background:var
 .enllac-bc{margin:2px 0 16px}
 .enllac-bc input{width:100%}
 .enllac-bc .avis-bc{border-left:3px solid var(--taronja); padding-left:10px; color:var(--os)}
+/* ACT-804 (a): aire entre la barra «▶ Escoltar ara» i la fila de Piles, també amb «Enganxa l'enllaç» al mig */
+.fitxa-piles{padding-top:12px}
+.enllac-bc{margin:12px 0 0}
