@@ -27,6 +27,7 @@
 //      Des de la ACT-665 (v1.49), abans del número: si el nom de l'àlbum és, normalitzat, el Part.Nom d'una part, hi va.
 
 import { numeroDActe } from './actes.js?v=1';
+import { actesDesats } from './actespregunta.js?v=1';
 const files = (db, sql, p = []) => {
   const st = db.prepare(sql); st.bind(p);
   // ACT-738: els noms de les columnes, un sol cop; getAsObject els torna a demanar a cada fila i, amb anys d'escoltes,
@@ -298,7 +299,7 @@ export const SQL_COMPTA = `(CASE WHEN s.unio IS NULL THEN (s.completitud >= ${LL
 // canviï una regla de recalcula, i també quan una migració canviï alguna cosa que recalcula llegeix (la migració el puja
 // ella mateixa, al mateix canvi). El banc ho vigila: migra una foto de l'arxiu sintètic feta amb l'estructura anterior,
 // ho torna a calcular tot i, si surt diferent i CALCUL no ha pujat, falla.
-export const CALCUL = 6;   // 6: ACT-815, el «repàs»   // 2: ACT-701, completar una escolta a mitges · 3: ACT-719, la que ja compta sense ser sencera
+export const CALCUL = 7;   // 7: ACT-787 (a), l'acte contestat · 6: ACT-815, el «repàs»   // 2: ACT-701, completar una escolta a mitges · 3: ACT-719, la que ja compta sense ser sencera
                            // 4: ACT-730, l'última pista comptada de fiat es pot reprendre 7 dies · 5: ACT-777, l'acte del nom de la pista
 const MARCA = 'calcul-escoltes';
 const marcaDelCodi = () => String(CALCUL);
@@ -367,7 +368,7 @@ export const recalcula = (db, { desDe = null } = {}) => {
 
   // Les edicions amb les seves durades i parts.
   const eds = new Map(files(db, 'SELECT e.id, e.durada_total, e.app_escolta, a.titol FROM edicio e JOIN album a ON a.id = e.album_id').map(e => [e.id, e]));
-  const parts = new Map();
+  const parts = new Map(), acteDe = actesDesats(db);   // ACT-787 (a): els actes contestats a la safata
   for (const p of files(db, 'SELECT id, edicio_id, numero, nom, durada, rotacio_actual FROM part')) (parts.get(p.edicio_id) || parts.set(p.edicio_id, []).get(p.edicio_id)).push(p);
 
   // Agrupar (ACT-585, opció B de Ricard del 4-11; abans: mateix context o res).
@@ -421,7 +422,7 @@ export const recalcula = (db, { desDe = null } = {}) => {
     const perNomPart = s.album && ps.length ? ps.find(p => p.nom && norm(p.nom) === norm(s.album)) : null;
     // ACT-777 (Obra 4, òperes per actes): després del nom de la part, l'acte que diu el nom de la pista (Scrobble.pista →
     // Part.numero), abans que el número del nom de l'àlbum: la caixa va per actes i el CD no hi mana.
-    const nActe = ps.length && !perNomPart ? numeroDActe(s.pista) : null;
+    const nActe = ps.length && !perNomPart ? (numeroDActe(s.pista) ?? acteDe.get(s.id) ?? null) : null;   // ACT-787 (a)
     const perActe = nActe !== null ? ps.find(p => p.numero === nActe) || null : null;
     const nPart = ps.length && !perNomPart && !perActe ? numeroDePart(s.album, eds.get(ed).titol) : null;
     const perNom = perNomPart || perActe || (nPart !== null ? ps.find(p => p.numero === nPart) : null);       // ACT-625

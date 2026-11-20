@@ -43,6 +43,6 @@ export const OBRA_D = [
     // (L'Historial només marca «a mitges» l'escolta en curs; el Disc Meitat és de fa dos mesos: aquí només hi ha de ser.)
     cal(h.meitat, 'el Disc Meitat no surt a l\'Historial');
     const codi = (await import('node:fs')).readFileSync(new URL('../js/escoltes.js', import.meta.url), 'utf8');
-    cal(/export const CALCUL = 6\b/.test(codi), 'CALCUL no ha pujat a 6 amb la regla nova');
+    cal(+(codi.match(/export const CALCUL = (\d+)\b/)?.[1]) >= 6, 'CALCUL no ha pujat a 6 amb la regla nova');   // ≥ 6: l'obra H el va pujar a 7 (20-11)
   } },
 ];

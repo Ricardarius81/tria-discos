@@ -12,6 +12,7 @@ import * as A from './arxiu.js?v=21';
 import * as D from './dades.js?v=25';
 import * as E from './escoltes.js?v=15';
 import { partsPerActe } from './actes.js?v=1';
+import * as AP from './actespregunta.js?v=1';
 import * as LB from './listenbrainz.js?v=2';
 import * as I from './imatges.js?v=5';
 import * as T from './tags.js?v=1';
@@ -844,6 +845,27 @@ function blocQ2(q) {
       <button class="nose" data-q2no="${esc(q.clau)}">No és cap d'aquestes</button>
     </div>`;
 }
+// ACT-787 (a): les pistes d'una caixa per actes que no diuen l'acte, cadascuna amb un botó per part (actespregunta.js).
+function blocActes(d) {
+  const ps = d.edicio_id ? AP.pistesSenseActe(db(), d.edicio_id, d.scr) : [];
+  if (!ps.length) return '';
+  const parts = AP.partsPerActes(db(), d.edicio_id);
+  return `<div class="sf-actes" style="padding-left:54px"><p class="sf-pre">${ps.length === 1 ? 'Aquesta pista no diu' : 'Aquestes pistes no diuen'} de quin acte és:</p>
+    ${ps.map(({ s, n }) => `<div data-sfactepista="${esc(s.recording_msid)}"><p class="sf-pre"><i>${esc(s.pista || '')}</i></p>
+      <div class="sf-chips">${parts.map(p => `<button class="${n === p.numero ? 'triat' : ''}" data-sfacte="${s.id}|${p.numero}">${esc(p.nom)}</button>`).join('')}</div></div>`).join('')}</div>`;
+}
+// ACT-787 (b): els actes escrits a mà d'un disc nou que MusicBrainz no dona amb pistes.
+function blocActesMa(x) {
+  if (x.proposta.parts || x.proposta.font !== 'el que ha sonat') return '';
+  const a = estat.actesMaDe?.[x.clau];
+  if (!a) return `<button class="sf-link" data-sfoperaactes="${esc(x.clau)}">És una òpera per actes</button>`;
+  const n = parseInt(a.n, 10) || 0;
+  return `<p class="sf-q">Una òpera per actes <button class="sf-link" data-sfoperaactes="${esc(x.clau)}">No ho és</button></p>
+    <label class="camp"><span>Quants actes?</span><input data-sfnactes="${esc(x.clau)}" type="number" inputmode="numeric" min="2" max="9" value="${n || ''}"></label>
+    ${Array.from({ length: n >= 2 && n <= 9 ? n : 0 }, (_, i) => `<label class="camp"><span>Acte ${i + 1}, en minuts</span>
+      <input data-sfactemin="${esc(x.clau)}|${i + 1}" type="number" inputmode="numeric" min="1" value="${esc(a.min?.[i + 1] ?? '')}"></label>`).join('')}
+    ${n >= 2 ? `<p class="sf-pre">La durada del disc serà la suma dels actes.</p>` : ''}`;
+}
 function blocNou(x) {
   const a = D.trobaArtista(db(), x.artista);
   const canal = estat.nouCanalDe?.[x.clau] || D.canalPerDefecte(db(), a?.id);
@@ -857,6 +879,7 @@ function blocNou(x) {
       : x.proposta.parts ? `<p class="sf-q" data-sfparts="${esc(x.clau)}">Una caixa de ${x.proposta.parts.length} parts, una per acte <small class="gris">· segons MusicBrainz</small></p>
       <p class="sf-pre">${x.proposta.parts.map(p => `${esc(p.nom)} · ${p.durada}′`).join('<br>')}</p>
       <div class="sf-chips"><button class="mes" data-sfsenseparts="${esc(x.clau)}">Sense parts</button></div>` : ''}
+    ${blocActesMa(x)}
     <p class="sf-q">Per on l'escoltes?</p>
     <div class="sf-chips">${Object.keys(CANALS).map(k => `<button class="${canal === k ? 'triat' : ''}" data-sfcanal="${esc(x.clau)}|${esc(k)}">${esc(CANALS[k].nom)}</button>`).join('')}
       ${altreCanal(estat.altreCanalDe === 'nou:' + x.clau, 'nou', x.clau)}</div>
@@ -940,7 +963,7 @@ function pintaSafata_() {
     const dq = d.edicio_id ? sosp.get(d.edicio_id) : null;
     if (dq && d.scr?.some(s => dq.escoltes.has(s.escolta_id))) bloc = avisDurada(d.edicio_id, dq, ' style="padding-left:54px"') + bloc;
     return minDisc(d, extra) + (esSolta ? `<button class="sf-link" style="padding:0 0 6px 54px" data-sfdisc="${esc(k)}">És un disc</button>` : '')
-      + (d.edicio_id ? `<button class="sf-link sf-canal" data-sfcanaldisc="${d.edicio_id}">Canal: ${esc(nomCanal(d.app_escolta))} · canvia'l</button>` : '') + bloc;
+      + (d.edicio_id ? `<button class="sf-link sf-canal" data-sfcanaldisc="${d.edicio_id}">Canal: ${esc(nomCanal(d.app_escolta))} · canvia'l</button>` : '') + blocActes(d) + bloc;
   };
   const jaContestat = d => `<p class="sf-pre" style="padding-left:54px">On: <b>${esc(d.context || '')}</b>, ja contestat.</p>`;
   // La nota de la còpia de seguretat (§3.5, ACT-569): han baixat les edicions, els àlbums o els artistes. Es confirma amb un toc.
@@ -2322,12 +2345,18 @@ document.addEventListener('click', e => {
     fes(E.ignora(x.scr), (x.album || x.pista) + ': ignorat'); return; }
   if (d.sfsenseparts) { (estat.sensePartsDe ||= {})[d.sfsenseparts] = true; pintaSafata(); return; }
   if (d.sfambparts) { if (estat.sensePartsDe) delete estat.sensePartsDe[d.sfambparts]; pintaSafata(); return; }
+  if (d.sfacte) { const [id, n] = d.sfacte.split('|').map(Number);
+    fes(y => { AP.desaActe(id, n)(y); E.recalcula(y, { desDe: E.desDePistes(y, [id]) }); }, `Acte ${n}`); return; }
+  if (d.sfoperaactes) { const k = d.sfoperaactes; estat.actesMaDe ||= {};
+    if (estat.actesMaDe[k]) delete estat.actesMaDe[k]; else estat.actesMaDe[k] = { n: '', min: {} }; pintaSafata(); return; }
   if (d.sfnou) { const [k, on] = d.sfnou.split('|');
     const x = E.discosNous(db(), mbCache).nous.find(y => y.clau === k); if (!x) return;
-    const min = parseInt(document.querySelector(`[data-sfdur="${CSS.escape(k)}"]`)?.value, 10);
+    const ma = estat.actesMaDe?.[k] ? AP.partsAMa(estat.actesMaDe[k].n, estat.actesMaDe[k].min) : null;   // ACT-787 (b)
+    if (typeof ma === 'string') { avisa(ma); return; }
+    const min = ma ? ma.reduce((s, p) => s + p.durada, 0) : parseInt(document.querySelector(`[data-sfdur="${CSS.escape(k)}"]`)?.value, 10);
     if (!min || min < 1) { avisa('Cap disc entra sense durada.'); return; }
     const a = D.trobaArtista(db(), x.artista), canal = estat.nouCanalDe?.[k] || D.canalPerDefecte(db(), a?.id), pref = estat.nouPrefDe?.[k];
-    fes(y => { const r = E.creaDiscNou({ album: x.album || x.pista, artista: x.artista, recording_msid: x.recording_msid, minuts: min, canal, rotacio: on === 'rotacio', parts: estat.sensePartsDe?.[k] ? null : x.proposta.parts })(y);   // ACT-787 (c)
+    fes(y => { const r = E.creaDiscNou({ album: x.album || x.pista, artista: x.artista, recording_msid: x.recording_msid, minuts: min, canal, rotacio: on === 'rotacio', parts: estat.sensePartsDe?.[k] ? null : x.proposta.parts, ...(ma ? { parts: ma } : {}) })(y);   // ACT-787 (c); (b), els actes a mà manen
                if (pref) D.afegeixPreferentId(r.artista_id)(y); return r; },
       `${x.album || x.pista} entra a l'arxiu${on === 'rotacio' ? ' i a la rotació' : ''}${pref ? ', i l\'artista a preferents' : ''}`); return; }
   // les preguntes 7, 8 i 9
@@ -2660,7 +2689,11 @@ $('#cercaArxiu').addEventListener('input', () => pintaArxiu());
 $('#ordrePref').innerHTML = R.ORDRES.map(([k, n]) => `<option value="${k}">${n}</option>`).join('');
 $('#ordrePref').value = R.ordrePref();
 $('#ordrePref').addEventListener('change', e => { R.posaOrdrePref(e.target.value); pintaFiles(); });
-document.addEventListener('input', e => { if (e.target.id === 'inLlista') estat.nomLlistaTxt = e.target.value; });
+document.addEventListener('input', e => { if (e.target.id === 'inLlista') estat.nomLlistaTxt = e.target.value;
+  const am = e.target.dataset?.sfactemin; if (am) { const [k, i] = am.split('|'); const a = estat.actesMaDe?.[k]; if (a) a.min[i] = e.target.value; } });
+// ACT-787 (b): en canviar quants actes, es repinten les caselles (al «change», per no perdre el focus a cada tecla)
+document.addEventListener('change', e => { const k = e.target.dataset?.sfnactes; if (!k || !estat.actesMaDe?.[k]) return;
+  estat.actesMaDe[k].n = e.target.value; pintaSafata(); });
 try { const l = localStorage.getItem('tria-lloc'); if (l === 'Lleida' || l === 'Fora') posaLloc(l, false); } catch {}
 try { navigator.permissions?.query({ name: 'geolocation' }).then(r => { if (r.state === 'granted') detectaLloc(false); }).catch(() => {}); } catch {}
 

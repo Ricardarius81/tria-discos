@@ -9,13 +9,14 @@
 //
 // Només es toca el que és d'aquest lloc. Google, el Drive, ListenBrainz, MusicBrainz i les portades passen de llarg.
 
-const VERSIO = '16330f4f6f9a';
+const VERSIO = '4dab18f0f45a';
 const FITXERS = [
   'index.html',
   'manifest.webmanifest',
   'css/faristol.css',
   'js/afinacio.js',
   'js/actes.js',
+  'js/actespregunta.js',
   'js/piles.js',
   'js/bandcamp.js',
   'js/arreglos.js',
