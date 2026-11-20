@@ -96,6 +96,7 @@ export const LLINDAR = 0.75, LLINDAR_DORMIR = 0.5;
 // trossos, sense dividir pel llindar) arriba a 0,95; passa de 1,05, la durada de la fitxa és sospitosa de curta.
 // Mesurat a l'arxiu el 8-11: les escoltes senceres de veritat donen entre 0,984 i 1,018 (durades en minuts arrodonits).
 export const ENTERA = 0.95, SOSPITOSA = 1.05;
+export const REPAS = 0.5;   // ACT-815: el 50 % de Ricard (l'únic número de la regla del «repàs»)
 // ACT-701 (8-11, Ricard, cas Glass Menagerie): una escolta «a mitges» es completa amb la següent del mateix disc encara que
 // sigui fora de les 15 hores, si comença dins dels 7 dies següents a l'última pista de la primera. Veure recalcula.
 export const FINESTRA_COMPLETAR = 7 * 24 * H;
@@ -297,7 +298,7 @@ export const SQL_COMPTA = `(CASE WHEN s.unio IS NULL THEN (s.completitud >= ${LL
 // canviï una regla de recalcula, i també quan una migració canviï alguna cosa que recalcula llegeix (la migració el puja
 // ella mateixa, al mateix canvi). El banc ho vigila: migra una foto de l'arxiu sintètic feta amb l'estructura anterior,
 // ho torna a calcular tot i, si surt diferent i CALCUL no ha pujat, falla.
-export const CALCUL = 5;   // 2: ACT-701, completar una escolta a mitges · 3: ACT-719, la que ja compta sense ser sencera
+export const CALCUL = 6;   // 6: ACT-815, el «repàs»   // 2: ACT-701, completar una escolta a mitges · 3: ACT-719, la que ja compta sense ser sencera
                            // 4: ACT-730, l'última pista comptada de fiat es pot reprendre 7 dies · 5: ACT-777, l'acte del nom de la pista
 const MARCA = 'calcul-escoltes';
 const marcaDelCodi = () => String(CALCUL);
@@ -432,7 +433,9 @@ export const recalcula = (db, { desDe = null } = {}) => {
     if (retoma(u, s)) { if (s.t - u.t0 >= FINESTRA_ESCOLTA) { u.t0 = s.t; u.represa++; } }   // ACT-730
     else if (completa) { u.t0 = s.t; u.represa++; }
     else if (!u || s.t - u.t0 >= FINESTRA_ESCOLTA || (clauDe(u, s) >= 0 && cobertura(u) >= ENTERA - 1e-9)) {
-      u = { ed, part, t0: s.t, tn: s.t, represa: 0, inicis: [], arriba: null, durada: durDe(ed, part), trossos: new Map(), millor: new Map(), pistes: [], id: null };
+      // ACT-815: l'escolta que compta d'abans, si aquesta comença dins de les 15 hores següents a la seva última pista
+      const prev = u && compta(u) && s.t - u.tn <= FINESTRA_ESCOLTA ? u : null;
+      u = { ed, part, t0: s.t, tn: s.t, represa: 0, inicis: [], arriba: null, durada: durDe(ed, part), trossos: new Map(), millor: new Map(), pistes: [], id: null, prev };
       oberta.set(ku, u);
     }
     u.tn = s.t; u.ultima = s;
@@ -445,6 +448,26 @@ export const recalcula = (db, { desDe = null } = {}) => {
     const m = u.millor.get(kp);
     if (!m || s.sonat > m.sonat) u.millor.set(kp, s);
     if (u.arriba === null && compta(u)) u.arriba = u.represa;   // ACT-719: el tram en què arriba a comptar
+  }
+
+  // EL «REPÀS» (ACT-815, 20-11, Ricard: «OK, si vemos que da problemas, lo revisamos de nuevo», cas del gimnàs i la dutxa
+  // del 19-11): després d'una escolta que compta, si en les 15 hores següents a la seva última pista sonen només pistes que
+  // ja van sonar en ella i no arriben al 50 % (REPAS) de la Durada total, és un repàs i s'ignora: ni escolta «a mitges» ni
+  // Historial. Les seves pistes s'afegeixen a l'escolta d'abans (com reprendre: cada pista compta un sol cop, la que més va
+  // sonar), perquè cap pista quedi sense escolta. Si passa del 50 %, compta com sempre. Camps: Escolta.unio,
+  // Escolta.completitud, Scrobble.recording_msid/pista/duration_ms (mateixaPista), Scrobble.listened_at, Edició.durada_total.
+  // DANY DIT: reempezar el disc el mateix dia, tallar-lo abans de la meitat i acabar-lo l'endemà pot no comptar.
+  for (const u2 of new Set(trossos.map(t => t.u))) {
+    const p = u2.prev;
+    if (!p || compta(u2) || cobertura(u2) >= REPAS - 1e-9 || !u2.pistes.every(x => p.pistes.some(y => mateixaPista(y, x)))) continue;
+    const desti = [...p.trossos.values()].pop();
+    for (const t of u2.trossos.values()) {
+      trossos.splice(trossos.indexOf(t), 1);
+      for (const x of t.s) {
+        x.kp = clauDe(p, x); desti.s.push(x); desti.comptes.add(x.compte);
+        const m = p.millor.get(x.kp); if (!m || x.sonat > m.sonat) p.millor.set(x.kp, x);
+      }
+    }
   }
 
   // Esborrar les escoltes que vénen de scrobbles i tornar-les a escriure.
