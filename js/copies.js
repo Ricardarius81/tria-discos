@@ -16,6 +16,7 @@
 
 import * as A from './arxiu.js?v=21';
 import * as X from './excel.js?v=6';
+import { FISICS } from './dades.js?v=25';
 
 const PATRO = /· còpia de seguretat (\d{4}-\d{2}-\d{2})\.(sqlite|xlsx)$/;
 export const nomCopia = (data, ext) => `la-meva-discoteca · còpia de seguretat ${data}.${ext}`;
@@ -40,10 +41,11 @@ export const posaNota = v => db => db.run('INSERT OR REPLACE INTO meta (clau, va
 export const treuAlarma = db => db.run('DELETE FROM meta WHERE clau = ?', [ALARMA]);
 export const treuNota = db => db.run('DELETE FROM meta WHERE clau = ?', [NOTA]);
 
-// El que es compta a cada còpia. escolta_fisica: les escoltes sense cap pista de ListenBrainz (CD, vinil).
+// El que es compta a cada còpia. escolta_fisica: les escoltes de CD o vinil, per Escolta.canal (ACT-837, ACT-840 2). Abans,
+// «sense cap pista»; amb les pistes velles als fitxers d'any (ACT-838), això voldria dir també «les seves pistes són fora».
 export function recomptes(db) {
   const n = A.recomptes();
-  n.escolta_fisica = db.exec('SELECT COUNT(*) FROM escolta WHERE id NOT IN (SELECT escolta_id FROM scrobble WHERE escolta_id IS NOT NULL)')[0].values[0][0];
+  n.escolta_fisica = db.exec(`SELECT COUNT(*) FROM escolta WHERE canal IN (${FISICS.map(f => `'${f}'`).join(', ')})`)[0].values[0][0];
   return n;
 }
 const VERMELLES = ['scrobble', 'escolta_fisica'], DE_NOTA = ['edicio', 'album', 'artista'];

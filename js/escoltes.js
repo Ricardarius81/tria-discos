@@ -293,6 +293,9 @@ function cronologia(scr) {
 const llindarDe = at => at === 'Dormir' ? LLINDAR_DORMIR : LLINDAR;
 const PES = x => `(${x}.completitud / (CASE WHEN ${x}.atencio = 'Dormir' THEN ${LLINDAR_DORMIR} ELSE ${LLINDAR} END))`;
 const PROU = 1 - 1e-9;                     // la suma de quocients pot quedar a una milionèsima d'1 per l'arrodoniment
+// Una escolta apuntada a mà (ACT-837, estructura 13): Escolta.origen 'a mà'. Una fila sense origen (escrita per codi d'abans
+// de l'estructura 13, o a mà a la base) es jutja com abans: sense cap pista lligada. Així cap fila vella queda òrfena.
+export const SQL_A_MA = `(origen = 'a mà' OR (origen IS NULL AND id NOT IN (SELECT escolta_id FROM scrobble WHERE escolta_id IS NOT NULL)))`;
 export const SQL_COMPTA = `(CASE WHEN s.unio IS NULL THEN (s.completitud >= ${LLINDAR} OR (s.atencio = 'Dormir' AND s.completitud >= ${LLINDAR_DORMIR}))
   ELSE (SELECT SUM(${PES('x')}) FROM escolta x WHERE x.unio = s.unio) >= ${PROU} END)`;
 // La marca del càlcul (ACT-700, 8-11): les escoltes es van calcular amb aquesta estructura i aquestes regles.
@@ -678,20 +681,21 @@ export function historial(db) {
 // 15 hores d'una escolta sencera (ACT-696); aquí sí que surt, perquè és la llista de totes, no l'estat del disc.
 // Camps: Escolta.data_hora, Escolta.completitud, Escolta.unio, Escolta.context, Escolta.atencio (calculats dels scrobbles).
 export function escoltesDeLEdicio(db, edicioId) {
-  const fs = files(db, `SELECT s.id, s.data_hora, s.context, s.atencio, s.completitud, s.unio, s.canal, s.part_id,
+  const fs = files(db, `SELECT s.id, s.data_hora, s.context, s.atencio, s.completitud, s.unio, s.canal, s.part_id, s.origen,
                                (SELECT COUNT(*) FROM scrobble p WHERE p.escolta_id = s.id) AS pistes
                         FROM escolta s WHERE s.edicio_id = ? ORDER BY s.data_hora, s.id`, [edicioId]);
   const per = new Map();
   for (const f of fs) { const u = f.unio ?? f.id; (per.get(u) || per.set(u, []).get(u)).push(f); }
   const out = [...per.entries()].map(([u, tr]) => {
     const cap = tr.find(t => t.id === u) || tr[0];
-    const fisica = tr.every(t => !t.pistes);
+    // ACT-837 (dues feines d'una paraula): «física» és Escolta.canal CD o vinil; «a mà» (Escolta.origen) és la que compta sola.
+    const fisica = tr.every(t => t.canal === 'CD' || t.canal === 'vinil'), ama = tr.every(t => t.origen === 'a mà' || (t.origen == null && !t.pistes));
     const cob = tr.reduce((x, t) => x + (t.completitud ?? 0), 0);
     const compta = f => (f.completitud ?? 0) / llindarDe(f.atencio);
-    const comptaU = fisica && tr.length === 1 && cap.unio === null
+    const comptaU = ama && tr.length === 1 && cap.unio === null
       ? (cap.completitud ?? 0) >= LLINDAR || (cap.atencio === 'Dormir' && (cap.completitud ?? 0) >= LLINDAR_DORMIR)
       : tr.reduce((x, t) => x + compta(t), 0) >= PROU;
-    return { u, data: cap.data_hora, trossos: tr, fisica, cobertura: Math.round(cob * 1000) / 1000, compta: comptaU, sencera: cob >= ENTERA - 1e-9 };
+    return { u, data: cap.data_hora, trossos: tr, fisica, ama, cobertura: Math.round(cob * 1000) / 1000, compta: comptaU, sencera: cob >= ENTERA - 1e-9 };
   });
   out.sort((a, b) => b.data.localeCompare(a.data) || b.u - a.u);
   const compten = out.filter(x => x.compta);
@@ -1229,7 +1233,7 @@ export const canviaEdicio = ({ de, a, correccio }) => db => {
     db.run(`UPDATE edicio SET data_darrera_pregunta_puntuacio = COALESCE(data_darrera_pregunta_puntuacio,
               (SELECT data_darrera_pregunta_puntuacio FROM edicio WHERE id = ?)) WHERE id = ?`, [de, a]);
     // les escoltes físiques, sense scrobble, es mouen a mà; les altres es tornen a calcular
-    db.run('UPDATE escolta SET edicio_id = ? WHERE edicio_id = ? AND id NOT IN (SELECT DISTINCT escolta_id FROM scrobble WHERE escolta_id IS NOT NULL)', [a, de]);
+    db.run(`UPDATE escolta SET edicio_id = ? WHERE edicio_id = ? AND ${SQL_A_MA}`, [a, de]);   // ACT-837: les apuntades a mà (Escolta.origen), no «sense pistes»
   }
   const v = un(db, 'SELECT rotacio_actual, data_referencia_rotacio, darrera_obertura FROM edicio WHERE id = ?', [de]);
   if (v?.rotacio_actual) {

@@ -19,7 +19,9 @@ const MAX_RESUM = 3000;
 
 // L'edició de MusicBrainz que porten les escoltes d'aquest àlbum (la més recent), si n'hi ha.
 export const releaseDeLAlbum = (db, albumId) => un(db, `SELECT p.caa_release_mbid AS m FROM scrobble p JOIN escolta x ON x.id = p.escolta_id
-  JOIN edicio e ON e.id = x.edicio_id WHERE e.album_id = ? AND p.caa_release_mbid IS NOT NULL ORDER BY p.listened_at DESC LIMIT 1`, [albumId])?.m || null;
+  JOIN edicio e ON e.id = x.edicio_id WHERE e.album_id = ? AND p.caa_release_mbid IS NOT NULL ORDER BY p.listened_at DESC LIMIT 1`, [albumId])?.m
+  || un(db, `SELECT release_mbid AS m FROM edicio WHERE album_id = ? AND release_mbid IS NOT NULL
+             ORDER BY COALESCE(darrer_scrobble, '') DESC LIMIT 1`, [albumId])?.m || null;   // ACT-841 (4): el desat a la fitxa
 
 // A: els enllaços.
 export function enllacos({ art, titol, release = null }) {

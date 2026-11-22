@@ -76,7 +76,8 @@ export const posaProperSegell = (id, artista, titol) => db => db.run('UPDATE seg
 export const canviaSegell = (edicioId, nom) => db => db.run('UPDATE edicio SET segell = ? WHERE id = ?', [String(nom || '').trim() || null, edicioId]);
 // L'edició de MusicBrainz que porten les escoltes d'AQUESTA edició (7.2: l'edició exacta), si n'hi ha.
 export const releaseDeLEdicio = (db, edicioId) => un(db, `SELECT p.caa_release_mbid AS m FROM scrobble p JOIN escolta x ON x.id = p.escolta_id
-  WHERE x.edicio_id = ? AND p.caa_release_mbid IS NOT NULL ORDER BY p.listened_at DESC LIMIT 1`, [edicioId])?.m || null;
+  WHERE x.edicio_id = ? AND p.caa_release_mbid IS NOT NULL ORDER BY p.listened_at DESC LIMIT 1`, [edicioId])?.m
+  || un(db, 'SELECT release_mbid AS m FROM edicio WHERE id = ?', [edicioId])?.m || null;   // ACT-841 (4): el desat a la fitxa
 // 7.2: el segell de MusicBrainz entra sol només si ve de l'edició exacta i l'edició no en té cap.
 export const segellDeMB = (edicioId, release, mb) => db => {
   if (!mb?.segell || !release || mb.release !== release) return false;

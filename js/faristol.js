@@ -32,6 +32,7 @@ import * as PR from './proper.js?v=1';
 import * as CB from './codibc.js?v=1';
 import * as BR from './branques.js?v=1';
 import * as INF from './info.js?v=1';
+import * as EM from './escoltama.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -1451,12 +1452,32 @@ function fullEscoltes(d) {
   obreFull(`<h3>Les escoltes</h3><p>${esc(d.titol)} · ${esc(d.art)}${d.min ? ' · ' + d.min + '′' : ''}</p>
     <div class="esc-total"><div><b>${r.compten}</b>${r.compten === 1 ? 'escolta' : 'escoltes'}</div><div><b>${r.mitges}</b>a mitges</div>
       <div><b>${r.darrera ? fa(r.darrera.data) : '—'}</b>la darrera${r.darrera && !r.darrera.compta ? ' · a mitges' : ''}</div></div>
+    <div class="canals" style="margin:10px 0"><button data-escoltama="${d.id}">＋ Apunta una escolta <small>a mà: un CD, un vinil o streaming sense ListenBrainz</small></button></div>
     ${r.escoltes.length ? `<ul class="esc-llista">${r.escoltes.map(x => `<li><div class="esc-fila ${x.compta ? '' : 'mitges'}">
       <span class="q">${dia_(x.data)}<small>${hm(x.data)}</small></span>
-      <span class="ctx">${textEscolta(x)}<small>${[...new Set(x.trossos.map(ctxTxt))].join(' + ')}${x.fisica ? ' · física' : ''}</small></span>
+      <span class="ctx">${textEscolta(x)}<small>${[...new Set(x.trossos.map(ctxTxt))].join(' + ')}${x.fisica ? ' · física' : x.ama ? ' · a mà' : ''}</small></span>
       <button class="modifica" data-corregeix="${d.id}|${x.u}">Modifica</button></div></li>`).join('')}</ul>`
       : '<p class="gris">Encara no n\'hi ha cap.</p>'}
     <p class="gris" style="font-size:12px;margin-top:10px">«Modifica» corregeix el context o l'atenció d'una escolta. Es torna a calcular: passar-la a Dormir canvia si compta.</p>`, true);
+  tornaA(d.id);
+}
+// L'escolta a mà (obra II, ACT-839, ACT-840 2): CD, vinil o streaming (i el canal), l'inici «ara menys la durada», el context
+// i l'atenció. Si ja hi ha una escolta de ListenBrainz del disc a prop d'aquesta hora, avisa i demana confirmar.
+const dataLocal = d => { const z = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}T${z(d.getHours())}:${z(d.getMinutes())}`; };
+function fullEscoltaMa(d) {
+  const { min } = EM.duradaDe(db(), d.id), ini = EM.iniciPerDefecte(min);
+  const perDefecte = d.formats.includes('vinil') && !d.formats.includes('CD') ? 'vinil' : d.formats.includes('CD') ? 'CD' : 'streaming';
+  const apps = [...new Set([...Object.keys(CANALS), ...D.canalsPropis(db())])], app = d.app_escolta && apps.includes(d.app_escolta) ? d.app_escolta : 'amazon';
+  estat.atencioMa = null;
+  obreFull(`<h3>Apunta una escolta</h3><p>${esc(d.titol)} · ${esc(d.art)}${min ? ' · ' + min + '′' : ''}. Compta com el disc sencer.</p>
+    <label class="camp"><span>Com</span><select id="selCanalMa">${EM.CANALS_MA.map(c => `<option value="${c}"${c === perDefecte ? ' selected' : ''}>${{ CD: 'CD', vinil: 'Vinil', streaming: 'Streaming' }[c]}</option>`).join('')}</select></label>
+    <label class="camp" id="campAppMa"${perDefecte === 'streaming' ? '' : ' hidden'}><span>Canal</span><select id="selAppMa">${apps.map(a => `<option value="${esc(a)}"${a === app ? ' selected' : ''}>${esc(CANALS[a]?.nom || nomCanal(a))}</option>`).join('')}</select></label>
+    <label class="camp"><span>Va començar</span><input id="inIniciMa" type="datetime-local" value="${dataLocal(ini)}"></label>
+    <label class="camp"><span>Context</span><select id="selCtxMa"><option value="">—</option>${E.CONTEXTOS.map(c => `<option>${esc(c)}</option>`).join('')}<option>No ho sé</option></select></label>
+    <div class="sf-chips" id="atencioMa">${E.ATENCIONS.map(([b]) => `<button data-atencioma="${esc(b)}">${b}</button>`).join('')}</div>
+    <div id="avisDupMa" hidden></div>
+    <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-desaescoltama="${d.id}">Apunta-la</button></div>`, true);
+  $('#selCanalMa').onchange = e => { $('#campAppMa').hidden = e.target.value !== 'streaming'; };
   tornaA(d.id);
 }
 // Corregir una escolta: un bloc per tros, amb els contextos i, si cal, l'atenció (la pregunta 4 de la safata).
@@ -2356,6 +2377,18 @@ document.addEventListener('click', e => {
   if (d.tagsfitxa) { const x = rot(d.tagsfitxa); if (x) fullTags(x); return; }
   if (d.mesfitxa) { const x = rot(d.mesfitxa); if (x) fullMes(x); return; }
   if (d.escoltesfitxa) { const x = rot(d.escoltesfitxa); estat.corrAtencio = null; if (x) fullEscoltes(x); return; }
+  if (d.escoltama) { const x = rot(d.escoltama); if (x) fullEscoltaMa(x); return; }
+  if (d.atencioma) { estat.atencioMa = d.atencioma; document.querySelectorAll('#atencioMa button').forEach(b => b.classList.toggle('triat', b.dataset.atencioma === d.atencioma)); return; }
+  if (d.desaescoltama) { const id = +d.desaescoltama, c = $('#selCanalMa').value, canal = c === 'streaming' ? $('#selAppMa').value : c;
+    const inici = new Date($('#inIniciMa').value), ctx = $('#selCtxMa').value || null;
+    if (isNaN(inici)) { avisa('Cal l\'hora d\'inici.'); return; }
+    if (!d.forca) { const x = EM.duplicat(db(), id, inici); if (x) {
+      $('#avisDupMa').hidden = false;
+      $('#avisDupMa').innerHTML = `<div class="avis-durada"><b>Potser ja hi és.</b> ListenBrainz ja té una escolta d'aquest disc a les ${hm(x.data_hora)} del ${new Date(x.data_hora).toLocaleDateString('ca-ES', { day: 'numeric', month: 'short' })}.
+        <div class="barra-accions" style="position:static;padding:6px 0 0"><button class="bt" data-desaescoltama="${id}" data-forca="1">Apunta-la igualment</button></div></div>`; return; } }
+    const at = estat.atencioMa ? (E.ATENCIONS.find(([b]) => b === estat.atencioMa)?.[1] || estat.atencioMa) : (ctx ? (ctx === 'Dormir' ? 'Dormir' : 'Efectes plens') : null);
+    fes(EM.apunta({ edicioId: id, canal, inici, context: ctx, atencio: at, forca: true }), 'Escolta apuntada');
+    const x = rot(id); if (x) fullEscoltes(x); return; }
   if (d.corregeix) { const [ed, u] = d.corregeix.split('|').map(Number); estat.corrAtencio = null; fullCorregeix(ed, u); return; }
   if (d.corrctx || d.corratencio) {
     const [ed, u, id, val] = (d.corrctx || d.corratencio).split('|'); const x = rot(ed); if (!x) return;

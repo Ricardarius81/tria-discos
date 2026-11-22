@@ -11,6 +11,7 @@
 //  · Agrupacions (ACT-635): mosaic de portades (Scrobble.caa_release_mbid de les pistes de la llista), ordre per l'última
 //    que ha sonat (Scrobble.llista_id), nombre de cançons, última escolta i durada total (llista_canco.durada_ms).
 
+import * as R from './resums.js?v=1';
 const files = (db, sql, p = []) => {
   const st = db.prepare(sql); st.bind(p);
   // ACT-738: els noms de les columnes, un sol cop; getAsObject els torna a demanar a cada fila i, amb anys d'escoltes,
@@ -31,19 +32,16 @@ export function llistes(db) {
            (SELECT COUNT(*) FROM llista_canco c WHERE c.llista_id = l.id) AS n,
            (SELECT SUM(c.durada_ms) FROM llista_canco c WHERE c.llista_id = l.id) AS durada_ms,
            (SELECT COUNT(*) FROM llista_canco c WHERE c.llista_id = l.id AND c.durada_ms IS NULL) AS sense_durada,
-           (SELECT MAX(s.listened_at) FROM scrobble s WHERE s.llista_id = l.id) AS darrera
+           (SELECT MAX(s.listened_at) FROM scrobble s WHERE s.llista_id = l.id) AS darrera_viva, l.darrera_escolta, l.portades AS portades_desades
     FROM llista l`)
-    .map(l => ({ ...l, portades: portades(db, l.id), incompleta: l.sense_durada > 0 }))
+    // ACT-841 (4): l'última escolta i les portades també des del desat a la Llista (resums.js), per quan les pistes se'n vagin.
+    .map(({ darrera_viva, darrera_escolta, portades_desades, ...l }) => ({ ...l, darrera: [darrera_viva, darrera_escolta].filter(Boolean).sort().pop() || null,
+      portades: R.unePortades(R.portadesVives(db, l.id), portades_desades), incompleta: l.sense_durada > 0 }))
     .sort((a, b) => (b.darrera || '').localeCompare(a.darrera || '') || b.data_alta.localeCompare(a.data_alta) || b.id - a.id);
 }
 // Les portades del mosaic: les de les pistes de la llista que han sonat amb ella, la més recent primer, sense repetir.
 // Només de cançons que encara hi són.
-function portades(db, id) {
-  return files(db, `SELECT s.caa_release_mbid AS m, MAX(s.listened_at) AS t FROM scrobble s
-                    WHERE s.llista_id = ? AND s.caa_release_mbid IS NOT NULL
-                      AND s.recording_msid IN (SELECT recording_msid FROM llista_canco WHERE llista_id = ?)
-                    GROUP BY s.caa_release_mbid ORDER BY t DESC LIMIT 4`, [id, id]).map(r => 'release/' + r.m);
-}
+// (Les portades vives són a resums.js, portadesVives: les fan servir la pantalla i desaResums.)
 export const llista = (db, id) => llistes(db).find(l => l.id === id) || null;
 export const cancons = (db, id) => files(db, 'SELECT id, posicio, recording_msid, artista, pista, durada_ms FROM llista_canco WHERE llista_id = ? ORDER BY posicio, id', [id]);
 export const perNom = (db, nom) => files(db, 'SELECT id, nom FROM llista').find(l => norm(l.nom) === norm(nom)) || null;

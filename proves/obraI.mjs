@@ -17,7 +17,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR
 export const OBRA_I = [
   { bloc: 'obra I: els comentaris de la ACT-836 i l\'estructura 13 (ACT-840 2)' },
   { nom: 'estructura 13 (ACT-840 2, ACT-836 e): segell_preferent.retrat i Escolta.origen; en migrar, les escoltes amb pistes són «listenbrainz» i les de sense pistes «a mà»', sintetic: true, async fes({ pagina, consulta }) {
-    igual(consulta('PRAGMA user_version')[0].user_version, 13, 'estructura de l\'arxiu del Drive');
+    cal(consulta('PRAGMA user_version')[0].user_version >= 13, 'estructura de l\'arxiu del Drive, 13 o més (la 14, obra II)');
     cal(consulta('PRAGMA table_info(segell_preferent)').some(c => c.name === 'retrat'), 'segell_preferent no té la columna retrat');
     cal(consulta('PRAGMA table_info(escolta)').some(c => c.name === 'origen'), 'Escolta no té la columna origen');
     const r = await pagina.evaluate(async () => {

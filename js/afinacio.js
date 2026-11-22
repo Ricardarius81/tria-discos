@@ -13,7 +13,7 @@
 //  · «Un que ja tinc amb un altre nom» (ACT-658 a ACT-664, ACT-670, ACT-680): juntar dues fitxes en una.
 //  · «És part d'un que ja tinc» (ACT-665 a ACT-669, ACT-685): una fitxa passa a ser una Part d'una altra.
 
-import { SQL_COMPTA, norm, recalcula, canviaEdicio, duradesSospitoses } from './escoltes.js?v=15';
+import { SQL_COMPTA, SQL_A_MA, norm, recalcula, canviaEdicio, duradesSospitoses } from './escoltes.js?v=15';
 import { treuDelGrup } from './dades.js?v=25';
 
 const files = (db, sql, p = []) => {
@@ -322,7 +322,7 @@ export const esPart = ({ de, a, partId = null, numero = null }) => tot(db => {
   // les escoltes: totes a aquesta part. Les físiques es mouen; les de scrobbles es tornen a calcular, i conserven la part
   // que porten (ACT-680), que és la que es posa aquí.
   db.run('UPDATE escolta SET part_id = ? WHERE edicio_id = ?', [part.id, de]);
-  db.run('UPDATE escolta SET edicio_id = ? WHERE edicio_id = ? AND id NOT IN (SELECT DISTINCT escolta_id FROM scrobble WHERE escolta_id IS NOT NULL)', [a, de]);
+  db.run(`UPDATE escolta SET edicio_id = ? WHERE edicio_id = ? AND ${SQL_A_MA}`, [a, de]);   // ACT-837: les apuntades a mà (Escolta.origen), no «sense pistes»
   // la nota (ACT-685, opció C): si la caixa no en té, la de la fitxa que desapareix és la seva primera; si en té, la caixa
   // conserva la seva. Passa amb el seu historial, perquè no es perdi cap judici (decisió de construcció, per ratificar).
   if (!un(db, 'SELECT 1 AS x FROM puntuacio WHERE edicio_id = ? LIMIT 1', [a])) db.run('UPDATE puntuacio SET edicio_id = ? WHERE edicio_id = ?', [a, de]);

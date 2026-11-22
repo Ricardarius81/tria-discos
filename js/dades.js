@@ -50,7 +50,8 @@ function carrega(db, on, params = []) {
            a.generes, a.llenguatge, a.formacio, a.instrument_solista, a.subgeneres,
            (SELECT COUNT(*) FROM edicio x WHERE x.album_id = e.album_id) AS n_edicions,
            (SELECT MAX(s.data_hora) FROM escolta s WHERE s.edicio_id = e.id AND ${SQL_COMPTA}) AS darrera_escolta,
-           (SELECT MAX(p.listened_at) FROM scrobble p JOIN escolta x ON x.id = p.escolta_id WHERE x.edicio_id = e.id) AS darrer_scrobble
+           MAX(COALESCE((SELECT MAX(p.listened_at) FROM scrobble p JOIN escolta x ON x.id = p.escolta_id WHERE x.edicio_id = e.id), ''),
+               COALESCE(e.darrer_scrobble, '')) AS darrer_scrobble   -- ACT-841 (4): també la desada a la fitxa (resums.js)
     FROM edicio e JOIN album a ON a.id = e.album_id JOIN artista ar ON ar.id = a.artista_id
     WHERE ${on}`, params);
   for (const e of eds) {

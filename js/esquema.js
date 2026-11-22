@@ -284,6 +284,18 @@ export const MIGRACIONS = [
   ALTER TABLE segell_preferent ADD COLUMN retrat TEXT;
   ALTER TABLE escolta ADD COLUMN origen TEXT;
   UPDATE escolta SET origen = CASE WHEN id IN (SELECT escolta_id FROM scrobble WHERE escolta_id IS NOT NULL) THEN 'listenbrainz' ELSE 'a mà' END;
+  `,
+  // v14 · obra II (v1.57, ACT-841 4): el que avui es dedueix de les pistes, desat a la seva fitxa, perquè no es perdi quan
+  //   les pistes de més de 12 mesos surtin al fitxer del seu any (ACT-838). Ho escriu resums.js (desaResums); les pantalles
+  //   prenen el més recent entre el desat i el que diuen les pistes que encara hi són.
+  //   edicio.release_mbid: el release de MusicBrainz de l'última pista que en portava (Info, segell). edicio.darrer_scrobble:
+  //   l'última pista que ha sonat de l'edició (l'ordre de Discos en Rotació). llista.darrera_escolta i llista.portades (JSON,
+  //   fins a quatre «release/…»): l'última escolta i el mosaic de cada Llista de reproducció.
+  `
+  ALTER TABLE edicio ADD COLUMN release_mbid TEXT;
+  ALTER TABLE edicio ADD COLUMN darrer_scrobble TEXT;
+  ALTER TABLE llista ADD COLUMN darrera_escolta TEXT;
+  ALTER TABLE llista ADD COLUMN portades TEXT;
   `
 ];
 
