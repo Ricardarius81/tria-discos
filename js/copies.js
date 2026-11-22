@@ -17,6 +17,7 @@
 import * as A from './arxiu.js?v=21';
 import * as X from './excel.js?v=6';
 import { FISICS } from './dades.js?v=25';
+import * as N from './anys.js?v=1';
 
 const PATRO = /· còpia de seguretat (\d{4}-\d{2}-\d{2})\.(sqlite|xlsx)$/;
 export const nomCopia = (data, ext) => `la-meva-discoteca · còpia de seguretat ${data}.${ext}`;
@@ -46,6 +47,7 @@ export const treuNota = db => db.run('DELETE FROM meta WHERE clau = ?', [NOTA]);
 export function recomptes(db) {
   const n = A.recomptes();
   n.escolta_fisica = db.exec(`SELECT COUNT(*) FROM escolta WHERE canal IN (${FISICS.map(f => `'${f}'`).join(', ')})`)[0].values[0][0];
+  n.scrobble += N.pistesAlsAnys(db);   // obra III (ACT-841 2): el TOTAL de pistes, principal més fitxers d'any
   return n;
 }
 const VERMELLES = ['scrobble', 'escolta_fisica'], DE_NOTA = ['edicio', 'album', 'artista'];
@@ -84,8 +86,11 @@ export async function fes({ copies = null } = {}) {
     fora.push(...copies.filter(f => dataDe(f) === data || vells.has(dataDe(f))));
   }
   for (const f of fora) await A.aLaPaperera(f.id);
+  // Els fitxers d'any (ACT-841 3): l'obert, amb la data de la parella (rota amb ella); el tancat, una còpia fixa un sol cop.
+  // Si falla, la parella ja hi és: no es desfà res, i el fitxer d'any original continua al Drive.
+  let anys = []; try { anys = await N.copiesAnys(db, data); } catch {}
   apunta(data);
-  return { feta: true, data, anterior: anterior ? dataDe(anterior) : null, vermelles, nota: deNota, paperera: fora.length };
+  return { feta: true, data, anterior: anterior ? dataDe(anterior) : null, vermelles, nota: deNota, paperera: fora.length, anys };
 }
 
 // La parella entra junta o no entra (ACT-571, ACT-750 e). Si l'app es tanca entre les dues pujades, al Drive queda una

@@ -180,9 +180,11 @@ async function desaLocal() {
 // memòria del navegador); una comprovació prova el de veritat.
 export const RITME = (() => { const r = { calma: 2000, rellotge: 30000 };
   try { Object.assign(r, JSON.parse(localStorage.getItem('tria-banc-ritme') || '{}')); } catch {} return r; })();
-// (c1) El pes de l'arxiu i el que va trigar l'última pujada, per a La Cabina: avisa en taronja a 8 MB i en vermell a 15,
-// sense frenar res. L'última pujada es recorda en aquest mòbil.
-export const PES_TARONJA = 8e6, PES_VERMELL = 15e6;
+// (c1) El pes de l'arxiu i el que va trigar l'última pujada, per a La Cabina: avisa en taronja i en vermell, sense frenar
+// res. L'última pujada es recorda en aquest mòbil. Des de l'obra III (ACT-840 1), recalibrats a l'arxiu principal, ara que
+// les pistes de més de 12 mesos van als fitxers d'any: taronja a 15 MB i vermell a 25 (abans 8 i 15). L'esperat amb la
+// col·lecció física, uns 9 MB. SÍMPTOMA: si el taronja s'encén el primer any, es refan els comptes.
+export const PES_TARONJA = 15e6, PES_VERMELL = 25e6;
 export const pes = { mida: null, pujada: (() => { try { return JSON.parse(localStorage.getItem('tria-darrera-pujada') || 'null'); } catch { return null; } })() };
 
 // Resultat d'obrir: { cas: 'obert' } o un cas que demana decisió de Ricard.
@@ -501,6 +503,20 @@ export async function escriuPendentsBustia(text) {
 // Una còpia és la parella «· còpia de seguretat AAAA-MM-DD» (.sqlite + .xlsx). Es troben pel nom, sempre sense la paperera
 // (H-04). Els recomptes de files de cada còpia viuen a les propietats internes del seu fitxer (appProperties, ACT-569):
 // es comparen sense baixar res.
+// ───────── els fitxers d'any (obra III, ACT-838) ─────────
+// «la-meva-discoteca · pistes AAAA.sqlite», a la mateixa carpeta que l'arxiu. Les regles són a anys.js.
+export const nomAny = any => `la-meva-discoteca · pistes ${any}.sqlite`;
+export const motorSql = () => motor();
+export async function fitxerAny(any) {
+  if (!tePermis()) throw new Error('cal connectar amb el Drive');
+  return (await buscar(nomAny(any), { pare: estat.carpetaId || null }))[0] || null;
+}
+export const baixaFitxer = id => baixa(id);
+export async function desaFitxerAny(any, bytes, id = null) {
+  if (!tePermis()) throw new Error('cal connectar amb el Drive');
+  if (id) { await sobreescriu(id, bytes); return id; }
+  return (await creaFitxer(nomAny(any), SQLITE_MIME, estat.carpetaId ? [estat.carpetaId] : null, new Blob([bytes], { type: SQLITE_MIME }))).id;
+}
 export async function llistaCopies() {
   if (!tePermis()) throw new Error('cal connectar amb el Drive');
   const q = `name contains '${esc('còpia de seguretat')}' and trashed = false`;

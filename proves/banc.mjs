@@ -96,7 +96,7 @@ async function mon() {
   const versioInicial = (() => { const d = new S.Database(bytes); const v = d.exec('PRAGMA user_version')[0].values[0][0]; d.close(); return v; })();
   const ctx = {
     versioInicial, context,
-    pagina, drive, lb, fonts, ara, ORIGEN, fugides, errors, real: !!ARXIU,
+    pagina, drive, lb, fonts, ara, ORIGEN, fugides, errors, real: !!ARXIU, S,
     $: s => pagina.locator(s),
     espera: ms => pagina.waitForTimeout(ms),
     // L'arxiu tal com és ara al Drive fals, obert amb sql.js. Qui el demana el tanca.

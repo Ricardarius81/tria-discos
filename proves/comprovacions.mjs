@@ -13,6 +13,7 @@ import { OBRA_H } from './obraH.mjs';
 import { OBRA_G } from './obraG.mjs';
 import { OBRA_I } from './obraI.mjs';
 import { OBRA_II } from './obraII.mjs';
+import { OBRA_III } from './obraIII.mjs';
 const cal = (cond, msg) => { if (!cond) throw new Error(msg); };
 const igual = (a, b, msg) => cal(a === b, `${msg}: s'esperava ${JSON.stringify(b)} i hi ha ${JSON.stringify(a)}`);
 
@@ -2252,10 +2253,10 @@ export const COMPROVACIONS = [
     const r0 = await linia();
     cal(/L'arxiu pesa [\d,]+ MB · l'última pujada va trigar [\d,]+ s/.test(r0.text), 'la línia del pes: ' + r0.text);
     igual(r0.taronja + r0.vermell, 0, 'colors amb un arxiu petit');
-    await pagina.evaluate(async () => { (await import('./js/arxiu.js?v=21')).pes.mida = 9e6; });
-    igual((await linia()).taronja, 1, 'taronja a 9 MB');
     await pagina.evaluate(async () => { (await import('./js/arxiu.js?v=21')).pes.mida = 16e6; });
-    igual((await linia()).vermell, 1, 'vermell a 16 MB');
+    igual((await linia()).taronja, 1, 'taronja a 16 MB (15 des de l\'obra III, ACT-840 1)');
+    await pagina.evaluate(async () => { (await import('./js/arxiu.js?v=21')).pes.mida = 26e6; });
+    igual((await linia()).vermell, 1, 'vermell a 26 MB (25 des de l\'obra III, ACT-840 1)');
     await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'); A.pes.mida = A.estat.db.export().length; });
   } },
   { nom: 'sonda (ACT-750 b): desa cada 25 portades o cada minut, no cada 2', sintetic: true, async fes({ pagina }) {
@@ -2579,6 +2580,7 @@ export const COMPROVACIONS = [
   ...OBRA_G,   // l'obra G (Segells Preferents), en fitxer propi
   ...OBRA_I,   // l'obra I (ACT-836, estructura 13), en fitxer propi
   ...OBRA_II,  // l'obra II (ACT-839, ACT-840, ACT-841 4), en fitxer propi
+  ...OBRA_III, // l'obra III (ACT-837, ACT-838, ACT-840 1, ACT-841), en fitxer propi
 
   // ───────── el que no ha de passar mai ─────────
   { bloc: 'obra 4: Parsifal, les òperes per actes (ACT-777)' },

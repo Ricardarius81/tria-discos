@@ -33,6 +33,7 @@ import * as CB from './codibc.js?v=1';
 import * as BR from './branques.js?v=1';
 import * as INF from './info.js?v=1';
 import * as EM from './escoltama.js?v=1';
+import * as ANYS from './anys.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -1091,6 +1092,9 @@ async function llegeixEscoltes() {
     }
     // Només una lectura sencera (les dues comptes) i ja desada al mòbil compta com a bona.
     E.fixaLectura(inici); try { localStorage.setItem(LECTURA, String(inici)); } catch {}
+    // Els fitxers d'any (obra III): primer el recàlcul que els demana (ACT-841 1), després el moviment del mes (ACT-838).
+    // Una estona després (ANYS.ESPERA_MS), per no frenar l'obertura ni la lectura; un sol cop alhora.
+    if (!estat.anysProgramat) { estat.anysProgramat = true; setTimeout(anysAlDia, ANYS.ESPERA_MS); }
   } catch (e) { estat.lbError = e.message; }
   finally { llegint = false; pintaSafata(); }
 }
@@ -1993,7 +1997,7 @@ function fullCabina() {
     </ul></div>`, true);
 }
 
-// El pes de l'arxiu a la vista (ACT-750 c1): taronja a 8 MB, vermell a 15 MB, sense frenar res.
+// El pes de l'arxiu a la vista (ACT-750 c1): taronja i vermell (15 i 25 MB des de l'obra III, ACT-840 1), sense frenar res.
 function liniaPes() {
   const m = A.pes.mida, u = A.pes.pujada; if (!m) return '';
   const color = m >= A.PES_VERMELL ? 'mal' : m >= A.PES_TARONJA ? 'pes-taronja' : '';
@@ -2067,9 +2071,15 @@ async function copiaAra() {
   catch (e) { estat.copiaError = 'no s\'ha pogut fer: ' + e.message; alertaCopia(); avisa('No s\'ha pogut fer la còpia: ' + e.message); }
   finally { copiant = false; if ($('#full').classList.contains('obert') && $('#full .menu-net')) fullCabina(); }
 }
+async function anysAlDia() {
+  try { if (ANYS.calObrir(db())) { const r = await ANYS.recalculaAmbAnys({ avisa }); if (r.fet) avisa('Escoltes recalculades amb els fitxers d\'any.'); }
+        await ANYS.mouMes(); } catch (e) { estat.anysError = e.message; } finally { estat.anysProgramat = false; }
+}
 async function descarregaExcel() {
   try {
-    const b = await X.xlsx(db());
+    // ACT-841 (3): l'Excel descarregat porta les pistes de tots els anys, amb el progrés (cada any, més lent).
+    const t = await ANYS.ambTotsElsAnys(db(), (i, n, any) => avisa(`Excel: afegint les pistes del ${any} (${i} de ${n})…`));
+    let b; try { b = await X.xlsx(t.db); } finally { t.tanca(); }
     const url = URL.createObjectURL(new Blob([b], { type: A.XLSX_MIME }));
     const a = document.createElement('a'); a.href = url; a.download = `la-meva-discoteca ${new Date().toISOString().slice(0, 10)}.xlsx`;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60e3);

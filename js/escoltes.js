@@ -323,6 +323,20 @@ export const calRecalcular = db => !!un(db, 'SELECT 1 AS x FROM scrobble LIMIT 1
   !!un(db, `SELECT 1 AS x FROM escolta s WHERE s.unio IS NULL
             AND EXISTS (SELECT 1 FROM scrobble p WHERE p.escolta_id = s.id) LIMIT 1`));
 
+// ───────── els fitxers d'any (obra III, ACT-841 1) ─────────
+// «anys-limit»: el límit del darrer moviment (tota pista d'un fitxer d'any és d'abans). Un recàlcul sencer, o des d'una pista
+// d'abans d'aquest límit, deixa «anys-per-recalcular» (la més antiga, o «tot»): anys.js obre els fitxers quan hi ha connexió.
+const ANYS_LIMIT = 'anys-limit', ANYS_OBRIR = 'anys-per-recalcular';
+export const posaLimitAnys = (db, lim) => db.run('INSERT OR REPLACE INTO meta (clau, valor) VALUES (?, ?)', [ANYS_LIMIT, lim]);
+export const anysPerRecalcular = db => un(db, 'SELECT valor FROM meta WHERE clau = ?', [ANYS_OBRIR])?.valor ?? null;
+export const netejaAnysPerRecalcular = db => db.run('DELETE FROM meta WHERE clau = ?', [ANYS_OBRIR]);
+function marcaAnys(db, desDe) {
+  const lim = un(db, 'SELECT valor FROM meta WHERE clau = ?', [ANYS_LIMIT])?.valor; if (!lim) return;
+  if (desDe && desDe >= lim) return;
+  const ja = anysPerRecalcular(db), nou = !desDe || ja === 'tot' ? 'tot' : [ja, desDe].filter(Boolean).sort()[0];
+  db.run('INSERT OR REPLACE INTO meta (clau, valor) VALUES (?, ?)', [ANYS_OBRIR, nou]);
+}
+
 // ───────── tornar a calcular les escoltes ─────────
 // Les escoltes que vénen de scrobbles es tornen a calcular senceres des dels scrobbles cada vegada que n'arriben
 // de nous o que es confirma un emparellament. El que Ricard hi ha contestat (context, atenció) i la part de la caixa
@@ -360,7 +374,7 @@ export const desDeEdicions = (db, eds) => {
                     WHERE x.edicio_id IN (${eds.map(() => '?').join(',')})`, eds);
   return r?.m ?? null;
 };
-export const recalcula = (db, { desDe = null } = {}) => {
+export const recalcula = (db, { desDe = null, ambAnys = false } = {}) => {
   const mapa = mapaEmparellaments(db);
   if (desDe && mapa.ambigues.size) { const d = desDeEdicions(db, [...mapa.ambigues]); if (d && d < desDe) desDe = d; }
   const ob = desDe && !calRecalcular(db) ? obertesA(db, desDe) : null;   // null: tot
@@ -539,6 +553,7 @@ export const recalcula = (db, { desDe = null } = {}) => {
     portades += db.getRowsModified();
   }
   db.run('INSERT OR REPLACE INTO meta (clau, valor) VALUES (?, ?)', [MARCA, marcaDelCodi()]);   // ACT-700, ACT-750 (d)
+  if (!ambAnys) marcaAnys(db, desDe);   // obra III (ACT-841 1): si toca pistes que són als fitxers d'any, cal obrir-los
   return { escoltes: n, portades, des: des || null };
 };
 
