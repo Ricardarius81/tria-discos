@@ -491,8 +491,8 @@ export const recalcula = (db, { desDe = null } = {}) => {
     db.run('UPDATE scrobble SET escolta_id = NULL WHERE escolta_id IS NOT NULL');
   }
 
-  const ins = db.prepare(`INSERT INTO escolta (edicio_id, part_id, data_hora, canal, context, atencio, completitud, compte, unio)
-                          VALUES (?, ?, ?, 'App', ?, ?, ?, ?, ?)`);
+  const ins = db.prepare(`INSERT INTO escolta (edicio_id, part_id, data_hora, canal, context, atencio, completitud, compte, unio, origen)
+                          VALUES (?, ?, ?, 'App', ?, ?, ?, ?, ?, 'listenbrainz')`);   // origen: estructura 13 (ACT-840 2)
   const lliga = db.prepare('UPDATE scrobble SET escolta_id = ? WHERE id = ?');
   let n = 0;
   for (const t of trossos) {

@@ -859,3 +859,18 @@ body[data-estil="ricard"] .reixa .disc.seg .coberta{outline:2.5px solid #C9CED6;
 .disc.pref.seg .coberta,
 body[data-estil="ricard"] .reixa .disc.pref.seg .coberta{outline:2.5px dashed #E2B44A; outline-offset:0; box-shadow:0 0 0 2.5px #C9CED6, 0 8px 18px rgba(0,0,0,.5)}
 .foto.segell{border-radius:8px}
+/* obra I (ACT-836 a): a Discos en Rotació, les icones de Pila són cercles plens del color de la Pila, com la tecla play */
+.coberta .ico-pila.plena i.ple{width:24px; height:24px; box-shadow:0 3px 8px rgba(0,0,0,.45)}
+.coberta .ico-pila.plena svg.pf{width:15px; height:15px}
+/* obra I (ACT-836 c): el marc dels segells preferents, de coure amb un fil fosc per fora (abans platejat #C9CED6) */
+.disc.seg .coberta,
+body[data-estil="ricard"] .reixa .disc.seg .coberta{outline:2.5px solid #B87333; outline-offset:0; box-shadow:0 0 0 3.5px #2B1A10, 0 8px 18px rgba(0,0,0,.5), 0 0 14px rgba(184,115,51,.3)}
+.disc.pref.seg .coberta,
+body[data-estil="ricard"] .reixa .disc.pref.seg .coberta{outline:2.5px dashed #E2B44A; outline-offset:0; box-shadow:0 0 0 2.5px #B87333, 0 0 0 3.5px #2B1A10, 0 8px 18px rgba(0,0,0,.5)}
+/* obra I (ACT-836 b): «Info», un botó rodó «i» a dalt a la dreta de la fitxa */
+.fitxa-cap{position:relative}
+.fitxa-cap .cap-txt h3{padding-right:38px}
+.fitxa-cap .info-i{position:absolute; top:0; right:0; width:30px; height:30px; border-radius:50%; border:1.5px solid var(--accent); background:transparent; color:var(--accent); font:italic 700 16px/1 Georgia, serif; display:grid; place-items:center; padding:0; cursor:pointer}
+/* obra I (ACT-836 e): el logo d'un segell preferent, a mà */
+.fila-segell .foto.segell.logo{background:#fff}
+.fila-segell .foto.segell.logo img{object-fit:contain}

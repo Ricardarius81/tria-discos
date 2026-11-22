@@ -11,6 +11,7 @@ import { OBRA_F } from './obraF.mjs';
 import { OBRA_D } from './obraD.mjs';
 import { OBRA_H } from './obraH.mjs';
 import { OBRA_G } from './obraG.mjs';
+import { OBRA_I } from './obraI.mjs';
 const cal = (cond, msg) => { if (!cond) throw new Error(msg); };
 const igual = (a, b, msg) => cal(a === b, `${msg}: s'esperava ${JSON.stringify(b)} i hi ha ${JSON.stringify(a)}`);
 
@@ -1304,7 +1305,7 @@ export const COMPROVACIONS = [
   // ───────── L'Afinació (v1.49, ACT-656 a ACT-686) ─────────
   { bloc: 'L\'Afinació (v1.49, ACT-656 a ACT-686)' },
   { nom: 'afinació (ACT-681, ACT-696, ACT-733): l\'arxiu és a l\'estructura 10, amb Edició.per_afinar, Edició.durada_confirmada i Àlbum.subgeneres', async fes({ consulta }) {
-    igual(consulta('PRAGMA user_version')[0].user_version, 12, 'estructura de l\'arxiu (la 10 des de la ACT-733; la 11 des de la ACT-744, les Piles; la 12, els Segells Preferents, obra G)');
+    igual(consulta('PRAGMA user_version')[0].user_version, 13, 'estructura de l\'arxiu (la 10 des de la ACT-733; la 11 des de la ACT-744, les Piles; la 12, els Segells Preferents, obra G; la 13, obra I)');
     cal(consulta('PRAGMA table_info(album)').some(c => c.name === 'subgeneres'), 'Àlbum no té la columna subgeneres (ACT-733)');
     cal(consulta('PRAGMA table_info(edicio)').some(c => c.name === 'durada_confirmada'), 'Edició no té la columna durada_confirmada (ACT-696)');
     cal(consulta('PRAGMA table_info(edicio)').some(c => c.name === 'per_afinar'), 'Edició no té la columna per_afinar');
@@ -2575,6 +2576,7 @@ export const COMPROVACIONS = [
   ...OBRA_D,   // l'obra D (ACT-815 5), en fitxer propi
   ...OBRA_H,   // l'obra H (ACT-787 a i b), en fitxer propi
   ...OBRA_G,   // l'obra G (Segells Preferents), en fitxer propi
+  ...OBRA_I,   // l'obra I (ACT-836, estructura 13), en fitxer propi
 
   // ───────── el que no ha de passar mai ─────────
   { bloc: 'obra 4: Parsifal, les òperes per actes (ACT-777)' },

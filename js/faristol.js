@@ -286,7 +286,7 @@ function pintaReixa() {
       : `<button class="escoltar" data-escoltar="${d.id}" aria-label="Escoltar ara ${esc(tit)}">▶</button>`);
     return `<div class="disc${prefs.has(d.artista_id) ? ' pref' : ''}${segs.has(d.id) ? ' seg' : ''}">
       <button class="coberta ${d.portada ? 'amb-img' : ''}" data-fitxa="${d.id}" aria-label="Fitxa de ${esc(tit)}">
-        ${d.portada ? IMG(d.portada) : ''}${icoPila(d.id)}<span class="a">${esc(d.art)}</span><span class="t">${esc(tit)}</span><span class="filet"></span>${dur}
+        ${d.portada ? IMG(d.portada) : ''}${icoPila(d.id, true)}<span class="a">${esc(d.art)}</span><span class="t">${esc(tit)}</span><span class="filet"></span>${dur}
       </button>${play}
       <button class="nom-sota" data-fitxa="${d.id}" tabindex="-1"><span><b>${esc(tit)}</b><i>${esc(d.art)}</i></span></button>
       <div class="peu">${part}${tags}</div>
@@ -557,7 +557,11 @@ function pintaArxiu() {
 const PILA = 'tria-pila';
 // ACT-773: la icona de Pila a la cantonada de la portada, quan l'àlbum té una entrada casada sense data_sortida. Es calcula un
 // cop per pintada (estat.enPiles) i es fa servir a Discos en rotació, a l'Historial i a La Prestatgeria.
-const icoPila = edId => { const l = estat.enPiles?.get(edId); return l ? `<span class="ico-pila" data-icopila="${esc(l.map(x => x.nom).join(' · '))}">${l.map(x => `<i title="${esc(x.nom)}">${P.figura(x.nom, estat.colorsPila?.get(x.pila_id))}</i>`).join('')}</span>` : ''; };
+const icoPila = (edId, ple = false) => { const l = estat.enPiles?.get(edId); if (!l) return '';
+  // ACT-836 (a): a Discos en Rotació, un cercle ple del color de la Pila, com la tecla play, amb el dibuix negre o blanc per luminància.
+  const fig = x => { const c = estat.colorsPila?.get(x.pila_id);
+    return ple && c ? `<i class="ple" title="${esc(x.nom)}" style="background:${c};color:${P.tintaSobre(c)}">${P.figura(x.nom)}</i>` : `<i title="${esc(x.nom)}">${P.figura(x.nom, c)}</i>`; };
+  return `<span class="ico-pila${ple ? ' plena' : ''}" data-icopila="${esc(l.map(x => x.nom).join(' · '))}">${l.map(fig).join('')}</span>`; };
 const edDe = id => D.edicio(db(), +id) || D.fitxa(db(), +id);
 const darreraPila = ps => { let v = null; try { v = +localStorage.getItem(PILA); } catch {} return ps.find(p => p.id === v) || ps[0] || null; };
 function fullNovaPila(repinta = false) {
@@ -1291,6 +1295,7 @@ function fullFitxa(d) {
       ? `<button class="afinar dalt marcat per-afinar" data-jaafinat="${d.id}">Per afinar<small>marcat ${esc(fa(d.per_afinar))} · toca per «Ja està afinat»</small></button>`
       : `<button class="afinar dalt" data-perafinar="${d.id}">Per afinar</button>`}
     <div class="fitxa-cap">
+      <button class="info-i" data-info="${d.id}" aria-label="Info: la Wikipedia, MusicBrainz, Discogs, RYM i AllMusic" title="Info">i</button>
       <div class="fitxa-portada cap-cob">${d.portada ? IMG(d.portada) : `<span class="inicials">${esc(inicials(d.art))}</span>`}</div>
       <div class="cap-txt">
         <h3>${esc(d.titol)} <button class="sf-link" data-canvianoms="${d.id}">canvia</button></h3><p class="cap-art">${esc(d.art)}</p>
@@ -1332,8 +1337,7 @@ function blocObra5(d) {
   return `<div class="canals fitxa-obra5" style="margin-top:12px">
     ${pid ? `<button data-vesartista="${pid}">Ves a l'artista <small>${esc(d.art)} · anterior i següent</small></button>`
           : `<button data-triaseguent="${d.id}">Tria el proper de ${esc(d.art)} <small>el següent o l'anterior; el fa preferent</small></button>`}
-    <button data-copiade="${d.id}">Copia d'un altre disc <small>gènere, subgèneres, llenguatge, formació i tags de l'àlbum</small></button>
-    <button data-info="${d.id}">Info <small>la Wikipedia, MusicBrainz, Discogs, RYM i AllMusic</small></button></div>`;
+    <button data-copiade="${d.id}">Copia d'un altre disc <small>gènere, subgèneres, llenguatge, formació i tags de l'àlbum</small></button></div>`;
 }
 // «Info» (ACT-815, 6): A, els enllaços; B, la fitxa de la Wikipedia (en anglès) i de MusicBrainz, desada per veure-la sense
 // connexió. Es busca només quan es toca «Busca la fitxa» o quan no n'hi ha cap de desada i hi ha xarxa.
@@ -1837,10 +1841,13 @@ function pintaSegells() {
     const r = s.rot, cob = (r || s.darrer)?.portada || null;
     const linia = r ? `Ara estudies <em>${esc(r.titol)}</em> · ${esc(r.art)}` : s.proper_titol ? `El proper: <em>${esc(s.proper_titol)}</em>${s.proper_artista ? ' · ' + esc(s.proper_artista) : ''}`
       : s.darrer ? `L'últim: <em>${esc(s.darrer.titol)}</em>` : 'Encara no ha sonat res seu';
+    // ACT-836 (e): amb logo (segell_preferent.retrat), el logo a l'esquerra i la portada del disc del segell al costat, com la
+    // fila de l'artista; sense logo, com abans: la portada a l'esquerra.
+    const foto = s.retrat || cob, alCostat = s.retrat && cob ? `<span class="cob-fila">${IMG(cob)}</span>` : '';
     return `<div class="fila fila-segell" data-filasegell="${s.id}">
       <button class="fila-cap" data-segell="${s.id}">
-        <span class="foto quadrat segell ${r ? 'viu' : ''}">${esc(inicials(s.nom))}${cob ? IMG(cob) : ''}</span>
-        <span class="fila-txt"><span class="nom">${esc(s.nom)}</span><span class="estat">${linia}</span></span>
+        <span class="foto quadrat segell ${s.retrat ? 'logo' : ''} ${r ? 'viu' : ''}">${esc(inicials(s.nom))}${foto ? IMG(foto) : ''}</span>
+        <span class="fila-txt"><span class="nom">${esc(s.nom)}</span><span class="estat">${linia}</span></span>${alCostat}
       </button></div>`;
   }).join('') || `<p class="subtitol" style="margin:12px 0 0">Encara no hi ha cap segell preferent.</p>`;
   I.omple(caixa);
@@ -1869,7 +1876,24 @@ function fullSegell(id, veins = null) {
       <button data-segpropma="${s.id}">${s.proper_titol ? 'Canvia el proper' : 'Tria el proper'} <small>a mà: artista i títol</small></button>
     </div>
     ${v}
+    <div class="canals" style="margin-top:12px">
+      <button data-seglogo="${s.id}">${s.retrat ? 'Canvia el logo' : 'Puja el logo'} <small>es desa al teu Drive; cap font el porta sol</small></button>
+      ${s.retrat ? `<button data-segtreulogo="${s.id}">Treu el logo</button>` : ''}
+    </div>
+    <input type="file" id="inLogo" accept="image/*" hidden>
     <div class="barra-accions" style="position:static;padding:14px 0 0"><button class="bt discret" data-segtreu="${s.id}">Treu-lo de Segells Preferents</button></div>`);
+  $('#inLogo').onchange = e => { const f = e.target.files?.[0]; if (f) pujaLogo(s, f); };
+}
+// El logo d'un segell pujat a mà (ACT-836 e): reduït, al Drive (carpeta «Retrats», com les fotos d'artista) i guardat al mòbil.
+async function pujaLogo(s, fitxer) {
+  if (!A.tePermis()) { avisa('Per pujar un logo cal estar connectat amb el Drive.'); return; }
+  avisa('Pujant el logo…');
+  try {
+    const blob = await I.redueix(fitxer);
+    const ref = 'drive:' + await A.pujaRetrat('Segell ' + s.nom, blob);
+    await I.guardaJa(ref, blob);
+    tancaFull(); fes(SG.posaLogo(s.id, ref), 'Logo de ' + s.nom + ' desat');
+  } catch (e) { avisa('No s\'ha pogut pujar el logo: ' + e.message); }
 }
 function fullProperSegell(id) {
   const s = SG.segellsPreferents(db()).find(x => x.id === id); if (!s) return;
@@ -1886,12 +1910,24 @@ function fullAfegeixSegell() {
     <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-desasegell="1">Afegeix-lo</button></div>`);
   setTimeout(() => $('#inSegell')?.focus(), 50);
 }
+// ACT-836 (d): el desplegable porta només els Segells Preferents; «Un altre» escriu un segell qualsevol només en aquesta
+// edició, i la casella «i fes-lo preferent» a més el crea a segell_preferent (entra a dalt). Consequència acceptada: un segell
+// no preferent pot quedar escrit de dues maneres en discos diferents sense avís.
 function fullSegellFitxa(id) {
-  const sg = SG.segellDe(db(), id) || '';
+  const sg = SG.segellDe(db(), id) || '', prefs = SG.nomsPreferents(db());
+  const casa = prefs.find(n => E.norm(n) === E.norm(sg)), altre = !!sg && !casa;
   obreFull(`<h3>Segell</h3>
     <p>El de l'edició. Mai el posa la màquina per deducció: tu, o la tasca de Bandcamp quan la pàgina és la d'un segell.</p>
-    <label class="camp"><span>Segell</span><input id="inSegFitxa" type="text" autocomplete="off" value="${esc(sg)}"></label>
+    <label class="camp"><span>Segell</span><select id="selSegFitxa">
+      <option value=""${!sg ? ' selected' : ''}>cap</option>
+      ${prefs.map(n => `<option value="${esc(n)}"${n === casa ? ' selected' : ''}>${esc(n)}</option>`).join('')}
+      <option value="__altre"${altre ? ' selected' : ''}>Un altre…</option></select></label>
+    <div id="segAltre"${altre ? '' : ' hidden'}>
+      <label class="camp"><span>Un altre</span><input id="inSegFitxa" type="text" autocomplete="off" value="${altre ? esc(sg) : ''}"></label>
+      <label class="camp" style="display:flex;gap:8px;align-items:center"><input id="chkSegPref" type="checkbox"><span>i fes-lo preferent <small>entra a dalt de Segells Preferents</small></span></label>
+    </div>
     <div class="barra-accions" style="position:static;padding:0"><button class="bt principal" data-desasegellfitxa="${id}">Desa'l</button></div>`);
+  $('#selSegFitxa').onchange = e => { const a = e.target.value === '__altre'; $('#segAltre').hidden = !a; if (a) setTimeout(() => $('#inSegFitxa')?.focus(), 30); };
   tornaA(id);
 }
 
@@ -2514,10 +2550,14 @@ document.addEventListener('click', e => {
   if (d.segdesaproper) { const t_ = $('#inSegTit').value.trim(); if (!t_) { avisa('Cal el títol.'); return; }
     tancaFull(); fes(SG.posaProperSegell(+d.segdesaproper, $('#inSegArt').value.trim(), t_), `El proper: ${t_}`); return; }
   if (d.segtreuproper) { tancaFull(); fes(SG.posaProperSegell(+d.segtreuproper, null, null), 'Nota del proper treta'); return; }
+  if (d.seglogo) { $('#inLogo')?.click(); return; }
+  if (d.segtreulogo) { tancaFull(); fes(SG.posaLogo(+d.segtreulogo, null), 'Logo tret'); return; }
   if (d.segtreu) { tancaFull(); fes(SG.treuSegell(+d.segtreu), 'Segell tret de Segells Preferents'); return; }
   if (d.segellfitxa) { fullSegellFitxa(+d.segellfitxa); return; }
-  if (d.desasegellfitxa) { const id = +d.desasegellfitxa, n = $('#inSegFitxa').value.trim();
-    fes(SG.canviaSegell(id, n), n ? `Segell: ${n}` : 'Segell tret'); const x = rot(id); if (x) fullFitxa(x); return; }
+  if (d.desasegellfitxa) { const id = +d.desasegellfitxa, v = $('#selSegFitxa').value, altre = v === '__altre';
+    const n = altre ? $('#inSegFitxa').value.trim() : v, fesPref = altre && !!n && $('#chkSegPref').checked;
+    fes(db => { SG.canviaSegell(id, n)(db); if (fesPref) SG.afegeixSegell(n)(db); },
+      n ? `Segell: ${n}${fesPref ? ' · afegit a Segells Preferents' : ''}` : 'Segell tret'); const x = rot(id); if (x) fullFitxa(x); return; }
   if (d.desaartista) { const n = $('#inNom').value.trim(); if (!n) { avisa('Cal un nom.'); return; }
     tancaFull(); fes(D.afegeixPreferent(n), r => r.jaHiEra ? n + ' ja hi era.' : n + ' afegit a Artistes Preferents'); return; }
   if (t.id === 'btOrdena') {

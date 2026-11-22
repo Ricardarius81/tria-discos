@@ -45,7 +45,7 @@ function edicionsPerSegell(db) {
 
 export function segellsPreferents(db) {
   const per = edicionsPerSegell(db);
-  return files(db, 'SELECT id, nom, ordre, proper_artista, proper_titol, discogs_id FROM segell_preferent ORDER BY ordre, id').map(s => {
+  return files(db, 'SELECT id, nom, ordre, proper_artista, proper_titol, discogs_id, retrat FROM segell_preferent ORDER BY ordre, id').map(s => {
     const eds = per.get(norm(s.nom)) || [];
     const rot = eds.find(e => e.rotacio_actual) || null;
     const darrer = eds.filter(e => e.darrera).sort((a, b) => (a.darrera < b.darrera ? 1 : -1))[0] || null;
@@ -67,6 +67,10 @@ export const afegeixSegell = nom => db => {
   db.run('INSERT INTO segell_preferent (nom, ordre, data_alta) VALUES (?, ?, ?)', [nom, o, new Date().toISOString()]);
   return { nom };
 };
+// ACT-836 (d): els noms dels Segells Preferents, en l'ordre de la llista, per al desplegable de la fitxa.
+export const nomsPreferents = db => files(db, 'SELECT nom FROM segell_preferent ORDER BY ordre, id').map(r => r.nom);
+// ACT-836 (e): el logo, només a mà (segell_preferent.retrat, estructura 13). null el treu.
+export const posaLogo = (id, ref) => db => db.run('UPDATE segell_preferent SET retrat = ? WHERE id = ?', [ref || null, id]);
 export const treuSegell = id => db => db.run('DELETE FROM segell_preferent WHERE id = ?', [id]);
 export const posaProperSegell = (id, artista, titol) => db => db.run('UPDATE segell_preferent SET proper_artista = ?, proper_titol = ? WHERE id = ?', [artista || null, titol || null, id]);
 export const canviaSegell = (edicioId, nom) => db => db.run('UPDATE edicio SET segell = ? WHERE id = ?', [String(nom || '').trim() || null, edicioId]);

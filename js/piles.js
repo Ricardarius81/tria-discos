@@ -147,6 +147,12 @@ export function sortides(db) {
 // Drive, falta omplir i alarma). Trac un terç més gruixut (1.6 → 2.1, ACT-814). Camp: Pila.id (l'ordre de piles()).
 export const COLORS_PILA = ['#3f9d5a', '#3d7fd6', '#8f6cc8', '#1d9a9a', '#7d8b2b', '#5d6e84', '#8c6a46', '#2f5aa3'];
 export function colorsPiles(db) { const m = new Map(); piles(db).forEach((p, i) => m.set(p.id, COLORS_PILA[i % COLORS_PILA.length])); return m; }
+// ACT-836 (a): el color del dibuix sobre un fons ple: el que fa més contrast (negre als clars, blanc als foscos: blau marí, pissarra, marró).
+export function tintaSobre(hex) {
+  const l = [1, 3, 5].map(i => parseInt(String(hex).slice(i, i + 2), 16) / 255).map(v => v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+  const y = 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2];
+  return (y + 0.05) / 0.05 >= 1.05 / (y + 0.05) ? '#000' : '#fff';
+}
 export const figura = (nom, color = null) => { const s = figura0(nom); return color ? s.replace('<svg ', `<svg style="color:${color}" `) : s; };
 
 // Crear i treure Piles (§7.7, 18-10, i Hoja de obra F): la nova tria el seu context (Pila.contextos) i va al final

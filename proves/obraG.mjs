@@ -23,7 +23,7 @@ export const OBRA_G = [
   { nom: 'segells (7.2, 7.8): «Segell» a la fitxa desa Edició.segell; un disc en rotació d\'un segell preferent porta el marc platejat, i la fila del segell diu «Ara estudies»', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
     const id = await posa(pagina, 'Banc Artista G', 'Banc Disc G'); await esperaDesat(); await reobre(pagina);
     await pagina.locator(`[data-fitxa="${id}"]`).first().click(); await pagina.waitForSelector('#full.obert');
-    await pagina.click(`#full [data-segellfitxa="${id}"]`); await pagina.fill('#inSegFitxa', 'Home Normal');
+    await pagina.click(`#full [data-segellfitxa="${id}"]`); await pagina.selectOption('#selSegFitxa', 'Home Normal');   // obra I (ACT-836 d): el desplegable dels preferents
     await pagina.click(`#full [data-desasegellfitxa="${id}"]`); await esperaDesat();
     igual(consulta(`SELECT segell FROM edicio WHERE id = ${id}`)[0]?.segell, 'Home Normal', 'Edició.segell');
     await reobre(pagina);

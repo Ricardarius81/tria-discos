@@ -274,6 +274,16 @@ export const MIGRACIONS = [
     ('Past Inside The Present', 4, 1558852, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     ('Dragon''s Eye Recordings', 5, 80927, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
     ('A Strangely Isolated Place', 6, 307352, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+  `,
+  // v13 · obra I (v1.57, ACT-836 e, ACT-840 2), una sola estructura per a les dues columnes:
+  //   segell_preferent.retrat: el logo del segell, només a mà («drive:<id>», com artista.retrat); buit = sense logo.
+  //   escolta.origen: 'listenbrainz' (feta pel recàlcul amb pistes) · 'a mà' (apuntada a mà: física o d'streaming).
+  //     Cal perquè, quan les pistes velles surtin a un fitxer d'any (ACT-838), «sense pistes» ja no voldrà dir «a mà» (ACT-837).
+  //     En migrar: les que tenen pistes, 'listenbrainz'; les que no, 'a mà' (fins ara, les físiques, registrades a mà).
+  `
+  ALTER TABLE segell_preferent ADD COLUMN retrat TEXT;
+  ALTER TABLE escolta ADD COLUMN origen TEXT;
+  UPDATE escolta SET origen = CASE WHEN id IN (SELECT escolta_id FROM scrobble WHERE escolta_id IS NOT NULL) THEN 'listenbrainz' ELSE 'a mà' END;
   `
 ];
 
