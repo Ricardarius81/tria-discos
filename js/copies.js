@@ -47,11 +47,15 @@ export const treuNota = db => db.run('DELETE FROM meta WHERE clau = ?', [NOTA]);
 export function recomptes(db) {
   const n = A.recomptes();
   n.escolta_fisica = db.exec(`SELECT COUNT(*) FROM escolta WHERE canal IN (${FISICS.map(f => `'${f}'`).join(', ')})`)[0].values[0][0];
+  // escolta_ma (22/11, Ricard: «OK también las de streaming»): les escoltes d'streaming apuntades a mà (Escolta.origen 'a mà',
+  // Escolta.canal que no és CD ni vinil). El recàlcul no les pot refer, com les físiques; sense recompte propi, en desaparèixer
+  // no sonaria res. Una còpia anterior sense n_escolta_ma no compara (com les fetes a mà, ACT-569).
+  n.escolta_ma = db.exec(`SELECT COUNT(*) FROM escolta WHERE origen = 'a mà' AND canal NOT IN (${FISICS.map(f => `'${f}'`).join(', ')})`)[0].values[0][0];
   n.scrobble += N.pistesAlsAnys(db);   // obra III (ACT-841 2): el TOTAL de pistes, principal més fitxers d'any
   return n;
 }
-const VERMELLES = ['scrobble', 'escolta_fisica'], DE_NOTA = ['edicio', 'album', 'artista'];
-export const NOMS = { scrobble: 'pistes de ListenBrainz', escolta_fisica: 'escoltes físiques', edicio: 'edicions', album: 'àlbums', artista: 'artistes' };
+const VERMELLES = ['scrobble', 'escolta_fisica', 'escolta_ma'], DE_NOTA = ['edicio', 'album', 'artista'];
+export const NOMS = { scrobble: 'pistes de ListenBrainz', escolta_fisica: 'escoltes físiques', escolta_ma: 'escoltes d\'streaming apuntades a mà', edicio: 'edicions', album: 'àlbums', artista: 'artistes' };
 
 const dataDe = f => PATRO.exec(f.name)?.[1] || null;
 export const darreraDelDrive = copies => copies.map(dataDe).filter(Boolean).sort().pop() || null;

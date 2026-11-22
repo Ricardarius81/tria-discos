@@ -34,6 +34,7 @@ import * as BR from './branques.js?v=1';
 import * as INF from './info.js?v=1';
 import * as EM from './escoltama.js?v=1';
 import * as ANYS from './anys.js?v=1';
+import * as PG from './progres.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -87,6 +88,7 @@ const estat = { superficie: 'entrada', sub: 'rot', ordena: false, ordreTmp: null
 
 // ───────── avisos, fulls, desat ─────────
 function avisa(txt, desfes) {
+  PG.treu();
   $('#avisTxt').textContent = txt; $('#avis').classList.add('obert');
   $('#avisBt').style.display = desfes ? 'inline' : 'none'; estat.ultima = desfes || null;
   clearTimeout(window._t); window._t = setTimeout(() => $('#avis').classList.remove('obert'), 6500);
@@ -2077,9 +2079,13 @@ async function anysAlDia() {
 }
 async function descarregaExcel() {
   try {
-    // ACT-841 (3): l'Excel descarregat porta les pistes de tots els anys, amb el progrés (cada any, més lent).
-    const t = await ANYS.ambTotsElsAnys(db(), (i, n, any) => avisa(`Excel: afegint les pistes del ${any} (${i} de ${n})…`));
+    // ACT-841 (3): l'Excel descarregat porta les pistes de tots els anys, amb una barra de progrés (22/11, Ricard: «Mejor
+    // la barra»): cada pas és un any baixat; el darrer, el fitxer. Cada any, més lent.
+    let nAnys = 0;
+    const t = await ANYS.ambTotsElsAnys(db(), (i, n, any) => { nAnys = n; PG.pinta(i - 1, n + 1, `Excel: afegint les pistes del ${any} (${i} de ${n})…`); });
+    PG.pinta(nAnys, nAnys + 1, 'Excel: preparant el fitxer…');
     let b; try { b = await X.xlsx(t.db); } finally { t.tanca(); }
+    PG.pinta(1, 1, 'Excel: preparant el fitxer…'); await new Promise(r => setTimeout(r, 300));   // que el 100 % es vegi
     const url = URL.createObjectURL(new Blob([b], { type: A.XLSX_MIME }));
     const a = document.createElement('a'); a.href = url; a.download = `la-meva-discoteca ${new Date().toISOString().slice(0, 10)}.xlsx`;
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60e3);

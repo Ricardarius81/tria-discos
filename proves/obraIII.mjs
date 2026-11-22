@@ -100,4 +100,40 @@ export const OBRA_III = [
     igual(r.prog.length, Object.keys(r.prog).length, 'el progrés');
     cal(r.prog.length >= 2, 'el progrés, un pas per any: ' + JSON.stringify(r.prog));
   } },
+  { nom: 'Excel (ACT-841 3; 22/11, Ricard: «Mejor la barra»): «Descarrega l\'Excel» pinta una barra de progrés que avança any a any fins al 100 %, i s\'amaga en acabar', sintetic: true, async fes({ pagina }) {
+    await pagina.evaluate(() => { window.__barra = []; const av = document.getElementById('avis');
+      new MutationObserver(() => { const b = document.getElementById('avisBarra'), i = b?.querySelector('i');
+        if (i && b.style.display !== 'none' && window.__barra.at(-1) !== i.style.width) window.__barra.push(i.style.width); })
+        .observe(av, { attributes: true, childList: true, subtree: true, attributeFilter: ['style', 'class'] }); });
+    await pagina.click('#btAjustos'); await pagina.waitForTimeout(300);
+    await Promise.all([pagina.waitForEvent('download', { timeout: 15000 }), pagina.click('[data-excel]')]);
+    const r = await pagina.evaluate(() => ({ passos: window.__barra, amagada: document.getElementById('avisBarra')?.style.display === 'none', txt: document.getElementById('avisTxt').textContent }));
+    await pagina.click('[data-tornafull]').catch(() => {});
+    const pct = r.passos.map(w => parseFloat(w));
+    cal(pct.length >= 3, 'la barra havia d\'avançar any a any (com a mínim 0 %, un any i 100 %): ' + JSON.stringify(r.passos));
+    cal(pct.every((v, k) => !k || v >= pct[k - 1]), 'la barra no pot anar enrere: ' + JSON.stringify(r.passos));
+    igual(r.passos.at(-1), '100%', 'el darrer pas de la barra');
+    cal(r.amagada, 'en acabar, la barra s\'amaga (l\'avís diu «' + r.txt + '»)');
+  } },
+  { nom: 'alarma de les còpies (22/11, Ricard: «OK también las de streaming»): el recompte escolta_ma compta les escoltes d\'streaming apuntades a mà (Escolta.origen, Escolta.canal); si en desapareix una, sona la vermella', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
+    const r = await pagina.evaluate(async () => {
+      const A = await import('./js/arxiu.js?v=21'), C = await import('./js/copies.js?v=6'), M = await import('./js/escoltama.js?v=1');
+      const ed = A.estat.db.exec('SELECT id FROM edicio ORDER BY id LIMIT 1')[0].values[0][0];
+      let st, cd; await A.canvia(db => {
+        st = M.apunta({ edicioId: ed, canal: 'amazon', inici: new Date(Date.now() - 5 * 86400e3), forca: true })(db);
+        cd = M.apunta({ edicioId: ed, canal: 'CD', inici: new Date(Date.now() - 6 * 86400e3), forca: true })(db);
+      });
+      const n1 = C.recomptes(A.estat.db).escolta_ma;
+      const c1 = await C.fes();
+      await A.canvia(db => db.run('DELETE FROM escolta WHERE id = ?', [st.id]));
+      const c2 = await C.fes();
+      return { n1, c1: c1.feta, vermelles: (c2.vermelles || []).map(v => v.taula), feta2: c2.feta, nom: C.NOMS.escolta_ma };
+    });
+    await esperaDesat();
+    igual(r.n1, consulta("SELECT COUNT(*) AS n FROM escolta WHERE origen = 'a mà' AND canal NOT IN ('CD', 'vinil')")[0].n + 1, 'escolta_ma = les d\'streaming a mà (abans d\'esborrar-ne una)');
+    cal(r.c1 && r.feta2, 'les dues còpies s\'havien de fer: ' + JSON.stringify(r));
+    cal(r.vermelles.includes('escolta_ma'), 'la vermella havia de sonar per escolta_ma: ' + JSON.stringify(r.vermelles));
+    cal(!r.vermelles.includes('escolta_fisica'), 'la del CD no s\'ha tocat, escolta_fisica no baixa: ' + JSON.stringify(r.vermelles));
+    cal(typeof r.nom === 'string' && r.nom.length > 0, 'el nom de l\'avís per a escolta_ma');
+  } },
 ];

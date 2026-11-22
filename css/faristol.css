@@ -204,6 +204,8 @@ nav.peu button[aria-current="page"]{color:var(--os); border-top-color:var(--acce
   box-shadow:0 10px 30px rgba(0,0,0,.45);
 }
 .avis.obert{display:flex}
+.avis-barra{position:absolute; left:0; right:0; bottom:0; height:4px; background:rgba(42,36,26,.14); display:none}
+.avis-barra i{display:block; height:100%; width:0; background:var(--accent-2); transition:width .25s ease}
 .avis button{margin-left:auto; background:none; border:0; color:#7A5E12; font-size:13px; cursor:pointer;
   font-family:var(--sans); text-decoration:underline; white-space:nowrap}
 /* ---------- bastida ---------- */
