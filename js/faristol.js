@@ -35,6 +35,7 @@ import * as INF from './info.js?v=1';
 import * as EM from './escoltama.js?v=1';
 import * as ANYS from './anys.js?v=1';
 import * as PG from './progres.js?v=1';
+import * as O4 from './obra4.js?v=1';
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -689,9 +690,14 @@ function pintaAgrupacions() {
       <span class="htxt"><span class="htit">${esc(l.nom)}</span><span class="hart">${l.n === 1 ? 'una cançó' : l.n + ' cançons'}</span>
         <span class="hmeta">${l.darrera ? 'l\'última, ' + esc(quan(l.darrera)) : 'encara no ha sonat'}</span></span>
       <span class="m">${textDurLlista(l)}</span></button>`;
-  caixa.innerHTML = `<h2 class="ag-cap">Grups</h2>${gs.map(filaGrup).join('') || '<p class="subtitol">Encara no hi ha cap grup. Es fa des de la fitxa d\'un disc: «agrupa\'l amb…».</p>'}
-    <h2 class="ag-cap">Llistes</h2>${ls.map(filaLlista).join('') || '<p class="subtitol">Encara no hi ha cap llista. Es fa des de la safata, amb les cançons soltes d\'una sessió: «Això és una llista».</p>'}
-    ${ls.some(l => l.incompleta) ? '<p class="subtitol" style="font-size:12px;margin:10px 0 0">Una durada amb «+» és incompleta: alguna cançó va arribar sense durada.</p>' : ''}`;
+  // Obra IV (b): dues subpantalles, com L'Aparador, perquè les llistes no quedin enterrades sota els grups. La darrera
+  // triada es recorda al mòbil (obra4.js).
+  const v = O4.agSub();
+  caixa.innerHTML = `<div class="apar-tabs ag-tabs" role="tablist">${O4.SUBS_AGR.map(([k, n]) =>
+      `<button id="agtab-${k}" role="tab" aria-selected="${v === k}" data-agsub="${k}">${n}</button>`).join('')}</div>
+    <div class="apanell ${v === 'disc' ? 'activa' : ''}" id="ag-disc">${gs.map(filaGrup).join('') || '<p class="subtitol">Encara no hi ha cap grup. Es fa des de la fitxa d\'un disc: «agrupa\'l amb…».</p>'}</div>
+    <div class="apanell ${v === 'll' ? 'activa' : ''}" id="ag-ll">${ls.map(filaLlista).join('') || '<p class="subtitol">Encara no hi ha cap llista. Es fa des de la safata, amb les cançons soltes d\'una sessió: «Això és una llista».</p>'}
+    ${ls.some(l => l.incompleta) ? '<p class="subtitol" style="font-size:12px;margin:10px 0 0">Una durada amb «+» és incompleta: alguna cançó va arribar sense durada.</p>' : ''}</div>`;
   I.omple(caixa);
 }
 // La fitxa d'una llista (ACT-635): les cançons en ordre, canviar-li el nom, treure'n una i esborrar-la. Sense ▶: viu fora.
@@ -741,12 +747,18 @@ function blocLlista(c, solta) {
   const n = new Set(s.resta.map(x => x.recording_msid)).size;
   if (estat.nomLlistaDe === clau) return h + `<div class="sf-nova-llista"><label class="camp"><span>Nom de la llista</span>
       <input id="inLlista" type="text" autocomplete="off" placeholder="p. ex. AA Händel" value="${esc(estat.nomLlistaTxt || '')}"></label>
+      <div class="sf-chips sug-llista" id="sugLlista">${chipsSugLlista()}</div>
       <div class="sf-chips"><button class="principal" data-sfllistanova="${clau}">Desa-la</button><button class="mes" data-sfllistaobre="">Deixa-ho</button></div></div>`;
   const p = s.proposta;
   const altra = `<button class="${p ? 'mes' : ''}" data-sfllistaobre="${clau}">${p ? 'No: és una altra llista' : 'Això és una llista'}</button>`;
   return h + `<div class="sf-chips sf-llistes">${p ? `<button class="principal" data-sfllistasi="${clau}|${p.id}">${p.continua ? 'Afegeix-les a ' + esc(p.nom) : 'Sí, és ' + esc(p.nom)}${p.noves ? ` · s'hi ${p.noves === 1 ? 'afegeix una cançó' : 'afegeixen ' + p.noves + ' cançons'}` : ''}</button>` : ''}${altra}</div>
     ${p || n < 2 ? '' : `<p class="sf-pre" style="margin-top:4px">${n} cançons soltes en aquesta sessió.</p>`}`;
 }
+// Obra IV (a): les llistes que ja hi ha (llista.nom) que contenen el que s'escriu; un toc posa el nom. Només es repinta
+// aquesta tira, no la safata, per no perdre el focus a cada tecla.
+const chipsSugLlista = () => O4.suggerimentsLlista(L.llistes(db()), estat.nomLlistaTxt || '')
+  .map(n => `<button class="mes" data-sugllista="${esc(n)}">${esc(n)}</button>`).join('');
+function pintaSugLlista() { const c = $('#sugLlista'); if (c) c.innerHTML = chipsSugLlista(); }
 // Les targetes d'una clau (ACT-738): la que comença amb aquesta pista i les que la segueixen, no tota la història.
 const tgDe = clau => E.targetesDes(db(), +String(clau).replace(/^[td]/, '').split(':')[0]);
 const targetaDe = clau => tgDe(clau).find(x => x.clau === +clau);
@@ -1306,6 +1318,7 @@ function fullFitxa(d) {
       <div class="fitxa-portada cap-cob">${d.portada ? IMG(d.portada) : `<span class="inicials">${esc(inicials(d.art))}</span>`}</div>
       <div class="cap-txt">
         <h3>${esc(d.titol)} <button class="sf-link" data-canvianoms="${d.id}">canvia</button></h3><p class="cap-art">${esc(d.art)}</p>
+        ${botoPrefCap(d)}
         <div class="cap-ed"><span class="min ${d.min ? '' : 'falta'}">${d.min ? d.min + '′' : 'falta la durada'}</span><button class="sf-link" data-durada="${d.id}">canvia</button><br>
           Edició <button class="sf-link" data-canviaedicio="${d.id}">${edicio}</button>
           <br>Segell <button class="sf-link" data-segellfitxa="${d.id}">${esc(SG.segellDe(db(), d.id) || 'cap')} · canvia'l</button>
@@ -1337,6 +1350,14 @@ function fullFitxa(d) {
   // La cadena de la fitxa (ACT-742, 7): les fulles que s'obren des d'aquí són a pantalla completa, i en recarregar l'app
   // aquesta fitxa es torna a obrir (ACT-743).
   $('#full').dataset.cadena = d.id; recordaPantalla();
+}
+// Obra IV (e): el botó propi de preferent, a la capçalera, fora de la quadrícula de vuit (ACT-734). «＋ Preferent» el fa
+// preferent (preferent.artista_id) i la fitxa es queda oberta; si ja ho és, «★ Preferent» porta a la seva pantalla.
+function botoPrefCap(d) {
+  if (!d.artista_id) return '';
+  const pid = FX.preferentDe(db(), d.artista_id);
+  return pid ? `<button class="pref-cap ja" data-prefja="${pid}" aria-label="${esc(d.art)} és preferent: ves a l'artista">★ Preferent</button>`
+             : `<button class="pref-cap" data-prefcap="${d.id}|${d.artista_id}" aria-label="Afegeix ${esc(d.art)} a Artistes Preferents">＋ Preferent</button>`;
 }
 // Obra 5 (ACT-771, ACT-772): l'artista i copiar. Preferent → «Ves a l'artista»; no preferent → «Tria el següent de X».
 function blocObra5(d) {
@@ -1864,7 +1885,14 @@ function fullProper(id) {
 function pintaSegells() {
   const caixa = $('#segells'); if (!caixa) return;
   let ss; try { ss = SG.segellsPreferents(db()); } catch { caixa.innerHTML = ''; return; }
-  caixa.innerHTML = ss.map(s => {
+  // Obra IV (d): l'ordre triat (obra4.js); només Manual s'ordena a mà, com els Artistes Preferents (ACT-775).
+  if (estat.ordenaSeg && estat.ordreSegTmp) ss = estat.ordreSegTmp.map(id => ss.find(s => s.id === id)).filter(Boolean);
+  else ss = O4.ordenaSegells(ss);
+  const manualSeg = O4.ordreSeg() === 'manual', selS = $('#ordreSeg');
+  if (selS && selS.value !== O4.ordreSeg()) selS.value = O4.ordreSeg();
+  if ($('#btOrdenaSeg')) $('#btOrdenaSeg').hidden = !manualSeg && !estat.ordenaSeg;
+  caixa.classList.toggle('ordenant', !!estat.ordenaSeg);
+  caixa.innerHTML = ss.map((s, i) => {
     const r = s.rot, cob = (r || s.darrer)?.portada || null;
     const linia = r ? `Ara estudies <em>${esc(r.titol)}</em> · ${esc(r.art)}` : s.proper_titol ? `El proper: <em>${esc(s.proper_titol)}</em>${s.proper_artista ? ' · ' + esc(s.proper_artista) : ''}`
       : s.darrer ? `L'últim: <em>${esc(s.darrer.titol)}</em>` : 'Encara no ha sonat res seu';
@@ -1875,7 +1903,10 @@ function pintaSegells() {
       <button class="fila-cap" data-segell="${s.id}">
         <span class="foto quadrat segell ${s.retrat ? 'logo' : ''} ${r ? 'viu' : ''}">${esc(inicials(s.nom))}${foto ? IMG(foto) : ''}</span>
         <span class="fila-txt"><span class="nom">${esc(s.nom)}</span><span class="estat">${linia}</span></span>${alCostat}
-      </button></div>`;
+      </button>${estat.ordenaSeg ? `<span class="mou">
+        <button data-mouseg="${i}:-1" aria-label="Amunt" ${i === 0 ? 'disabled' : ''}>▲</button>
+        <button data-mouseg="${i}:1" aria-label="Avall" ${i === ss.length - 1 ? 'disabled' : ''}>▼</button></span>
+        <button class="nansa" aria-label="Arrossega ${esc(s.nom)}">⠿</button>` : ''}</div>`;
   }).join('') || `<p class="subtitol" style="margin:12px 0 0">Encara no hi ha cap segell preferent.</p>`;
   I.omple(caixa);
 }
@@ -2614,6 +2645,18 @@ document.addEventListener('click', e => {
     const ids = estat.ordreTmp; estat.ordena = false; estat.ordreTmp = null; t.textContent = 'Ordena la llista'; t.setAttribute('aria-pressed', 'false');
     fes(D.ordenaPreferents(ids), 'Ordre desat'); return;
   }
+  if (t.id === 'btOrdenaSeg') {   // Obra IV (d)
+    if (!estat.ordenaSeg) { estat.ordenaSeg = true; estat.ordreSegTmp = SG.segellsPreferents(db()).map(s => s.id); t.textContent = 'Fet'; t.setAttribute('aria-pressed', 'true'); pintaSegells(); return; }
+    const ids = estat.ordreSegTmp; estat.ordenaSeg = false; estat.ordreSegTmp = null; t.textContent = 'Ordena la llista'; t.setAttribute('aria-pressed', 'false');
+    fes(O4.desaOrdreSegells(ids), 'Ordre desat'); return;
+  }
+  if (d.mouseg) { const [i, dir] = d.mouseg.split(':').map(Number), j = i + dir, o = estat.ordreSegTmp;
+    if (!o || j < 0 || j >= o.length) return; const [a] = o.splice(i, 1); o.splice(j, 0, a); pintaSegells(); return; }
+  if (d.agsub) { O4.posaAgSub(d.agsub); pintaAgrupacions(); return; }   // Obra IV (b)
+  if (d.sugllista !== undefined) { const i = $('#inLlista'); if (i) { i.value = d.sugllista; estat.nomLlistaTxt = d.sugllista; pintaSugLlista(); i.focus(); } return; }   // Obra IV (a)
+  if (d.prefja) { N.apuntaAlcada('artista', { sup: estat.superficie, sub: estat.sub }); tancaFull(); estat.artista = +d.prefja; pintaArtista(estat.artista); vesA('artista'); return; }   // Obra IV (e): com «Ves a l'artista»
+  if (d.prefcap) { const [id, aid] = d.prefcap.split('|').map(Number);   // Obra IV (e)
+    fes(D.afegeixPreferentId(aid), 'Afegit a Artistes Preferents'); const x = rot(id); if (x) fullFitxa(x); return; }
   if (d.mou) { const [i, dir] = d.mou.split(':').map(Number), j = i + dir, o = estat.ordreTmp;
     if (!o || j < 0 || j >= o.length) return; const [a] = o.splice(i, 1); o.splice(j, 0, a); pintaFiles(); return; }
   if (d.artista) { N.apuntaAlcada('artista', { sup: estat.superficie, sub: estat.sub }); estat.artista = +d.artista; pintaArtista(estat.artista); vesA('artista'); return; }
@@ -2664,14 +2707,16 @@ document.addEventListener('pointerdown', e => {
 });
 document.addEventListener('pointermove', e => {
   if (!arros) return; e.preventDefault();
-  const sota = document.elementFromPoint(e.clientX, e.clientY), altra = sota && sota.closest('#files .fila');
-  if (altra && altra !== arros.fila) { const r = altra.getBoundingClientRect();
+  const caixa = arros.fila.parentNode, sota = document.elementFromPoint(e.clientX, e.clientY), altra = sota && sota.closest('.fila');
+  if (altra && altra !== arros.fila && altra.parentNode === caixa) { const r = altra.getBoundingClientRect();
     altra.parentNode.insertBefore(arros.fila, (e.clientY < r.top + r.height / 2) ? altra : altra.nextSibling); }
 }, { passive: false });
 document.addEventListener('pointerup', () => {
   if (!arros) return;
-  estat.ordreTmp = [...document.querySelectorAll('#files .fila')].map(f => +f.dataset.fila);
-  arros.fila.classList.remove('agafat'); document.body.classList.remove('arrossegant'); arros = null; pintaFiles();
+  const seg = arros.fila.parentNode?.id === 'segells';   // Obra IV (d): també els Segells Preferents
+  if (seg) estat.ordreSegTmp = [...document.querySelectorAll('#segells .fila')].map(f => +f.dataset.filasegell);
+  else estat.ordreTmp = [...document.querySelectorAll('#files .fila')].map(f => +f.dataset.fila);
+  arros.fila.classList.remove('agafat'); document.body.classList.remove('arrossegant'); arros = null; if (seg) pintaSegells(); else pintaFiles();
 });
 $('#fons').addEventListener('click', tancaFull);
 $('#cerca').addEventListener('input', () => pintaHistorial());
@@ -2866,7 +2911,10 @@ $('#cercaArxiu').addEventListener('input', () => pintaArxiu());
 $('#ordrePref').innerHTML = R.ORDRES.map(([k, n]) => `<option value="${k}">${n}</option>`).join('');
 $('#ordrePref').value = R.ordrePref();
 $('#ordrePref').addEventListener('change', e => { R.posaOrdrePref(e.target.value); pintaFiles(); });
-document.addEventListener('input', e => { if (e.target.id === 'inLlista') estat.nomLlistaTxt = e.target.value;
+$('#ordreSeg').innerHTML = O4.ORDRES.map(([k, n]) => `<option value="${k}">${n}</option>`).join('');   // Obra IV (d)
+$('#ordreSeg').value = O4.ordreSeg();
+$('#ordreSeg').addEventListener('change', e => { O4.posaOrdreSeg(e.target.value); pintaSegells(); });
+document.addEventListener('input', e => { if (e.target.id === 'inLlista') { estat.nomLlistaTxt = e.target.value; pintaSugLlista(); }
   const am = e.target.dataset?.sfactemin; if (am) { const [k, i] = am.split('|'); const a = estat.actesMaDe?.[k]; if (a) a.min[i] = e.target.value; } });
 // ACT-787 (b): en canviar quants actes, es repinten les caselles (al «change», per no perdre el focus a cada tecla)
 document.addEventListener('change', e => { const k = e.target.dataset?.sfnactes; if (!k || !estat.actesMaDe?.[k]) return;

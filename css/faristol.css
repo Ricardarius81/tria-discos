@@ -876,3 +876,12 @@ body[data-estil="ricard"] .reixa .disc.pref.seg .coberta{outline:2.5px dashed #E
 /* obra I (ACT-836 e): el logo d'un segell preferent, a mà */
 .fila-segell .foto.segell.logo{background:#fff}
 .fila-segell .foto.segell.logo img{object-fit:contain}
+
+/* Obra IV (22-11): els Segells Preferents s'ordenen com els artistes (d); el botó «＋ Preferent» de la fitxa (e) */
+#segells.ordenant .cob-fila{display:none}
+.ag-tabs{margin-top:4px}
+.cap-txt .pref-cap{appearance:none; background:none; border:1px solid var(--accent); color:var(--accent); border-radius:14px;
+  font:600 12px/1 var(--sans); padding:6px 11px; margin:-2px 0 8px; cursor:pointer}
+.cap-txt .pref-cap.ja{background:var(--accent); color:var(--fons)}
+.sug-llista{margin:2px 0 6px}
+.sug-llista:empty{display:none}

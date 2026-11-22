@@ -14,6 +14,7 @@ import { OBRA_G } from './obraG.mjs';
 import { OBRA_I } from './obraI.mjs';
 import { OBRA_II } from './obraII.mjs';
 import { OBRA_III } from './obraIII.mjs';
+import { OBRA_IV } from './obraIV.mjs';
 const cal = (cond, msg) => { if (!cond) throw new Error(msg); };
 const igual = (a, b, msg) => cal(a === b, `${msg}: s'esperava ${JSON.stringify(b)} i hi ha ${JSON.stringify(a)}`);
 
@@ -1023,8 +1024,9 @@ export const COMPROVACIONS = [
   } },
   { nom: 'agrupacions (ACT-635): els grups i les llistes amb mosaic; la llista amb cançons, última escolta i durada total (incompleta amb «+»), la més recent primer', sintetic: true, async fes({ pagina }) {
     await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="agr"]'); await pagina.waitForTimeout(300);
-    const t = await pagina.locator('#agrupacions').innerText();
-    cal(/Grups[\s\S]*Careful Now/.test(t), 'falta el grup Careful Now a Agrupacions');
+    const t = await pagina.locator('#ag-disc').innerText();   // obra IV (ACT-849 b): els grups, a «Discos Agrupats»
+    cal(/Careful Now/.test(t), 'falta el grup Careful Now a Agrupacions');
+    await pagina.click('[data-agsub="ll"]'); await pagina.waitForTimeout(150);   // i les llistes, a «Llistes de Reproducció»
     const ls = await pagina.locator('#agrupacions [data-llista]').allInnerTexts();
     igual(ls.length, 2, 'llistes a Agrupacions');
     cal(ls[0].includes('AA Händel') && ls[0].includes('5 cançons') && ls[0].includes('15′'), 'la primera ha de ser AA Händel, 5 cançons, 15′: ' + JSON.stringify(ls[0]));
@@ -2581,6 +2583,7 @@ export const COMPROVACIONS = [
   ...OBRA_I,   // l'obra I (ACT-836, estructura 13), en fitxer propi
   ...OBRA_II,  // l'obra II (ACT-839, ACT-840, ACT-841 4), en fitxer propi
   ...OBRA_III, // l'obra III (ACT-837, ACT-838, ACT-840 1, ACT-841), en fitxer propi
+  ...OBRA_IV,  // l'obra IV (ACT-848, ACT-849), en fitxer propi
 
   // ───────── el que no ha de passar mai ─────────
   { bloc: 'obra 4: Parsifal, les òperes per actes (ACT-777)' },
