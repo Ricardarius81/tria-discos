@@ -184,7 +184,7 @@ export async function velocitat({ navegador, ORIGEN, ara = Date.now() }) {
     });
     await desat();
     await p.click('[data-tornasafata]').catch(() => {}); await p.waitForTimeout(300);
-    await pantalla('Prestatgeria · les rajoles (obra 6)', async () => { await p.click('[data-anar="prestatgeria"]'); await p.waitForSelector('#s-prestatgeria.activa'); await p.waitForSelector('#rajoles [data-rajola]'); });
+    await pantalla('Prestatgeria · les rajoles (obra 6)', async () => { await p.evaluate(() => document.querySelector('[data-anar="prestatgeria"]').click()); await p.waitForSelector('#s-prestatgeria.activa'); await p.waitForSelector('#rajoles [data-rajola]'); });
     await pantalla('Prestatgeria · Tots els discos', async () => { await p.click('[data-rajola="tots"]'); await p.waitForSelector('#arxiu [data-fitxa]'); });
     await pantalla('Prestatgeria · Agrupacions', () => p.click('[data-psub="agr"]'));
     await pantalla('L\'Afinació', () => p.click('[data-psub="afi"]'));

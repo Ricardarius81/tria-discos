@@ -2,7 +2,7 @@
 const cal = (cond, msg) => { if (!cond) throw new Error(msg); };
 const igual = (a, b, msg) => cal(a === b, `${msg}: s'esperava ${JSON.stringify(b)} i hi ha ${JSON.stringify(a)}`);
 async function espera(pagina) {
-  await pagina.waitForSelector('#peu:not([hidden])', { timeout: 10000 });
+  await pagina.waitForSelector('#btInici:not([hidden])', { timeout: 10000 });
   await pagina.waitForFunction(() => !document.body.classList.contains('desconnectat'), null, { timeout: 8000 });
 }
 async function reobre(pagina) {

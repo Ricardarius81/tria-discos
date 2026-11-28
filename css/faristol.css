@@ -891,3 +891,39 @@ body[data-estil="ricard"] .reixa .disc.pref.seg .coberta{outline:2.5px dashed #E
 .full{overflow-x:hidden; overflow-x:clip}
 .graella > *{min-width:0}
 .full button{max-width:100%; overflow-wrap:anywhere}
+
+/* ---------- obra VI: el menú «La Meva Discoteca», Inici i Tornar (ACT-880 a ACT-884, ACT-886 a ACT-888) ---------- */
+nav.peu{display:none !important}   /* ACT-881: el menú substitueix la barra de baix; els botons queden per al codi (data-anar) */
+#btInici{position:relative; width:40px; height:36px; border-radius:18px; display:grid; place-items:center}
+#btInici[hidden]{display:none}
+#btInici[aria-pressed="true"]{background:var(--tinta); color:var(--c1); border-color:var(--tinta)}
+#btInici .alerta{top:-5px; right:-5px}
+.tornar-cap{appearance:none; border:0; cursor:pointer; height:34px; padding:0 13px 0 9px; border-radius:17px; display:inline-flex; align-items:center; gap:3px;
+  background:var(--tinta); color:var(--c1); font:700 14px var(--sans); flex:none}
+.tornar-cap[hidden]{display:none}
+.tornar-cap:not([hidden]) + .marca{display:none}
+#s-inici{padding:0 14px 28px}
+.ini-cap{background:var(--c1); color:var(--tinta); margin:0 -14px; padding:6px 18px 22px}
+.ini-cap h1{margin:0; font-family:var(--titol); font-weight:900; font-stretch:66%; font-size:64px; line-height:.86; letter-spacing:-.025em; color:var(--tinta)}
+.ini-cols{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; padding:18px 0 0}
+.ini-col{display:flex; flex-direction:column; gap:14px; min-width:0}
+.ini-col h2{margin:0; height:22px; font-family:var(--titol); font-weight:900; font-stretch:66%; font-size:21px; line-height:1; letter-spacing:-.01em; color:var(--accent); text-align:center}
+.ini-sec{appearance:none; background:none; border:0; padding:0; color:inherit; cursor:pointer; display:flex; flex-direction:column; gap:7px; text-align:center; min-width:0}
+.ini-tile{display:block; width:100%; aspect-ratio:1; border-radius:11px; overflow:hidden; position:relative;
+  box-shadow:0 12px 24px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.06)}
+.ini-tile svg{display:block; width:100%; height:100%}
+.ini-nom{font-family:var(--titol); font-weight:800; font-stretch:72%; font-size:17px; line-height:.98; color:var(--os)}
+.ini-aviat{opacity:.62}
+.ini-aviat .ini-nom{color:var(--os-3); font-weight:700}
+.ini-sec:active .ini-tile{transform:scale(.97)}
+#btAfinacio .punt{position:absolute; top:7px; right:7px; width:14px; height:14px; border-radius:50%; background:var(--taronja,#FF6B3D); box-shadow:0 0 0 2.5px rgba(0,0,0,.45)}
+#btAfinacio .punt[hidden]{display:none}
+.ini-peu{padding:22px 0 0}
+.ini-cabina{appearance:none; cursor:pointer; width:100%; display:flex; align-items:center; gap:14px; background:var(--fons-2); border:1px solid var(--vora);
+  border-radius:18px; padding:10px 16px 10px 10px; text-align:left; color:var(--os); position:relative}
+.ini-cabina .ini-tile{width:64px; flex:none; border-radius:10px}
+.ini-cab-txt{flex:1; min-width:0}
+.ini-cab-txt b{display:block; font-family:var(--titol); font-weight:900; font-stretch:70%; font-size:24px; line-height:1}
+.ini-cab-txt small{font-size:12.5px; color:var(--os-2)}
+.ini-cabina .alerta{position:static; flex:none; width:24px; height:24px; line-height:24px; font-size:13px; box-shadow:none}
+body.sense-copia .ini-cabina .alerta{display:block}

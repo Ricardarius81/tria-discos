@@ -2,12 +2,12 @@
 const cal = (cond, msg) => { if (!cond) throw new Error(msg); };
 const igual = (a, b, msg) => cal(a === b, `${msg}: s'esperava ${JSON.stringify(b)} i hi ha ${JSON.stringify(a)}`);
 async function reobre(pagina) {
-  await pagina.reload(); await pagina.waitForSelector('#peu:not([hidden])', { timeout: 10000 });
+  await pagina.reload(); await pagina.waitForSelector('#btInici:not([hidden])', { timeout: 10000 });
   await pagina.waitForFunction(() => !document.body.classList.contains('desconnectat'), null, { timeout: 8000 });
   await pagina.evaluate(() => { if (document.querySelector('#full.obert')) document.querySelector('#fons')?.click(); document.querySelector('[data-anar="faristol"]')?.click(); document.querySelector('[data-sub="rot"]')?.click(); });
   await pagina.waitForSelector('#s-faristol.activa', { timeout: 10000 });
 }
-const alsSegells = async pagina => { await pagina.click('[data-anar="faristol"]'); await pagina.click('[data-sub="pref"]'); await pagina.click('[data-asub="seg"]'); await pagina.waitForSelector('#a-seg.activa'); };
+const alsSegells = async pagina => { await pagina.evaluate(() => document.querySelector('[data-anar=\"faristol\"]').click()); await pagina.click('[data-sub="pref"]'); await pagina.click('[data-asub="seg"]'); await pagina.waitForSelector('#a-seg.activa'); };
 const nomsSegells = pagina => pagina.locator('#segells .fila .nom').allInnerTexts();
 const posa = (pagina, art, tit) => pagina.evaluate(async ([art, tit]) => { const A = await import('./js/arxiu.js?v=21'), D = await import('./js/dades.js?v=25');
   let r; await A.canvia(db => { r = D.posaEnRotacio({ art, tit, min: 40, canal: 'amazon' })(db); }); return r.id; }, [art, tit]);
@@ -45,7 +45,7 @@ export const OBRA_IV = [
   } },
   { nom: 'agrupacions (ACT-849 b): dues subpantalles, «Discos Agrupats» i «Llistes de Reproducció», com L\'Aparador; la darrera triada es recorda', sintetic: true, async fes({ pagina }) {
     await pagina.evaluate(() => { try { localStorage.removeItem('tria-agrupacions-sub'); } catch {} });
-    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="agr"]'); await pagina.waitForTimeout(300);
+    await pagina.evaluate(() => document.querySelector('[data-anar=\"prestatgeria\"]').click()); await pagina.click('[data-psub="agr"]'); await pagina.waitForTimeout(300);
     igual(JSON.stringify(await pagina.locator('#agrupacions .ag-tabs [data-agsub]').allInnerTexts()), JSON.stringify(['Discos Agrupats', 'Llistes de Reproducció']), 'les dues pastilles d\'Agrupacions');
     cal(await pagina.locator('#ag-disc.activa').count() === 1 && await pagina.locator('#ag-ll.activa').count() === 0, 'per defecte, Discos Agrupats');
     cal((await pagina.locator('#ag-disc').innerText()).includes('Careful Now'), 'el grup Careful Now a Discos Agrupats');
@@ -54,9 +54,9 @@ export const OBRA_IV = [
     cal(await pagina.locator('#ag-ll.activa').count() === 1 && await pagina.locator('#ag-disc.activa').count() === 0, 'Llistes de Reproducció, activa');
     cal(await pagina.locator('#ag-ll [data-llista]', { hasText: 'AA Händel' }).isVisible(), 'la llista AA Händel es veu a Llistes de Reproducció');
     igual(await pagina.locator('#ag-ll [data-grup]').count(), 0, 'cap grup a Llistes de Reproducció');
-    await reobre(pagina); await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-psub="agr"]'); await pagina.waitForTimeout(300);
+    await reobre(pagina); await pagina.evaluate(() => document.querySelector('[data-anar=\"prestatgeria\"]').click()); await pagina.click('[data-psub="agr"]'); await pagina.waitForTimeout(300);
     igual(await pagina.locator('#ag-ll.activa').count(), 1, 'en tornar a obrir, la darrera subpantalla triada (Llistes de Reproducció)');
-    await pagina.click('[data-agsub="disc"]'); await pagina.click('[data-anar="faristol"]');
+    await pagina.click('[data-agsub="disc"]'); await pagina.evaluate(() => document.querySelector('[data-anar=\"faristol\"]').click());
   } },
   { nom: 'segells (ACT-849 d): s\'ordenen com els Artistes Preferents — A-Z, Z-A, Inclusió (segell_preferent.id), Darrera escolta (Escolta.data_hora per Edició.segell) — i «Ordena la llista» desa segell_preferent.ordre', sintetic: true, async fes({ pagina, consulta, esperaDesat }) {
     await alsSegells(pagina);
@@ -103,6 +103,6 @@ export const OBRA_IV = [
     igual((await ja.innerText()).trim(), '★ Preferent', 'ja és preferent: «★ Preferent»');
     await ja.click(); await pagina.waitForSelector('#s-artista.activa', { timeout: 5000 });
     cal((await pagina.locator('#s-artista').innerText()).includes('Banc Artista IV'), '«★ Preferent» porta a la pantalla de l\'artista');
-    await pagina.click('[data-anar="faristol"]').catch(() => {});
+    await pagina.evaluate(() => document.querySelector('[data-anar=\"faristol\"]').click()).catch(() => {});
   } },
 ];

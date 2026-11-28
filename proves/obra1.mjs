@@ -3,7 +3,7 @@ const cal = (cond, msg) => { if (!cond) throw new Error(msg); };
 const igual = (a, b, msg) => cal(a === b, `${msg}: s'esperava ${JSON.stringify(b)} i hi ha ${JSON.stringify(a)}`);
 async function espera(cond, msg, max = 10000) { const t = Date.now(); while (!(await cond())) { if (Date.now() - t > max) throw new Error(msg); await new Promise(r => setTimeout(r, 150)); } }
 async function reobre(pagina) {
-  await pagina.reload(); await pagina.waitForSelector('#peu:not([hidden])', { timeout: 10000 });
+  await pagina.reload(); await pagina.waitForSelector('#btInici:not([hidden])', { timeout: 10000 });
   await pagina.waitForFunction(() => !document.body.classList.contains('desconnectat'), null, { timeout: 8000 });
   await pagina.evaluate(() => { if (document.querySelector('#full.obert')) document.querySelector('#fons')?.click(); document.querySelector('[data-anar="faristol"]')?.click(); document.querySelector('[data-sub="rot"]')?.click(); });
   await pagina.waitForSelector('#s-faristol.activa', { timeout: 10000 });
@@ -138,7 +138,7 @@ export const OBRA1 = [
     await reobre(pagina); await pagina.waitForTimeout(400);
     const c0 = await n(); cal(c0 >= 1, 'en obrir, el punt no s\'ha calculat');
     await obreSafata(); await pagina.waitForTimeout(600); await pagina.click('[data-tornasafata]');
-    await pagina.click('[data-anar="prestatgeria"]'); await pagina.click('[data-anar="faristol"]'); await pagina.click('[data-sub="hist"]'); await pagina.click('[data-sub="rot"]');
+    await pagina.evaluate(() => document.querySelector('[data-anar=\"prestatgeria\"]').click()); await pagina.evaluate(() => document.querySelector('[data-anar=\"faristol\"]').click()); await pagina.click('[data-sub="hist"]'); await pagina.click('[data-sub="rot"]');
     await pagina.evaluate(async () => { const A = await import('./js/arxiu.js?v=21'); document.dispatchEvent(new Event('visibilitychange')); });
     await pagina.waitForTimeout(500);
     igual(await n(), c0, 'càlculs del punt després de llegir ListenBrainz i navegar');

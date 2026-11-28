@@ -25,6 +25,7 @@ import * as F from './afinacio.js?v=4';
 import * as P from './piles.js?v=1';
 import * as N from './navegacio.js?v=1';
 import * as FX from './fitxa.js?v=1';
+import * as INI from './inici.js?v=1';
 import * as R from './rajoles.js?v=1';
 import * as B from './bandcamp.js?v=1';
 import * as J from './arreglos.js?v=1';
@@ -2193,7 +2194,24 @@ function vesA(sup) {
     if (act) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
   window.scrollTo(0, 0);
+  marcaEnrere();
 }
+// Obra VI (ACT-883 b, c): Inici i Tornar. On és ara, per tornar-hi; Tornar surt només amb un pas enrere, i no a la safata ni a la
+// pantalla de l'artista, que porten el seu «← Tornar» (decisió de construcció, per ratificar: no dos Tornar a la mateixa pantalla).
+const llocAra = () => ({ sup: estat.superficie, sub: estat.sub, psub: estat.psub });
+function marcaEnrere() {
+  const t = $('#btTornar'); if (t) t.hidden = !INI.hiHaEnrere() || ['artista', 'safata', 'entrada'].includes(estat.superficie);
+  $('#btInici')?.setAttribute('aria-pressed', String(estat.superficie === 'inici'));
+}
+function anarA(sup, sb) {
+  if ($('#full').classList.contains('obert')) tancaFull();
+  vesA(sup);
+  if (sup === 'faristol' && sb) sub(sb);
+  if (sup === 'prestatgeria') { pintaPrestatgeria(); if (sb) psub(sb); }
+}
+function obreInici() { if (estat.superficie === 'inici') return; INI.empeny(llocAra()); anarA('inici'); }
+function tornaEnrere() { const l = INI.treu(); if (!l) { marcaEnrere(); return; } anarA(l.sup, l.sup === 'faristol' ? l.sub : l.sup === 'prestatgeria' ? l.psub : null); }
+addEventListener('popstate', () => { if (INI.hiHaEnrere()) tornaEnrere(); });
 const SUBS = ['rot', 'pref', 'hist'];
 function sub(v) {
   const de = SUBS.indexOf(estat.sub), a = SUBS.indexOf(v), p = $('#p-' + v);
@@ -2239,7 +2257,10 @@ document.addEventListener('click', e => {
   if (t.id === 'btLloc') { fullLloc(); return; }
   if (d.lloc) { estat.gps = 'Triat a mà.'; posaLloc(d.lloc); tancaFull(); return; }
   if (d.gps) { estat.gps = 'Mirant…'; detectaLloc(true); return; }
-  if (t.id === 'btAfinacio') { if (!A.estat.db) return; tancaFull(); vesA('prestatgeria'); if (estat.psub === 'afi') pintaPrestatgeria(); else psub('afi'); return; }
+  if (t.id === 'btInici') { if (A.estat.db) obreInici(); return; }
+  if (t.id === 'btTornar') { if (INI.hiHaEnrere()) { try { history.back(); } catch { tornaEnrere(); } } else marcaEnrere(); return; }
+  if (d.menu) { const [s, sb] = d.menu.split(':'); INI.empeny(llocAra()); anarA(s, sb || null); return; }
+  if (t.id === 'btAfinacio') { if (!A.estat.db) return; if (estat.superficie === 'inici') INI.empeny(llocAra()); tancaFull(); vesA('prestatgeria'); if (estat.psub === 'afi') pintaPrestatgeria(); else psub('afi'); return; }
   if (d.asub) { aparador(d.asub); return; }
   if (d.novapila) { fullNovaPila(); return; }
   if (d.ctxnovapila) { const s = (estat.novaPilaCtx ||= new Set()); s.has(d.ctxnovapila) ? s.delete(d.ctxnovapila) : s.add(d.ctxnovapila); fullNovaPila(true); return; }
@@ -2772,13 +2793,13 @@ function tornaPantalla() {
 }
 function mostraMaquina() {
   puntBrut = true;   // ACT-796: obrir l'arxiu o carregar-lo del Drive
-  $('#peu').hidden = false;
+  $('#peu').hidden = false; $('#btInici').hidden = false; marcaEnrere();
   if (estat.superficie === 'entrada' && !tornaPantalla()) { vesA('faristol'); sub('rot'); }
   pinta(); marcaDesat();
   marcadorBandcamp();   // ACT-817: l'app oberta pel marcador «Codi per a la Discoteca»
 }
 function entrada(text, botons = '', classe = '') {
-  vesA('entrada'); $('#peu').hidden = true; document.body.classList.remove('desconnectat');
+  vesA('entrada'); $('#peu').hidden = true; $('#btInici').hidden = true; INI.buida(); marcaEnrere(); document.body.classList.remove('desconnectat');
   $('#entradaTxt').className = classe; $('#entradaTxt').textContent = text; $('#entradaAccions').innerHTML = botons;
 }
 const BT = (id, text, principal) => `<button class="bt ${principal ? 'principal' : ''}" id="${id}">${text}</button>`;
@@ -2904,6 +2925,7 @@ A.vigilaPendents(r => {
   // «Desat al Drive» només quan torna a funcionar després d'una fallada: el rellotge puja les lectures cada 30 s (ACT-750 a).
   const fallava = estat.desatFallat; marcaDesat(r); if (r.desat && fallava) avisa('Desat al Drive.');
 });
+$('#s-inici').innerHTML = INI.htmlInici();   // obra VI: el menú es pinta un cop; el punt i l'exclamació hi viuen
 lliscar($('#s-faristol'));
 aparador(N.darrerAparador());
 lliscar($('#s-prestatgeria'), PSUBS, () => estat.psub || 'tots', psub);

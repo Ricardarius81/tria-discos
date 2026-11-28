@@ -14,12 +14,12 @@
 <div id="telefon">
 
   <header class="barra">
+    <button class="tornar-cap" id="btTornar" hidden aria-label="Tornar"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>Tornar</button>
     <span class="marca">La Meva Discoteca</span>
     <span class="desat" id="desat">sense desar</span>
     <button class="lloc" id="btLloc" aria-label="On ets"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 21s-6.5-6.1-6.5-11.2A6.5 6.5 0 0 1 18.5 9.8C18.5 14.9 12 21 12 21z"/><circle cx="12" cy="9.8" r="2.3"/></svg><span id="llocTxt"></span></button>
     <button class="icona-btn ic-safata" id="btSafata" aria-label="La safata"><svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"><path d="M3 13.5 5.4 5.6A1.5 1.5 0 0 1 6.8 4.5h10.4a1.5 1.5 0 0 1 1.4 1.1L21 13.5V18a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18z"/><path d="M3 13.5h5l1.3 2.4h5.4l1.3-2.4h5"/></svg><span class="pastilla zero" id="safataNum">0</span></button>
-    <button class="icona-btn ic-afi" id="btAfinacio" aria-label="L'Afinació" title="L'Afinació"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 3v7a3.5 3.5 0 0 0 7 0V3"/><path d="M12 13.5V21"/></svg><span class="punt" id="afiPunt" hidden></span></button>
-    <button class="icona-btn" id="btAjustos" title="La Cabina" aria-label="La Cabina">≡<span class="alerta" aria-hidden="true">!</span></button>
+    <button class="icona-btn" id="btInici" hidden aria-label="Inici: La Meva Discoteca" title="Inici"><svg viewBox="0 0 24 24" width="21" height="21" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.8 11.4 12 4.6l8.2 6.8"/><path d="M6.3 9.6v9.9h4.2v-5.2h3v5.2h4.2V9.6"/></svg><span class="alerta" aria-hidden="true">!</span></button>
   </header>
 
   <button class="safata-tira conn-tira" id="btConnecta">Connecta amb el Drive <span class="tanca">→</span></button>
@@ -30,6 +30,8 @@
       <p id="entradaTxt">Obrint…</p>
       <div id="entradaAccions"></div>
     </section>
+
+    <section class="superficie" id="s-inici"></section>
 
     <section class="superficie" id="s-prestatgeria">
       <div class="cap">
@@ -77,17 +79,17 @@
       </div>
       <div class="panell" id="p-pref">
         <div class="apar-tabs" role="tablist">
-          <button id="atab-pref" role="tab" aria-selected="true" data-asub="pref">Artistes Preferents</button>
           <button id="atab-esc" role="tab" aria-selected="false" data-asub="esc">Piles</button>
+          <button id="atab-pref" role="tab" aria-selected="true" data-asub="pref">Artistes Preferents</button>
           <button id="atab-seg" role="tab" aria-selected="false" data-asub="seg">Segells Preferents</button>
+        </div>
+        <div class="apanell" id="a-esc">
+          <div id="piles"></div>
         </div>
         <div class="apanell activa" id="a-pref">
           <button class="afegeix" id="btAfegeixArtista">＋ Afegeix un artista</button>
           <div class="eina"><label class="ordre-pref">Ordre <select id="ordrePref" aria-label="Ordre dels preferents"></select></label><button id="btOrdena" aria-pressed="false">Ordena la llista</button></div>
           <div class="files" id="files"></div>
-        </div>
-        <div class="apanell" id="a-esc">
-          <div id="piles"></div>
         </div>
         <div class="apanell" id="a-seg">
           <button class="afegeix" id="btAfegeixSegell">＋ Afegeix un segell</button>
@@ -110,7 +112,7 @@
     </section>
   </main>
 
-  <nav class="peu" id="peu" hidden>
+  <nav class="peu" id="peu" hidden aria-hidden="true">
     <button data-anar="prestatgeria">Prestatgeria</button>
     <button data-anar="faristol" aria-current="page">Faristol</button>
     <button data-anar="gramola">Gramola</button>

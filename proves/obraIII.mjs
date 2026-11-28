@@ -105,7 +105,7 @@ export const OBRA_III = [
       new MutationObserver(() => { const b = document.getElementById('avisBarra'), i = b?.querySelector('i');
         if (i && b.style.display !== 'none' && window.__barra.at(-1) !== i.style.width) window.__barra.push(i.style.width); })
         .observe(av, { attributes: true, childList: true, subtree: true, attributeFilter: ['style', 'class'] }); });
-    await pagina.click('#btAjustos'); await pagina.waitForTimeout(300);
+    await pagina.evaluate(() => document.getElementById('btAjustos').click()); await pagina.waitForTimeout(300);
     await Promise.all([pagina.waitForEvent('download', { timeout: 15000 }), pagina.click('[data-excel]')]);
     const r = await pagina.evaluate(() => ({ passos: window.__barra, amagada: document.getElementById('avisBarra')?.style.display === 'none', txt: document.getElementById('avisTxt').textContent }));
     await pagina.click('[data-tornafull]').catch(() => {});
