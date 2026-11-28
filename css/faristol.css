@@ -927,3 +927,28 @@ nav.peu{display:none !important}   /* ACT-881: el menú substitueix la barra de 
 .ini-cab-txt small{font-size:12.5px; color:var(--os-2)}
 .ini-cabina .alerta{position:static; flex:none; width:24px; height:24px; line-height:24px; font-size:13px; box-shadow:none}
 body.sense-copia .ini-cabina .alerta{display:block}
+
+/* ---------- obra VII: la fitxa del disc (ACT-882, ACT-884 e i f, ACT-887 a, ACT-888) ---------- */
+.fitxa-cap button.fitxa-portada{appearance:none; border:0; padding:0; cursor:pointer; aspect-ratio:1; overflow:hidden}
+.tit-edita{appearance:none; background:none; border:0; padding:0; margin:0; color:inherit; font:inherit; text-align:left; cursor:pointer; overflow-wrap:anywhere}
+.fitxa-accions{display:flex; align-items:flex-start; gap:6px}
+.fitxa-accions .bt.principal{flex:1; min-height:50px; border-radius:25px}
+.bt-rodo{appearance:none; background:none; border:0; padding:0; color:var(--os-2); cursor:pointer; width:66px; display:flex; flex-direction:column; align-items:center; gap:4px; flex:none}
+.bt-rodo .rodo{width:50px; height:50px; border-radius:25px; border:1.5px solid var(--vora-2); display:grid; place-items:center; color:var(--os)}
+.bt-rodo small{font-size:11px; line-height:1.2; text-align:center}
+.bt-rodo.rot.actiu .rodo{background:var(--accent); border-color:var(--accent); color:var(--tinta,var(--fons))}
+.bt-rodo.afinar.marcat .rodo{background:var(--taronja,#FF6B3D); border-color:var(--taronja,#FF6B3D); color:#fff}
+.bt-rodo.afinar.marcat small{color:var(--taronja,#FF6B3D)}
+.fitxa-piles{display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin-top:16px}
+.fitxa-piles .fp-et{font-size:12.5px; color:var(--os-3); margin-right:2px}
+.fitxa-piles .a-pila{display:inline-flex; align-items:center; gap:7px; border-radius:17px; background:var(--fons-2); border:1px solid var(--vora); padding:4px 0 4px 5px; font-size:13px; min-height:34px; color:var(--os)}
+.fitxa-piles .fp-ic{width:24px; height:24px; border-radius:12px; display:grid; place-items:center}
+.fitxa-piles .fp-ic svg{width:15px; height:15px}
+.fitxa-piles .fp-treu{appearance:none; background:none; border:0; color:var(--os-3); font-size:16px; padding:4px 11px 4px 2px; cursor:pointer}
+.fitxa-piles .fp-mes{appearance:none; width:34px; height:34px; border-radius:17px; border:1px dashed var(--vora-2); background:none; color:var(--accent); font-size:17px; padding:0; cursor:pointer}
+.fitxa-peu{margin-top:18px; padding-top:8px; border-top:1px solid var(--vora)}
+.fitxa-peu .barra-accions{padding-top:4px !important}
+/* el botó rodó d'afinar no hereta l'estil del botó ample d'abans (.afinar, ACT-742) */
+.bt-rodo.afinar, .bt-rodo.afinar.marcat{margin:0; width:66px; padding:0; border:0; border-radius:0; background:none; color:var(--os-2)}
+.bt-rodo.afinar small, .bt-rodo.afinar.marcat small{font-weight:400; font-size:11px; color:var(--os-2)}
+.bt-rodo.afinar.marcat small{color:var(--taronja,#FF6B3D)}

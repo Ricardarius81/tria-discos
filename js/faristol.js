@@ -645,15 +645,19 @@ function fullJaEscoltats(pilaId) {
 }
 // A la fitxa (ACT-710, ACT-744): «A la Pila Gimnàs · Treu» per cada Pila on és l'àlbum, i «Afegeix a una Pila».
 function pilesFitxa(d) {
-  const ps = P.pilesDeLAlbum(db(), d.album_id);
-  return `<div class="fitxa-piles">${ps.map(x => `<span class="a-pila">A la Pila ${esc(x.nom)} · <button class="sf-link" data-treuentrada="${x.id}" data-fitxaed="${d.id}">Treu</button></span>`).join(' ')}
-    <button class="bt" data-afegeixapila="${d.id}">Afegeix a una Pila</button></div>`;
+  const ps = P.pilesDeLAlbum(db(), d.album_id), cols = P.colorsPiles(db());
+  return `<div class="fitxa-piles"><span class="fp-et">Piles</span>${ps.map(x => { const c = cols.get(x.pila_id) || '#5d6e84';
+      return `<span class="a-pila" aria-label="A la Pila ${esc(x.nom)}"><span class="fp-ic" style="background:${c};color:${P.tintaSobre(c)}">${P.figura(x.nom)}</span>${esc(x.nom)}<button class="fp-treu" data-treuentrada="${x.id}" data-fitxaed="${d.id}" aria-label="Treu-lo de la Pila ${esc(x.nom)}">×</button></span>`; }).join('')}
+    <button class="fp-mes" data-afegeixapila="${d.id}" aria-label="Totes les Piles">＋</button></div>`;
 }
 function fullTriaPila(edId) {
   const d = edDe(edId); if (!d) return;
-  const ja = new Set(P.pilesDeLAlbum(db(), d.album_id).map(x => x.pila_id)), ps = P.piles(db()).filter(p => !ja.has(p.id));
-  obreFull(`<h3>Afegeix a una Pila</h3><p>${esc(d.titol)} · ${esc(d.art)}</p>
-    <div class="barra-accions" style="position:static;padding:0 0 10px">${ps.map(p => `<button class="bt" data-posaapila="${p.id}:${d.id}">${esc(p.nom)}</button>`).join('') || 'Ja és a totes les Piles.'}</div>`);
+  // ACT-884 f: totes les Piles, per marcar i desmarcar
+  const ja = new Map(P.pilesDeLAlbum(db(), d.album_id).map(x => [x.pila_id, x.id]));
+  obreFull(`<h3>Les Piles</h3><p>${esc(d.titol)} · ${esc(d.art)}</p>
+    <div class="barra-accions" style="position:static;padding:0 0 10px">${P.piles(db()).map(p => ja.has(p.id)
+      ? `<button class="bt triat" data-treuentrada="${ja.get(p.id)}" data-fitxaed="${d.id}" aria-pressed="true">✓ ${esc(p.nom)}</button>`
+      : `<button class="bt" data-posaapila="${p.id}:${d.id}" aria-pressed="false">${esc(p.nom)}</button>`).join('')}</div>`);
 }
 
 // L'Afinació (ACT-683, ACT-686): una fila per edició, que obre la seva fitxa. A dalt les marcades «Per afinar», de la més
@@ -1311,26 +1315,26 @@ function fullFitxa(d) {
   const tEsc = esc_.escoltes.length ? `${esc_.compten}${esc_.mitges ? ` · ${esc_.mitges} a mitges` : ''}` : 'cap encara';
   // «Per afinar» (ACT-742, 1): a dalt de tot, damunt de la portada i a tot l'ample, marcat o no. Ricard: «Siempre arriba. Si
   // vemos que no funciona te aviso». Consequència dita: és el primer de cada fitxa, també als discos que estan bé.
-  obreFull(`${d.per_afinar
-      ? `<button class="afinar dalt marcat per-afinar" data-jaafinat="${d.id}">Per afinar<small>marcat ${esc(fa(d.per_afinar))} · toca per «Ja està afinat»</small></button>`
-      : `<button class="afinar dalt" data-perafinar="${d.id}">Per afinar</button>`}
-    <div class="fitxa-cap">
+  obreFull(`<div class="fitxa-cap">
       <button class="info-i" data-info="${d.id}" aria-label="Info: la Wikipedia, MusicBrainz, Discogs, RYM i AllMusic" title="Info">i</button>
-      <div class="fitxa-portada cap-cob">${d.portada ? IMG(d.portada) : `<span class="inicials">${esc(inicials(d.art))}</span>`}</div>
+      <button class="fitxa-portada cap-cob" data-canviaportada="${d.id}" aria-label="Canvia la portada">${d.portada ? IMG(d.portada) : `<span class="inicials">${esc(inicials(d.art))}</span>`}</button>
       <div class="cap-txt">
-        <h3>${esc(d.titol)} <button class="sf-link" data-canvianoms="${d.id}">canvia</button></h3><p class="cap-art">${esc(d.art)}</p>
+        <h3><button class="tit-edita" data-canvianoms="${d.id}" aria-label="Canvia el títol o el nom">${esc(d.titol)}</button></h3><p class="cap-art">${esc(d.art)}</p>
         ${botoPrefCap(d)}
         <div class="cap-ed"><span class="min ${d.min ? '' : 'falta'}">${d.min ? d.min + '′' : 'falta la durada'}</span><button class="sf-link" data-durada="${d.id}">canvia</button><br>
           Edició <button class="sf-link" data-canviaedicio="${d.id}">${edicio}</button>
           <br>Segell <button class="sf-link" data-segellfitxa="${d.id}">${esc(SG.segellDe(db(), d.id) || 'cap')} · canvia'l</button>
           ${d.parts.length ? `<br>${d.esperant ? 'Cap part viva: la caixa espera' : 'Part viva: ' + esc(d.viva.nom || '') + ' · ' + d.viva.numero + ' de ' + d.parts.length}` : ''}
-          ${d.formats.length ? `<br><small>${esc(d.formats.map(f => NOMS_FISICS[f] || f).join(', '))}</small>` : ''}</div>
+</div>
       </div>
     </div>
     ${q ? `<div class="avis-durada"><b>Durada?</b> ${avisDurada(d.id, q)}</div>` : ''}
     <div class="barra-accions fitxa-accions">
       ${d.esperant ? `<button class="bt principal" data-repren="${d.id}">Reprèn</button>` : `<button class="bt principal" data-escoltar="${d.id}">▶ Escoltar ara</button>`}
-      ${d.rotacio_actual ? `<button class="bt" data-treure="${d.id}">Treu de rotació</button>` : `<button class="bt" data-hrot="${d.id}">Posa'l en rotació</button>`}
+      ${d.rotacio_actual ? `<button class="bt-rodo rot actiu" data-treure="${d.id}" aria-label="En rotació: toca per treure'l"><span class="rodo"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6.5" rx="1.6"/><rect x="17" y="14" width="4" height="6.5" rx="1.6"/><path d="M14.4 9.6a3.3 3.3 0 1 0 .6 2.4"/><path d="M15.4 7.9l-.3 1.9-1.9-.3"/></svg></span><small>En rotació</small></button>`
+                         : `<button class="bt-rodo rot" data-hrot="${d.id}" aria-label="Posa'l en rotació"><span class="rodo"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6.5" rx="1.6"/><rect x="17" y="14" width="4" height="6.5" rx="1.6"/><path d="M14.4 9.6a3.3 3.3 0 1 0 .6 2.4"/><path d="M15.4 7.9l-.3 1.9-1.9-.3"/></svg></span><small>Posa'l en rotació</small></button>`}
+      ${d.per_afinar ? `<button class="bt-rodo afinar marcat per-afinar" data-jaafinat="${d.id}" aria-label="Per afinar, marcat ${esc(fa(d.per_afinar))}: toca per «Ja està afinat»" title="toca per «Ja està afinat»"><span class="rodo"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 3v6.6a3 3 0 0 0 6 0V3"/><path d="M12 12.6V21"/><path d="M5.6 5.2c-1.1 1.4-1.1 3.4 0 4.8"/><path d="M18.4 5.2c1.1 1.4 1.1 3.4 0 4.8"/></svg></span><small>marcat ${esc(fa(d.per_afinar))}</small></button>`
+                     : `<button class="bt-rodo afinar" data-perafinar="${d.id}" aria-label="Per afinar"><span class="rodo"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 3v6.6a3 3 0 0 0 6 0V3"/><path d="M12 12.6V21"/><path d="M5.6 5.2c-1.1 1.4-1.1 3.4 0 4.8"/><path d="M18.4 5.2c1.1 1.4 1.1 3.4 0 4.8"/></svg></span><small>Per afinar</small></button>`}
     </div>
     ${blocEnllac(d)}
     ${pilesFitxa(d)}
@@ -1338,14 +1342,15 @@ function fullFitxa(d) {
       ${cel('generefitxa', d.id, (gen.falta ? 'falta' : 'ple') + ' cel-genere', 'Gènere', esc(gen.txt))}
       ${cel('tagsfitxa', d.id, tg.falta ? 'falta' : 'ple', 'Tags', esc(tg.txt))}
       ${cel('canalfitxa', d.id, canal ? 'ple' : 'falta', 'Canal', canal ? esc(canal) + codi : 'falta')}
-      ${cel('notafitxa', d.id, notaEncaraNo(d) ? 'falta' : d.nota ? 'ple' : 'buit', 'Nota', d.nota ? esc(nomNota(d.nota.valor)) : notaEncaraNo(d) ? 'Encara no' : 'sense nota')}
-      ${cel('canviaportada', d.id, d.portada_edicio ? 'ple' : 'falta', 'Portada', esc(d.portada_edicio ? origen : 'falta'))}
+      ${cel('formatsfitxa', d.id, 'neutre', 'Formats', d.formats.length ? esc(d.formats.map(f => NOMS_FISICS[f] || f).join(', ')) : 'només streaming')}
       ${grup ? cel('fitxagrup', d.conjunt, 'neutre', 'Grup', esc(titolGrup(d.conjunt, d.discosGrup)) + ' · ' + d.discosGrup.length)
              : cel('agrupa', d.id, 'neutre', 'Grup', 'cap · agrupa\'l amb…')}
+      ${cel('unifica', d.id, 'neutre', 'Unifica', d.parts.length ? 'és una caixa' : 'juntar · és part')}
       ${cel('escoltesfitxa', d.id, 'neutre', 'Escoltes', tEsc)}
-      ${cel('mesfitxa', d.id, 'neutre', 'Més…', 'preferents, juntar, esborrar')}
+      ${cel('notafitxa', d.id, notaEncaraNo(d) ? 'falta' : d.nota ? 'ple' : 'buit', 'Nota', d.nota ? esc(nomNota(d.nota.valor)) : notaEncaraNo(d) ? 'Encara no' : 'sense nota')}
     </div>
     ${blocObra5(d)}
+    <div class="fitxa-peu">${blocEsborra(d)}</div>
     <div class="llegenda"><span><i class="l-falta"></i>falta omplir</span><span><i class="l-ple"></i>omplert</span><span><i class="l-neutre"></i>no s'omple</span></div>
     ${d.parts.length ? blocParts(d) : ''}`, true);
   // La cadena de la fitxa (ACT-742, 7): les fulles que s'obren des d'aquí són a pantalla completa, i en recarregar l'app
@@ -1366,7 +1371,7 @@ function blocObra5(d) {
   return `<div class="canals fitxa-obra5" style="margin-top:12px">
     ${pid ? `<button data-vesartista="${pid}">Ves a l'artista <small>${esc(d.art)} · anterior i següent</small></button>`
           : `<button data-triaseguent="${d.id}">Tria el proper de ${esc(d.art)} <small>el següent o l'anterior; el fa preferent</small></button>`}
-    <button data-copiade="${d.id}">Copia d'un altre disc <small>gènere, subgèneres, llenguatge, formació i tags de l'àlbum</small></button></div>`;
+</div>`;
 }
 // «Info» (ACT-815, 6): A, els enllaços; B, la fitxa de la Wikipedia (en anglès) i de MusicBrainz, desada per veure-la sense
 // connexió. Es busca només quan es toca «Busca la fitxa» o quan no n'hi ha cap de desada i hi ha xarxa.
@@ -1408,7 +1413,8 @@ function fullCopiaTria(d, filtre = '') {
   const i = $('#inCopia'); if (i) i.oninput = () => fullCopiaTria(d, i.value);
 }
 function fullCopia(d, de) {
-  const items = FX.copiable(db(), de), o = db().exec('SELECT a.titol FROM album a WHERE a.id = ' + (+de))[0]?.values[0][0] || '';
+  const GEN = ['genere', 'subgeneres', 'llenguatge', 'formacio'], que = estat.copiaQue;   // ACT-887 a: cada fulla copia el seu
+  const items = FX.copiable(db(), de).filter(x => !que || (que === 'genere') === GEN.includes(x.clau.split(':')[0])), o = db().exec('SELECT a.titol FROM album a WHERE a.id = ' + (+de))[0]?.values[0][0] || '';
   estat.copia = { id: d.id, de };
   obreFull(`<h3>Què es copia</h3><p>De «${esc(o)}» a «${esc(d.titol)}». El gènere, el llenguatge, la formació, la veu i l'estació substitueixen; els subgèneres, els tags i els idiomes se sumen.</p>
     ${items.length ? `<div class="copia-caselles">${items.map(x => `<label class="camp" style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-clau="${esc(x.clau)}" ${x.marcat ? 'checked' : ''}><span>${esc(x.txt)}</span></label>`).join('')}</div>
@@ -1446,21 +1452,27 @@ function fa(iso) {
 }
 // «Més…» (ACT-734): el que es fa poc, fora de la vista. Preferents, la pregunta d'identitat com a acció (ACT-658, opció B) i
 // esborrar. Una fitxa amb parts no es junta ni es fa part d'una altra (ACT-664; les parts són d'un sol nivell, §8.4).
-function fullMes(d) {
-  const jaPref = D.preferents(db()).some(p => p.artista_id === d.artista_id);
-  obreFull(`<h3>Més</h3><p>${esc(d.titol)} · ${esc(d.art)}. El que fas poc, fora de la vista.</p>
+function fullUnifica(d) {
+  obreFull(`<h3>Unifica</h3><p>${esc(d.titol)} · ${esc(d.art)}. Quan aquesta fitxa i una altra són el mateix disc.</p>
     <div class="canals mes-ll">
-      ${jaPref ? '' : `<button data-fespref="${d.artista_id}">Afegir a Artistes Preferents <small>${esc(d.art)}</small></button>`}
-      ${d.parts.length ? '' : `<button data-juntar="${d.id}">Un que ja tinc amb un altre nom <small>juntar dues fitxes</small></button>
+      ${d.parts.length ? '<p class="gris">És una caixa amb parts: no es junta ni es fa part d\'una altra (les parts són d\'un sol nivell).</p>'
+        : `<button data-juntar="${d.id}">Un que ja tinc amb un altre nom <small>juntar dues fitxes</small></button>
         <button data-espart="${d.id}">És part d'un que ja tinc <small>una caixa</small></button>`}
-    </div>
-    ${blocEsborra(d)}`, true);
+    </div>`, true);
+  tornaA(d.id);
+}
+// Formats (ACT-887 a, Edició.formats): el CD i el vinil que té; sense cap, només streaming.
+function fullFormats(d) {
+  obreFull(`<h3>Formats</h3><p>${esc(d.titol)} · ${esc(d.art)}. Els que tens a casa: a Lleida, el ▶ els fa servir.</p>
+    <div class="chips">${Object.entries(NOMS_FISICS).map(([k, n]) => `<button class="xip ${d.formats.includes(k) ? 'triat' : ''}" data-formatfitxa="${d.id}|${k}" aria-pressed="${d.formats.includes(k)}">${n}</button>`).join('')}</div>
+    <p class="gris desat-toc">Cada toc es desa al moment. Tornar a tocar és el desfés.</p>`, true);
   tornaA(d.id);
 }
 // La fulla dels tags (ACT-734): els mateixos dos grups d'abans, que abans eren a la fitxa. Cada toc es desa.
 function fullTags(d) {
   obreFull(`<h3>Els tags</h3><p>${esc(d.titol)} · ${esc(d.art)}</p>${blocTags(d)}
-    <p class="gris" style="font-size:12px;margin-top:12px">El botó surt taronja mentre falti la veu, o l'idioma si és «amb veu». La resta de tags no ho pot saber: no marcar-ne cap és una resposta vàlida.</p>`, true);
+    <p class="gris" style="font-size:12px;margin-top:12px">El botó surt taronja mentre falti la veu, o l'idioma si és «amb veu». La resta de tags no ho pot saber: no marcar-ne cap és una resposta vàlida.</p>
+    <div class="canals" style="margin-top:10px"><button data-copiade="${d.id}|tags">Copia d'un altre disc <small>els tags de l'àlbum</small></button></div>`, true);
   tornaA(d.id);
 }
 
@@ -1554,7 +1566,8 @@ function fullGenere(d) {
     ${g.generes.length ? `<div class="chips gen-subs">${subs.map(s => `<span class="sub-amb-llapis">${xip('gensub', s, g.subgeneres.includes(s), s, 'sub')}<button class="llapis" data-renomsub="${esc(s)}" aria-label="Canvia el nom de ${esc(s)}">✎</button></span>`).join('')}
         <button class="mes" data-altresub="1">＋ Altre</button></div>`
       : '<p class="gris" style="font-size:12.5px">Primer una branca: sense branca, el disc no sortiria quan la demanis.</p>'}
-    <p class="gris desat-toc">Cada toc es desa al moment. Tornar a tocar és el desfés.</p>`, true);
+    <p class="gris desat-toc">Cada toc es desa al moment. Tornar a tocar és el desfés.</p>
+    <div class="canals" style="margin-top:10px"><button data-copiade="${d.id}|genere">Copia d'un altre disc <small>gènere, subgèneres, llenguatge i formació</small></button></div>`, true);
   tornaA(d.id);
   const i = $('#inInstrument'); if (i) i.onchange = () => tocaGenere(g2 => { g2.instrument = i.value; });
 }
@@ -2443,7 +2456,12 @@ document.addEventListener('click', e => {
     tocaGenere(g => { if (!g.subgeneres.includes(v)) g.subgeneres.push(v); }); return; }
   // Les fulles de la fitxa nova (ACT-734, ACT-736)
   if (d.tagsfitxa) { const x = rot(d.tagsfitxa); if (x) fullTags(x); return; }
-  if (d.mesfitxa) { const x = rot(d.mesfitxa); if (x) fullMes(x); return; }
+  if (d.unifica) { const x = rot(d.unifica); if (x) fullUnifica(x); return; }
+  if (d.formatsfitxa) { const x = rot(d.formatsfitxa); if (x) fullFormats(x); return; }
+  if (d.formatfitxa) { const [id, f] = d.formatfitxa.split('|'); const x = rot(id); if (!x) return;
+    const nous = x.formats.includes(f) ? x.formats.filter(y => y !== f) : [...x.formats, f];
+    fes(y => y.run('UPDATE edicio SET formats = ? WHERE id = ?', [nous.length ? JSON.stringify(nous) : null, x.id]), null, { desfes: false });
+    const z = rot(id); if (z) fullFormats(z); return; }
   if (d.escoltesfitxa) { const x = rot(d.escoltesfitxa); estat.corrAtencio = null; if (x) fullEscoltes(x); return; }
   if (d.escoltama) { const x = rot(d.escoltama); if (x) fullEscoltaMa(x); return; }
   if (d.atencioma) { estat.atencioMa = d.atencioma; document.querySelectorAll('#atencioMa button').forEach(b => b.classList.toggle('triat', b.dataset.atencioma === d.atencioma)); return; }
@@ -2692,7 +2710,7 @@ document.addEventListener('click', e => {
   if (d.veinou) { const v = estat.vei; if (v?.nouPref) fullVeiDe(v.partida, d.veinou, { pid: null, nouPref: v.nouPref }); return; }   // ACT-799
   if (d.triaseguent) { const x = rot(d.triaseguent); if (!x) return; fullVeiDe(FX.partidaDelDisc(db(), x.album_id), 'seg', { pid: null, nouPref: x.artista_id }); tornaA(x.id); return; }
   if (d.veisortida) { const [pid, dir, al] = d.veisortida.split(':'); fullVeiDe(FX.partidaDelDisc(db(), +al), dir, { pid: +pid }); return; }
-  if (d.copiade) { const x = rot(d.copiade); if (x) { estat.copia = null; fullCopiaTria(x); } return; }
+  if (d.copiade) { const [id, que] = String(d.copiade).split('|'); const x = rot(id); if (x) { estat.copia = null; estat.copiaQue = que || null; fullCopiaTria(x); } return; }
   if (d.copiaorigen) { const x = estat.copia && rot(estat.copia.id); if (x) fullCopia(x, +d.copiaorigen); return; }
   if (d.fescopia) { const [id, de] = d.fescopia.split('|').map(Number), claus = [...$('#full').querySelectorAll('input[data-clau]:checked')].map(i => i.dataset.clau);
     const x = rot(id); if (!x) return;

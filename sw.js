@@ -9,7 +9,7 @@
 //
 // Només es toca el que és d'aquest lloc. Google, el Drive, ListenBrainz, MusicBrainz i les portades passen de llarg.
 
-const VERSIO = '7f3e7735daf6';
+const VERSIO = '72ffd5c2af28';
 const FITXERS = [
   'index.html',
   'manifest.webmanifest',
