@@ -703,7 +703,7 @@ body .fitxa-portada .portada-espera .bt{padding:6px 0; color:var(--accent)}
    Taronja és que falta; ple és el color del Lloc (var(--accent): blau fora, groc a Lleida; correcció de Ricard del 14-11);
    el que no s'omple, sense color i amb vora discontínua. */
 :root{--taronja:#FF6B3D; --taronja-fons:rgba(255,107,61,.13)}
-.fitxa-cap{display:grid; grid-template-columns:118px 1fr; gap:14px; align-items:start; margin-top:4px}
+.fitxa-cap{display:grid; grid-template-columns:118px minmax(0,1fr); gap:14px; align-items:start; margin-top:4px}
 .fitxa-cap .fitxa-portada.cap-cob{width:118px; margin:0; border-radius:8px; background:var(--fons-3); display:flex; align-items:center; justify-content:center; position:relative}
 .fitxa-cap .fitxa-portada.cap-cob .inicials{font-family:var(--titol); font-weight:800; font-size:30px; color:var(--os-3)}
 .fitxa-cap .fitxa-portada.cap-cob img{position:absolute; inset:0}
@@ -723,7 +723,7 @@ body .fitxa-portada .portada-espera .bt{padding:6px 0; color:var(--accent)}
 .avis-durada > b{color:var(--taronja)}
 .barra-accions.fitxa-accions{position:static; padding:16px 0 0; display:flex; gap:8px}
 .fitxa-accions .bt{flex:1}
-.graella{display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-top:16px}
+.graella{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:9px; margin-top:16px}
 .cel{position:relative; text-align:left; border-radius:14px; padding:11px 12px 10px 14px; cursor:pointer; background:var(--fons-3);
   border:1.5px solid var(--vora); min-height:62px; color:var(--os); font:inherit}
 .cel b{display:block; font-family:var(--titol); font-weight:700; font-stretch:90%; font-size:15.5px}
@@ -885,3 +885,9 @@ body[data-estil="ricard"] .reixa .disc.pref.seg .coberta{outline:2.5px dashed #E
 .cap-txt .pref-cap.ja{background:var(--accent); color:var(--fons)}
 .sug-llista{margin:2px 0 6px}
 .sug-llista:empty{display:none}
+
+/* ACT-885: el scroll horitzontal de la fitxa. Les columnes 1fr no s'encongien per sota del text sense salt de línia; minmax(0,1fr)
+   i, a la fulla, cap desbordament horitzontal. */
+.full{overflow-x:hidden; overflow-x:clip}
+.graella > *{min-width:0}
+.full button{max-width:100%; overflow-wrap:anywhere}

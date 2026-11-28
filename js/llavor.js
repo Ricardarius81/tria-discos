@@ -166,10 +166,10 @@ export function carrega(db, ara = new Date().toISOString()) {
       }
       const enRot = d.foraDeRotacio ? 0 : 1;
       db.run(`INSERT INTO edicio (album_id, nom_edicio, durada_total, rotacio_actual, app_escolta, codi_bandcamp,
-                tags, emparellaments, data_referencia_rotacio, lot_carrega)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                tags, emparellaments, data_referencia_rotacio, data_ordre_rotacio, lot_carrega)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [albums[clau], d.edicio || null, d.min, enRot, d.canal, d.parts ? null : (d.bc || null),
-         json(d.tags), json(d.emparellaments), enRot ? ara : null, LOT]);
+         json(d.tags), json(d.emparellaments), enRot ? ara : null, enRot ? ara : null, LOT]);
       const edId = val('SELECT last_insert_rowid()');
       edicions++;
       (d.parts || []).forEach(([nom, min, bc], i) => {

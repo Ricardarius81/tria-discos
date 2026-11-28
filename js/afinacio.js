@@ -43,8 +43,8 @@ export const BRANQUES = ['Clàssica', 'Neoclàssica', 'Ambient', 'New Age', 'Ele
   'Metal', 'Progressiu', 'Punk / New wave', 'Shoegaze / Dream pop', 'Post-rock', 'Pop', 'Indie / Alternatiu', 'Folk / cantautor',
   'Cançó tradicional / arrel', 'Country / Americana', 'Blues', 'Jazz', 'Soul / Funk / R&B', 'Rap / Hip-hop', 'Reggae', 'Musical', 'Zappa'];
 // Els dos eixos de la clàssica (§6.2): tres llenguatges i vuit formacions (v1.3).
-export const LLENGUATGES = ['Antiga', 'Canon', 'Atonal / Dodecafònica'];
-export const FORMACIONS = ['vocal-coral', 'lied', 'òpera', 'ballet', 'sarsuela', 'orquestral', 'cambra', 'instrument sol'];
+export const LLENGUATGES = ['Antiga', 'Canon', 'Tonal moderna', 'Atonal / Dodecafònica'];   // ACT-858: «Tonal moderna», tonal o modal del s. XX-XXI que no sona a Canon
+export const FORMACIONS = ['vocal-coral', 'lied', 'òpera', 'ballet', 'sarsuela', 'orquestral', 'banda', 'cambra', 'instrument sol'];   // ACT-859: «banda», de vents
 
 export function genere(db, albumId) {
   const a = un(db, 'SELECT generes, llenguatge, formacio, instrument_solista, subgeneres FROM album WHERE id = ?', [albumId]) || {};
@@ -335,8 +335,8 @@ export const esPart = ({ de, a, partId = null, numero = null }) => tot(db => {
   if (x.rotacio_actual && !y.rotacio_actual) {
     db.run('UPDATE part SET rotacio_actual = 0 WHERE edicio_id = ?', [a]);
     db.run('UPDATE part SET rotacio_actual = 1 WHERE id = ?', [part.id]);
-    db.run('UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ?, darrera_obertura = COALESCE(darrera_obertura, ?) WHERE id = ?',
-      [x.data_referencia_rotacio || ara(), x.darrera_obertura, a]);
+    db.run('UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ?, darrera_obertura = COALESCE(darrera_obertura, ?), data_ordre_rotacio = ? WHERE id = ?',
+      [x.data_referencia_rotacio || ara(), x.darrera_obertura, x.data_ordre_rotacio || x.data_referencia_rotacio || ara(), a]);   // ACT-856 (a)
   }
   db.run('UPDATE edicio SET rotacio_actual = 0 WHERE id = ?', [de]);
   const r = recalcula(db);

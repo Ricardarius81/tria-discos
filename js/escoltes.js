@@ -1132,8 +1132,9 @@ export const creaDiscNou = ({ album, artista, recording_msid, minuts, canal, rot
   db.run('INSERT INTO album (titol, artista_id) VALUES (?, ?)', [String(album || 'Sense títol').trim(), a.id]);
   const albumId = un(db, 'SELECT last_insert_rowid() AS id').id;
   const ara = new Date().toISOString();
-  db.run(`INSERT INTO edicio (album_id, durada_total, rotacio_actual, app_escolta, emparellaments, data_referencia_rotacio, lot_carrega)
-          VALUES (?, ?, ?, ?, ?, ?, 'SAFATA')`, [albumId, minuts, rotacio ? 1 : 0, canal, JSON.stringify([album ? album : clauMsid(recording_msid)]), rotacio ? ara : null]);
+  // ACT-856 (a): si entra a la rotació des de la safata, l'ordre és el de la seva escolta, no el de contestar ('' = que l'ordeni l'escolta).
+  db.run(`INSERT INTO edicio (album_id, durada_total, rotacio_actual, app_escolta, emparellaments, data_referencia_rotacio, data_ordre_rotacio, lot_carrega)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'SAFATA')`, [albumId, minuts, rotacio ? 1 : 0, canal, JSON.stringify([album ? album : clauMsid(recording_msid)]), rotacio ? ara : null, rotacio ? '' : null]);
   const id = un(db, 'SELECT last_insert_rowid() AS id').id;
   // ACT-777: la caixa d'una òpera, una part per acte (Part.Numero, Part.Nom, Part.Durada). Viva, la primera si entra a la
   // rotació (decisió de construcció POR RATIFICAR).
@@ -1179,7 +1180,9 @@ export function preguntesRotacio(db, ara = Date.now()) {
 }
 // Les respostes. A la 7, el sí i el no reescriuen la data (ACT-764: entrar també, perquè «ja el dones per estudiat?» no
 // surti el mateix dia amb les mateixes cinc escoltes); a la 8 i a la 9, qualsevol resposta (§8.10).
-export const respon7 = (id, si) => db => si ? (db.run('UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ? WHERE id = ?', [new Date().toISOString(), id]), esborraProperSiEsAquest(db, id))
+// ACT-856 (a): entrar des de la safata compta l'hora de l'última escolta, no la de contestar.
+export const respon7 = (id, si) => db => si ? (db.run(`UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ?,
+                                            data_ordre_rotacio = COALESCE((SELECT MAX(data_hora) FROM escolta WHERE edicio_id = edicio.id), '') WHERE id = ?`, [new Date().toISOString(), id]), esborraProperSiEsAquest(db, id))
                                           : db.run('UPDATE edicio SET data_referencia_rotacio = ? WHERE id = ?', [new Date().toISOString(), id]);
 export const tocaReferencia = id => db => db.run('UPDATE edicio SET data_referencia_rotacio = ? WHERE id = ?', [new Date().toISOString(), id]);
 
@@ -1250,11 +1253,11 @@ export const canviaEdicio = ({ de, a, correccio }) => db => {
     // les escoltes físiques, sense scrobble, es mouen a mà; les altres es tornen a calcular
     db.run(`UPDATE escolta SET edicio_id = ? WHERE edicio_id = ? AND ${SQL_A_MA}`, [a, de]);   // ACT-837: les apuntades a mà (Escolta.origen), no «sense pistes»
   }
-  const v = un(db, 'SELECT rotacio_actual, data_referencia_rotacio, darrera_obertura FROM edicio WHERE id = ?', [de]);
+  const v = un(db, 'SELECT rotacio_actual, data_referencia_rotacio, darrera_obertura, data_ordre_rotacio FROM edicio WHERE id = ?', [de]);
   if (v?.rotacio_actual) {
     db.run('UPDATE edicio SET rotacio_actual = 0 WHERE id = ?', [de]);
-    db.run('UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ?, darrera_obertura = COALESCE(darrera_obertura, ?) WHERE id = ?',
-      [v.data_referencia_rotacio || new Date().toISOString(), v.darrera_obertura, a]);
+    db.run('UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ?, darrera_obertura = COALESCE(darrera_obertura, ?), data_ordre_rotacio = COALESCE(?, data_ordre_rotacio) WHERE id = ?',
+      [v.data_referencia_rotacio || new Date().toISOString(), v.darrera_obertura, v.data_ordre_rotacio, a]);
   }
   return desDe ? recalcula(db, { desDe }) : { escoltes: 0, portades: 0 };
 };

@@ -45,7 +45,7 @@ export const fitxa = (db, id) => carrega(db, 'e.id = ?', [id])[0] || null;
 function carrega(db, on, params = []) {
   const eds = files(db, `
     SELECT e.id, e.album_id, e.nom_edicio, e.durada_total, e.rotacio_actual, e.app_escolta, e.codi_bandcamp, e.enllac_bandcamp, e.formats, e.tags,
-           e.darrera_obertura, e.data_referencia_rotacio, e.portada, e.portada_origen, e.data_darrera_pregunta_puntuacio, e.per_afinar,
+           e.darrera_obertura, e.data_referencia_rotacio, e.data_ordre_rotacio, e.portada, e.portada_origen, e.data_darrera_pregunta_puntuacio, e.per_afinar,
            a.titol, a.artista_id, a.tags AS album_tags, a.conjunt, a.posicio, ar.nom_canonic AS art,
            a.generes, a.llenguatge, a.formacio, a.instrument_solista, a.subgeneres,
            (SELECT COUNT(*) FROM edicio x WHERE x.album_id = e.album_id) AS n_edicions,
@@ -74,7 +74,10 @@ function carrega(db, on, params = []) {
     e.bce = e.parts.length ? null : (e.enllac_bandcamp || null);   // ACT-767: l'enllaç enganxat, mentre no arriba el codi
     // + l'última pista que ha sonat d'aquesta edició, encara que no arribi al 75 % (opció B de Ricard, 3-11: com el
     // «escoltat recentment» d'Amazon, puja també el que només has començat). Només si el nom ja és emparellat.
-    e.clau = [e.darrera_obertura, e.darrera_escolta, e.darrer_scrobble, e.data_referencia_rotacio].filter(Boolean).sort().pop() || '';
+    // ACT-856 (a): l'ordre el mouen un toc de ▶, una escolta real i l'entrada a la rotació (Edició.data_ordre_rotacio);
+    // mai la data de referència (treure i cancel·lar, «Encara no»), que és de l'oferta d'entrar.
+    // Un disc sense data d'ordre (entrat abans de l'estructura 15 per un camí que no la porta) pren la de referència.
+    e.clau = [e.darrera_obertura, e.darrera_escolta, e.darrer_scrobble, e.data_ordre_rotacio ?? e.data_referencia_rotacio].filter(Boolean).sort().pop() || '';
     // La línia «Grup» de la fitxa (ACT-449): tots els discos del grup que són a l'arxiu, en el seu ordre, en rotació o no.
     e.discosGrup = e.conjunt ? files(db, 'SELECT id, titol, posicio FROM album WHERE conjunt = ? ORDER BY COALESCE(posicio, 99), id', [e.conjunt]) : [];
   }
@@ -83,7 +86,7 @@ function carrega(db, on, params = []) {
 
 // Posar en rotació una edició que ja és a l'arxiu (des de l'Historial): té durada per força (ACT-188).
 export const posaIdEnRotacio = id => db => {
-  db.run('UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ? WHERE id = ?', [ara(), id]);
+  const t = ara(); db.run('UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ?, data_ordre_rotacio = ? WHERE id = ?', [t, t, id]);
   esborraProperSiEsAquest(db, id); // ACT-619
 };
 
@@ -223,6 +226,8 @@ export const deixaEsperant = id => db => db.run('UPDATE part SET rotacio_actual 
 export const posaPart = (id, numero) => db => {
   db.run('UPDATE part SET rotacio_actual = 0 WHERE edicio_id = ?', [id]);
   db.run('UPDATE part SET rotacio_actual = 1 WHERE edicio_id = ? AND numero = ?', [id, numero]);
+  // ACT-856 (a): una caixa que ja era en rotació no es mou; si hi entra, sí.
+  db.run('UPDATE edicio SET data_ordre_rotacio = ? WHERE id = ? AND rotacio_actual = 0', [ara(), id]);
   db.run('UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ? WHERE id = ?', [ara(), id]);
   esborraProperSiEsAquest(db, id); // ACT-619
 };
@@ -272,15 +277,16 @@ export const posaEnRotacio = ({ art, tit, min, canal }) => db => {
   if (albums.length) {
     const e = un(db, 'SELECT id FROM edicio WHERE album_id = ? ORDER BY id DESC LIMIT 1', [albums[0].id]);
     if (e) {
-      db.run('UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ? WHERE id = ?', [ara(), e.id]);
+      const t = ara(); db.run('UPDATE edicio SET rotacio_actual = 1, data_referencia_rotacio = ?, data_ordre_rotacio = ? WHERE id = ?', [t, t, e.id]);
       res = { nou: false, id: e.id };
     }
   }
   if (res.nou) {
     let albumId = albums[0]?.id;
     if (!albumId) { db.run('INSERT INTO album (titol, artista_id) VALUES (?, ?)', [tit.trim(), a.id]); albumId = un(db, 'SELECT last_insert_rowid() AS id').id; }
-    db.run(`INSERT INTO edicio (album_id, durada_total, rotacio_actual, app_escolta, formats, data_referencia_rotacio, lot_carrega)
-            VALUES (?, ?, 1, ?, ?, ?, 'FARISTOL')`, [albumId, min, fisic ? null : canal, fisic ? json([canal]) : null, ara()]);
+    const t = ara();
+    db.run(`INSERT INTO edicio (album_id, durada_total, rotacio_actual, app_escolta, formats, data_referencia_rotacio, data_ordre_rotacio, lot_carrega)
+            VALUES (?, ?, 1, ?, ?, ?, ?, 'FARISTOL')`, [albumId, min, fisic ? null : canal, fisic ? json([canal]) : null, t, t]);
     res.id = un(db, 'SELECT last_insert_rowid() AS id').id;
   }
   // El «proper» només s'esborra si el disc que entra és el mateix (ACT-619; abans, qualsevol disc seu).
@@ -427,7 +433,7 @@ export const ajustaCarPendent3010 = db => {
   nous.forEach(([art, tit, min], i) => {
     if (edicioDe(art, tit)?.rotacio_actual) { fets.push(tit + ' ja hi era'); return; }
     const r = posaEnRotacio({ art, tit, min, canal: 'amazon' })(db);
-    db.run('UPDATE edicio SET data_referencia_rotacio = ?, lot_carrega = ? WHERE id = ?', [new Date(t0 + i * 1000).toISOString(), 'CP-30-10', r.id]);
+    { const t = new Date(t0 + i * 1000).toISOString(); db.run('UPDATE edicio SET data_referencia_rotacio = ?, data_ordre_rotacio = ?, lot_carrega = ? WHERE id = ?', [t, t, 'CP-30-10', r.id]); }
     fets.push(tit + ' entra');
   });
   db.run('INSERT INTO meta (clau, valor) VALUES (?, ?)', [AJUST_CP, ara() + ' · ' + fets.join(' · ')]);

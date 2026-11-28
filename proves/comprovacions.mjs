@@ -15,6 +15,7 @@ import { OBRA_I } from './obraI.mjs';
 import { OBRA_II } from './obraII.mjs';
 import { OBRA_III } from './obraIII.mjs';
 import { OBRA_IV } from './obraIV.mjs';
+import { OBRA_V } from './obraV.mjs';
 const cal = (cond, msg) => { if (!cond) throw new Error(msg); };
 const igual = (a, b, msg) => cal(a === b, `${msg}: s'esperava ${JSON.stringify(b)} i hi ha ${JSON.stringify(a)}`);
 
@@ -1309,7 +1310,7 @@ export const COMPROVACIONS = [
   // ───────── L'Afinació (v1.49, ACT-656 a ACT-686) ─────────
   { bloc: 'L\'Afinació (v1.49, ACT-656 a ACT-686)' },
   { nom: 'afinació (ACT-681, ACT-696, ACT-733): l\'arxiu és a l\'estructura 10, amb Edició.per_afinar, Edició.durada_confirmada i Àlbum.subgeneres', async fes({ consulta }) {
-    igual(consulta('PRAGMA user_version')[0].user_version, 14, 'estructura de l\'arxiu (la 10 des de la ACT-733; la 11 des de la ACT-744, les Piles; la 12, els Segells Preferents, obra G; la 13, obra I; la 14, obra II)');
+    igual(consulta('PRAGMA user_version')[0].user_version, 15, 'estructura de l\'arxiu (la 10 des de la ACT-733; la 11 des de la ACT-744, les Piles; la 12, els Segells Preferents, obra G; la 13, obra I; la 14, obra II; la 15, obra V)');
     cal(consulta('PRAGMA table_info(album)').some(c => c.name === 'subgeneres'), 'Àlbum no té la columna subgeneres (ACT-733)');
     cal(consulta('PRAGMA table_info(edicio)').some(c => c.name === 'durada_confirmada'), 'Edició no té la columna durada_confirmada (ACT-696)');
     cal(consulta('PRAGMA table_info(edicio)').some(c => c.name === 'per_afinar'), 'Edició no té la columna per_afinar');
@@ -1348,8 +1349,8 @@ export const COMPROVACIONS = [
     await pagina.click('#full [data-generefitxa]');
     cal((await pagina.locator('#full').innerText()).includes('canvia a les 2 edicions'), 'no avisa que el gènere és de l\'àlbum i canvia a les dues edicions');
     await pagina.click('#full [data-genbr="Clàssica"]');
-    igual(await pagina.locator('#full [data-genll]').count(), 3, 'llenguatges');
-    igual(await pagina.locator('#full [data-genfo]').count(), 8, 'formacions');
+    igual(await pagina.locator('#full [data-genll]').count(), 4, 'llenguatges (4 des de la ACT-858, «Tonal moderna»)');
+    igual(await pagina.locator('#full [data-genfo]').count(), 9, 'formacions (9 des de la ACT-859, «banda»)');
     await pagina.click('#full [data-genfo="orquestral"]'); await pagina.click('#full [data-genfo="instrument sol"]');
     await pagina.fill('#inInstrument', 'piano'); await pagina.locator('#inInstrument').dispatchEvent('change');
     await pagina.waitForTimeout(400); await esperaDesat();   // ACT-732: l'instrument es desa en sortir del camp (change)
@@ -2584,6 +2585,7 @@ export const COMPROVACIONS = [
   ...OBRA_II,  // l'obra II (ACT-839, ACT-840, ACT-841 4), en fitxer propi
   ...OBRA_III, // l'obra III (ACT-837, ACT-838, ACT-840 1, ACT-841), en fitxer propi
   ...OBRA_IV,  // l'obra IV (ACT-848, ACT-849), en fitxer propi
+  ...OBRA_V,   // l'obra V (ACT-856 a, ACT-858 a ACT-860, ACT-885), en fitxer propi
 
   // ───────── el que no ha de passar mai ─────────
   { bloc: 'obra 4: Parsifal, les òperes per actes (ACT-777)' },

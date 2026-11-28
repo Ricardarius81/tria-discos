@@ -296,6 +296,17 @@ export const MIGRACIONS = [
   ALTER TABLE edicio ADD COLUMN darrer_scrobble TEXT;
   ALTER TABLE llista ADD COLUMN darrera_escolta TEXT;
   ALTER TABLE llista ADD COLUMN portades TEXT;
+  `,
+  // v15 · obra V (v1.59, ACT-856 a): edicio.data_ordre_rotacio, la clau d'ordre de Discos en Rotació quan el disc ENTRA a la
+  //   rotació. Abans l'ordre feia servir edicio.data_referencia_rotacio, que fa dues feines (la data des de la qual es
+  //   compten les escoltes de l'oferta d'entrar i les preguntes 8 i 9, ACT-763, i l'ordre): treure'l i cancel·lar la
+  //   sortida, o contestar «Encara no», el pujava a dalt sense haver sonat. Ara l'ordre el mouen només un toc de ▶
+  //   (darrera_obertura), una escolta real (escolta.data_hora, scrobble.listened_at, darrer_scrobble) i l'entrada a la
+  //   rotació (aquest camp). En migrar: el de data_referencia_rotacio dels discos que ara són en rotació, perquè l'ordre
+  //   d'avui no es mogui.
+  `
+  ALTER TABLE edicio ADD COLUMN data_ordre_rotacio TEXT;
+  UPDATE edicio SET data_ordre_rotacio = data_referencia_rotacio WHERE rotacio_actual = 1;
   `
 ];
 
